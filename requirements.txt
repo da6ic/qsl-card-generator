@@ -1,0 +1,10 @@
+# Python 3.11+ erforderlich. Tkinter ist Teil der Standardbibliothek.
+reportlab>=4.0      # PDF-Erzeugung, mm-genaue Positionierung
+pillow>=10.0        # Bild laden/skalieren (Frontbild)
+requests>=2.31      # HamQTH-/QRZ-XML-API
+pyyaml>=6.0         # config.yaml lesen/schreiben
+
+# Entwicklung / Tests
+pytest>=8.0
+black>=24.0
+ruff>=0.4
