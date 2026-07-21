@@ -1,2 +1,13 @@
+# Konfiguration & lokale Daten (nicht einchecken)
 config.yaml
 lookup_cache.json
+
+# Ausgabe
+/output/
+
+# Python
+__pycache__/
+*.pyc
+
+# Virtuelle Umgebung
+.venv/

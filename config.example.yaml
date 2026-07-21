@@ -1,0 +1,41 @@
+# config.example.yaml
+# Kopiere diese Datei nach "config.yaml" und passe die Werte an.
+# Absenderdaten stehen fest auf der Karte; QSO-Daten kommen aus dem ADIF-Log.
+
+sender:
+  callsign: "DN5MT"            # großes Rufzeichen oben links
+  subtitle: "Responsive"       # Zeile unter dem Rufzeichen
+  name: "Axel Tüner"
+  street: "Wilhelmstr. 76"
+  zip: "72124"
+  city: "Pliezhausen"
+  country: "Deutschland"
+  locator: "JN48OM"            # eigenes Locator (Stationsblock)
+  dok: "P31"
+  waz: "14"
+  itu: "28"
+
+lookup:
+  # HamQTH: kostenloses Konto genügt (https://www.hamqth.com/ registrieren)
+  hamqth_user: ""
+  hamqth_pass: ""
+  # QRZ: ohne bezahltes XML-Abo nur eingeschränkte Daten -> optional
+  qrz_user: ""
+  qrz_pass: ""
+  program_id: "qslcards"       # Kennung, die HamQTH als prg-Parameter erwartet
+  lookup_addresses: false      # nur einschalten, wenn Adressen gebraucht werden
+  address_export: false        # zusätzliche Adress-/Label-Ausgabe für Direkt-Karten
+
+generation:
+  card_mode: "per_qso"         # "per_qso" oder "per_station"
+  via_filter: ["B", "D", "E", "M"]   # B=Büro, D=Direkt, E=Elektronisch, M=Manager
+  include_missing_via: false   # QSOs ohne QSL_SENT_VIA einbeziehen?
+  default_via: "B"             # gilt, wenn oben true und Via im QSO fehlt
+  page_orientation: "landscape"  # A6 quer (Referenz). Alternativ "portrait"
+  static_footer: "TNX FR NICE CONTACT, 73"
+  qsl_mark: "none"             # welches Kästchen ankreuzen (global): pse|tnx|none
+                               #   pse : PSE QSL bei allen Karten (Karte anfordern)
+                               #   tnx : TNX QSL bei allen Karten (für Karte danken)
+                               #   none: beide leer (von Hand ankreuzen)
+  portable_mark: "none"        # /p oder /m ankreuzen (global): none|p|m
+                               #   p: /p ankreuzen, m: /m ankreuzen, none: keins
