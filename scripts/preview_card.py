@@ -1,9 +1,9 @@
-"""Rendert eine Testkarte mit Beispieldaten als back_preview.pdf.
+"""Rendert eine komplette Testkarte (Vorder- + Rückseite) als 2-Seiten-PDF.
 
-Zum visuellen Abgleich der Rückseite mit der Referenz (CARD_LAYOUT.md §5).
+Seite 1 = Frontbild, Seite 2 = Rückseite (Reihenfolge wie im späteren Generator).
 
 Aufruf:
-    python scripts/preview_back.py [AUSGABE.pdf]
+    python scripts/preview_card.py [AUSGABE.pdf] [FRONTBILD]
 """
 
 from __future__ import annotations
@@ -21,6 +21,9 @@ from qslcards.cards.models import Card, CardRow  # noqa: E402
 from qslcards.config import AppConfig, GenerationConfig, SenderConfig  # noqa: E402
 from qslcards.pdf.geometry import PAGE_H, PAGE_W  # noqa: E402
 from qslcards.pdf.layout_back import draw_back  # noqa: E402
+from qslcards.pdf.layout_front import draw_front  # noqa: E402
+
+DEFAULT_IMAGE = ROOT / "Bild.jpg"
 
 SAMPLE_CARD = Card(
     recipient_call="DL2SCT",
@@ -28,8 +31,6 @@ SAMPLE_CARD = Card(
     via_code="B",
     rows=[
         CardRow("19", "07", "26", "14:38", "14.230", "SSB", "59"),
-        CardRow("20", "07", "26", "09:00", "7.150", "SSB", "599"),
-        CardRow("21", "07", "26", "10:15", "144.300", "CW", "57"),
     ],
     qsl_mark="tnx",
     portable_mark="p",
@@ -54,12 +55,19 @@ SAMPLE_CONFIG = AppConfig(
 
 
 def main(argv: list[str]) -> int:
-    out = Path(argv[1]) if len(argv) > 1 else ROOT / "back_preview.pdf"
+    out = Path(argv[1]) if len(argv) > 1 else ROOT / "card_preview.pdf"
+    image = Path(argv[2]) if len(argv) > 2 else DEFAULT_IMAGE
+
     c = canvas.Canvas(str(out), pagesize=(PAGE_W, PAGE_H))
+    if image.exists():
+        draw_front(c, str(image), SAMPLE_CONFIG)
+    else:
+        print(f"Warnung: Frontbild fehlt ({image}) – nur Rückseite wird gerendert.")
+    c.showPage()
     draw_back(c, SAMPLE_CARD, SAMPLE_CONFIG)
     c.showPage()
     c.save()
-    print(f"geschrieben: {out}")
+    print(f"geschrieben: {out} (2 Seiten, Front={image.name})")
     return 0
 
 
