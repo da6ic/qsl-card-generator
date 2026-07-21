@@ -44,7 +44,7 @@ QSL_CODE_TO_DISPLAY = {v: k for k, v in QSL_MARK_TO_CODE.items()}
 PORTABLE_TO_CODE = {"Keins": "none", "/p": "p", "/m": "m"}
 PORTABLE_CODE_TO_DISPLAY = {v: k for k, v in PORTABLE_TO_CODE.items()}
 
-THUMB_MAX = (220, 160)
+THUMB_MAX = (360, 260)
 
 
 class App(tk.Tk):
@@ -83,9 +83,12 @@ class App(tk.Tk):
         self._left.grid(row=0, column=0, padx=6, pady=4, sticky="nsew")
         self.sender_section.frame.grid(row=0, column=1, padx=6, pady=4, sticky="nsew")
 
+        # Links Filter(4) über Modus(5) gestapelt; rechts Lookups(6) über beide
+        # Zeilen -> Modus schließt bündig mit den Lookups ab, die Vorschau (7)
+        # rutscht direkt darunter.
         self.filter_section.frame.grid(row=1, column=0, padx=6, pady=4, sticky="nwe")
-        self.lookup_section.frame.grid(row=1, column=1, padx=6, pady=4, sticky="nwe")
         self.mode_section.frame.grid(row=2, column=0, padx=6, pady=4, sticky="nwe")
+        self.lookup_section.frame.grid(row=1, column=1, rowspan=2, padx=6, pady=4, sticky="nwe")
 
         self.preview.frame.grid(row=3, column=0, columnspan=2, padx=6, pady=4, sticky="nsew")
         self.output_section.frame.grid(row=4, column=0, columnspan=2, padx=6, pady=4, sticky="we")

@@ -9,13 +9,14 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from qslcards.cards.models import Card
 
-_COLUMNS = ("print", "call", "qsos", "via", "date")
+_COLUMNS = ("print", "call", "qsos", "via", "date", "utc")
 _HEADINGS = {
     "print": "Drucken",
     "call": "Call",
     "qsos": "#QSOs",
     "via": "Via",
     "date": "Datum",
+    "utc": "UTC",
 }
 
 
@@ -47,13 +48,15 @@ class PreviewTable:
         self._rows.clear()
         for card in cards:
             date = ""
+            utc = ""
             if card.rows:
                 r = card.rows[0]
                 date = f"{r.date_d}.{r.date_m}.{r.date_y}"
+                utc = r.utc
             iid = self.tree.insert(
                 "",
                 "end",
-                values=("Ja", card.recipient_call, len(card.rows), card.via_code, date),
+                values=("Ja", card.recipient_call, len(card.rows), card.via_code, date, utc),
             )
             self._rows[iid] = (card, True)
 
