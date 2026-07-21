@@ -175,7 +175,6 @@ def _draw_frame(c: Canvas) -> None:
 def _draw_sender(c: Canvas, config: AppConfig) -> None:
     s = config.sender
     text(c, g.SENDER_X, g.CALLSIGN_YT, s.callsign, g.FONT_BOLD, g.SIZE_CALLSIGN)
-    text(c, g.SENDER_X, g.SUBTITLE_YT, s.subtitle, g.FONT_REGULAR, g.SIZE_SUBTITLE)
     text(c, g.SENDER_X, g.ADDR_Z1_YT, s.name, g.FONT_REGULAR, g.SIZE_ADDRESS)
     text(c, g.SENDER_X, g.ADDR_Z2_YT, s.street, g.FONT_REGULAR, g.SIZE_ADDRESS)
     text(

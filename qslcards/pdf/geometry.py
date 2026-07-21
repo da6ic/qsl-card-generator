@@ -75,7 +75,6 @@ FONT_REGULAR, FONT_BOLD = _register_fonts()
 # --------------------------------------------------------------------------- #
 
 SIZE_CALLSIGN = 22
-SIZE_SUBTITLE = 7
 SIZE_ADDRESS = 9  # Absenderadresse
 SIZE_LABEL = 10  # "To Amateur…", "Via:" (größer, besser lesbar)
 SIZE_CALL_BOX = 16  # Empfänger-Rufzeichen in der Box (größer)
@@ -92,12 +91,11 @@ SIZE_FOOTER = 8
 
 SENDER_X = mm(6)
 CALLSIGN_YT = mm(6)
-SUBTITLE_YT = mm(16)
-# Adresse direkt unter "Responsive"
-ADDR_Z1_YT = mm(23)  # name
-ADDR_Z2_YT = mm(28.5)  # street
-ADDR_Z3_YT = mm(34)  # zip + city
-ADDR_Z4_YT = mm(39.5)  # country
+# Adresse direkt unter dem Rufzeichen (kein Untertitel mehr)
+ADDR_Z1_YT = mm(18)  # name
+ADDR_Z2_YT = mm(23.5)  # street
+ADDR_Z3_YT = mm(29)  # zip + city
+ADDR_Z4_YT = mm(34.5)  # country
 
 # --------------------------------------------------------------------------- #
 # Kopf rechts: Empfänger + Via (§3)

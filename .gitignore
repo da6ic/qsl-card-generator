@@ -6,6 +6,8 @@ lookup_cache.json
 /output/
 back_preview.pdf
 card_preview.pdf
+qsl_karten.pdf
+*_addresses.csv
 
 # Python
 __pycache__/

@@ -16,7 +16,6 @@ import yaml
 @dataclass
 class SenderConfig:
     callsign: str = ""
-    subtitle: str = ""
     name: str = ""
     street: str = ""
     zip: str = ""

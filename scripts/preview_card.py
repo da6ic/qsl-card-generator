@@ -53,7 +53,6 @@ SAMPLE_CARDS = [
 SAMPLE_CONFIG = AppConfig(
     sender=SenderConfig(
         callsign="DN5MT",
-        subtitle="Responsive",
         name="Axel Tüner",
         street="Wilhelmstr. 76",
         zip="72124",

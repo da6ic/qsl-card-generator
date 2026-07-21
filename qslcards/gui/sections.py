@@ -12,7 +12,6 @@ from tkinter import ttk
 # Reihenfolge der Absenderfelder (Attributname, Label).
 SENDER_FIELDS: list[tuple[str, str]] = [
     ("callsign", "Rufzeichen"),
-    ("subtitle", "Untertitel"),
     ("name", "Name"),
     ("street", "Straße"),
     ("zip", "PLZ"),
@@ -57,7 +56,8 @@ class FileSection:
 
 
 class ImageSection:
-    """2. Frontbild."""
+    """2. Frontbild. Das Vorschaufeld dehnt sich (bündig mit Abschnitt 3),
+    das Thumbnail selbst hat eine feste Maximalgröße und ist zentriert."""
 
     def __init__(self, parent: tk.Misc) -> None:
         self.frame = ttk.LabelFrame(parent, text="2. Frontbild")
@@ -68,29 +68,65 @@ class ImageSection:
         ttk.Entry(self.frame, textvariable=self.path_var, width=32).grid(
             row=0, column=1, padx=4, pady=4, sticky="we"
         )
-        # Thumbnail-Vorschau (PhotoImage wird in app.py gesetzt/gehalten).
-        self.thumb_label = ttk.Label(self.frame, text="(keine Vorschau)")
-        self.thumb_label.grid(row=1, column=0, columnspan=2, padx=4, pady=4)
+        # Vorschaufeld füllt den restlichen Platz; das Thumbnail (feste Größe,
+        # PhotoImage in app.py gesetzt/gehalten) wird darin zentriert.
+        self.thumb_label = ttk.Label(self.frame, text="(keine Vorschau)", anchor="center")
+        self.thumb_label.grid(row=1, column=0, columnspan=2, padx=4, pady=4, sticky="nsew")
         self.frame.columnconfigure(1, weight=1)
+        self.frame.rowconfigure(1, weight=1)
 
 
 class SenderSection:
-    """3. Absender (Config)."""
+    """3. Absender (Config) inkl. globaler Markierungen (QSL/Portabel)."""
 
     def __init__(self, parent: tk.Misc) -> None:
         self.frame = ttk.LabelFrame(parent, text="3. Absender (Config)")
         self.vars: dict[str, tk.StringVar] = {}
 
-        for i, (field, label) in enumerate(SENDER_FIELDS):
-            ttk.Label(self.frame, text=label).grid(row=i, column=0, padx=4, pady=1, sticky="w")
+        row = 0
+        for field, label in SENDER_FIELDS:
+            ttk.Label(self.frame, text=label).grid(row=row, column=0, padx=4, pady=1, sticky="w")
             var = tk.StringVar()
             self.vars[field] = var
             ttk.Entry(self.frame, textvariable=var, width=28).grid(
-                row=i, column=1, padx=4, pady=1, sticky="we"
+                row=row, column=1, padx=4, pady=1, sticky="we"
             )
+            row += 1
+
+        ttk.Separator(self.frame, orient="horizontal").grid(
+            row=row, column=0, columnspan=2, sticky="we", padx=4, pady=4
+        )
+        row += 1
+
+        # Globale Markierungen (gelten für alle Karten).
+        ttk.Label(self.frame, text="QSL-Markierung").grid(
+            row=row, column=0, padx=4, pady=1, sticky="w"
+        )
+        self.qsl_mark = tk.StringVar(value=QSL_MARK_CHOICES[0])
+        self.qsl_combo = ttk.Combobox(
+            self.frame,
+            textvariable=self.qsl_mark,
+            values=QSL_MARK_CHOICES,
+            state="readonly",
+            width=14,
+        )
+        self.qsl_combo.grid(row=row, column=1, padx=4, pady=1, sticky="w")
+        row += 1
+
+        ttk.Label(self.frame, text="Portabel").grid(row=row, column=0, padx=4, pady=1, sticky="w")
+        self.portable = tk.StringVar(value=PORTABLE_CHOICES[0])
+        self.portable_combo = ttk.Combobox(
+            self.frame,
+            textvariable=self.portable,
+            values=PORTABLE_CHOICES,
+            state="readonly",
+            width=14,
+        )
+        self.portable_combo.grid(row=row, column=1, padx=4, pady=1, sticky="w")
+        row += 1
 
         btns = ttk.Frame(self.frame)
-        btns.grid(row=len(SENDER_FIELDS), column=0, columnspan=2, pady=4)
+        btns.grid(row=row, column=0, columnspan=2, pady=4)
         self.save_btn = ttk.Button(btns, text="Speichern")
         self.save_btn.pack(side="left", padx=2)
         self.load_btn = ttk.Button(btns, text="Laden")
@@ -124,7 +160,7 @@ class FilterSection:
 
 
 class ModeSection:
-    """5. Kartenmodus + globale Markierungen."""
+    """5. Kartenmodus."""
 
     def __init__(self, parent: tk.Misc) -> None:
         self.frame = ttk.LabelFrame(parent, text="5. Kartenmodus")
@@ -139,30 +175,8 @@ class ModeSection:
             variable=self.card_mode,
             value="per_station",
         )
-        self.radio_qso.grid(row=0, column=0, columnspan=2, padx=4, pady=1, sticky="w")
-        self.radio_station.grid(row=1, column=0, columnspan=2, padx=4, pady=1, sticky="w")
-
-        ttk.Label(self.frame, text="QSL-Markierung").grid(
-            row=2, column=0, padx=4, pady=1, sticky="w"
-        )
-        self.qsl_mark = tk.StringVar(value=QSL_MARK_CHOICES[0])
-        ttk.Combobox(
-            self.frame,
-            textvariable=self.qsl_mark,
-            values=QSL_MARK_CHOICES,
-            state="readonly",
-            width=12,
-        ).grid(row=2, column=1, padx=4, pady=1, sticky="w")
-
-        ttk.Label(self.frame, text="Portabel").grid(row=3, column=0, padx=4, pady=1, sticky="w")
-        self.portable = tk.StringVar(value=PORTABLE_CHOICES[0])
-        ttk.Combobox(
-            self.frame,
-            textvariable=self.portable,
-            values=PORTABLE_CHOICES,
-            state="readonly",
-            width=12,
-        ).grid(row=3, column=1, padx=4, pady=1, sticky="w")
+        self.radio_qso.grid(row=0, column=0, padx=4, pady=1, sticky="w")
+        self.radio_station.grid(row=1, column=0, padx=4, pady=(1, 4), sticky="w")
 
 
 class LookupSection:

@@ -34,7 +34,6 @@ REQUIRED_CONSTANTS = [
     "FONT_REGULAR",
     "FONT_BOLD",
     "SIZE_CALLSIGN",
-    "SIZE_SUBTITLE",
     "SIZE_ADDRESS",
     "SIZE_LABEL",
     "SIZE_CALL_BOX",
@@ -46,7 +45,6 @@ REQUIRED_CONSTANTS = [
     "SIZE_FOOTER",
     "SENDER_X",
     "CALLSIGN_YT",
-    "SUBTITLE_YT",
     "ADDR_Z1_YT",
     "ADDR_Z2_YT",
     "ADDR_Z3_YT",
@@ -160,7 +158,6 @@ X_POSITIONS = [
 
 YT_POSITIONS = [
     "CALLSIGN_YT",
-    "SUBTITLE_YT",
     "ADDR_Z1_YT",
     "ADDR_Z2_YT",
     "ADDR_Z3_YT",

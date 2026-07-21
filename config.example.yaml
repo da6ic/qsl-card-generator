@@ -4,7 +4,6 @@
 
 sender:
   callsign: "DN5MT"            # großes Rufzeichen oben links
-  subtitle: "Responsive"       # Zeile unter dem Rufzeichen
   name: "Axel Tüner"
   street: "Wilhelmstr. 76"
   zip: "72124"

@@ -16,7 +16,6 @@ def test_load_example_all_fields():
 
     # Sender
     assert c.sender.callsign == "DN5MT"
-    assert c.sender.subtitle == "Responsive"
     assert c.sender.name == "Axel Tüner"
     assert c.sender.street == "Wilhelmstr. 76"
     assert c.sender.zip == "72124"

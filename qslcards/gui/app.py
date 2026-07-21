@@ -10,7 +10,7 @@ from __future__ import annotations
 import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 
 from PIL import Image, ImageTk
 
@@ -65,8 +65,14 @@ class App(tk.Tk):
 
     # ---------------------------------------------------------------- UI
     def _build_ui(self) -> None:
-        self.file_section = FileSection(self)
-        self.image_section = ImageSection(self)
+        # Linke Spalte: ADIF (fix) + Frontbild (dehnt sich bis zur Unterkante
+        # der Absender-Config in der rechten Spalte).
+        self._left = ttk.Frame(self)
+        self.file_section = FileSection(self._left)
+        self.image_section = ImageSection(self._left)
+        self.file_section.frame.pack(side="top", fill="x")
+        self.image_section.frame.pack(side="top", fill="both", expand=True, pady=(8, 0))
+
         self.sender_section = SenderSection(self)
         self.filter_section = FilterSection(self)
         self.mode_section = ModeSection(self)
@@ -74,21 +80,21 @@ class App(tk.Tk):
         self.preview = PreviewTable(self)
         self.output_section = OutputSection(self)
 
-        # Linke Spalte: 1,2,4,5,6 ; rechte Spalte: 3,7 ; unten: 8
-        self.file_section.frame.grid(row=0, column=0, padx=6, pady=4, sticky="nwe")
-        self.image_section.frame.grid(row=1, column=0, padx=6, pady=4, sticky="nwe")
-        self.filter_section.frame.grid(row=2, column=0, padx=6, pady=4, sticky="nwe")
-        self.mode_section.frame.grid(row=3, column=0, padx=6, pady=4, sticky="nwe")
-        self.lookup_section.frame.grid(row=4, column=0, padx=6, pady=4, sticky="nwe")
+        self._left.grid(row=0, column=0, padx=6, pady=4, sticky="nsew")
+        self.sender_section.frame.grid(row=0, column=1, padx=6, pady=4, sticky="nsew")
 
-        self.sender_section.frame.grid(row=0, column=1, rowspan=2, padx=6, pady=4, sticky="nwe")
-        self.preview.frame.grid(row=2, column=1, rowspan=3, padx=6, pady=4, sticky="nsew")
+        self.filter_section.frame.grid(row=1, column=0, padx=6, pady=4, sticky="nwe")
+        self.lookup_section.frame.grid(row=1, column=1, padx=6, pady=4, sticky="nwe")
+        self.mode_section.frame.grid(row=2, column=0, padx=6, pady=4, sticky="nwe")
 
-        self.output_section.frame.grid(row=5, column=0, columnspan=2, padx=6, pady=4, sticky="we")
+        self.preview.frame.grid(row=3, column=0, columnspan=2, padx=6, pady=4, sticky="nsew")
+        self.output_section.frame.grid(row=4, column=0, columnspan=2, padx=6, pady=4, sticky="we")
 
         self.columnconfigure(0, weight=1)
         self.columnconfigure(1, weight=1)
-        self.rowconfigure(4, weight=1)
+        # Nur die Vorschau bekommt Extra-Höhe -> Zeile 0 bleibt auf natürlicher
+        # (Absender-)Höhe, sodass die Bild-Vorschau bündig damit abschließt.
+        self.rowconfigure(3, weight=1)
 
     def _wire_commands(self) -> None:
         self.file_section.browse_btn.config(command=self._browse_log)
@@ -99,12 +105,17 @@ class App(tk.Tk):
         self.output_section.browse_btn.config(command=self._browse_output)
         self.output_section.generate_btn.config(command=self._on_generate)
 
-        # Vorschau automatisch neu aufbauen, wenn Filter/Modus sich ändern.
+        # Vorschau automatisch neu aufbauen, wenn Filter/Modus/Markierungen sich
+        # ändern (die Markierungen fließen in build_cards ein).
         for cb in self.filter_section.checkbuttons:
             cb.config(command=self._rebuild_cards)
         self.filter_section.include_cb.config(command=self._rebuild_cards)
         self.mode_section.radio_qso.config(command=self._rebuild_cards)
         self.mode_section.radio_station.config(command=self._rebuild_cards)
+        self.sender_section.qsl_combo.bind("<<ComboboxSelected>>", lambda _e: self._rebuild_cards())
+        self.sender_section.portable_combo.bind(
+            "<<ComboboxSelected>>", lambda _e: self._rebuild_cards()
+        )
 
     # ----------------------------------------------------------- Config
     def _load_initial_config(self) -> None:
@@ -129,10 +140,10 @@ class App(tk.Tk):
             var.set(code in config.generation.via_filter)
         self.filter_section.include_missing.set(config.generation.include_missing_via)
         self.mode_section.card_mode.set(config.generation.card_mode)
-        self.mode_section.qsl_mark.set(
+        self.sender_section.qsl_mark.set(
             QSL_CODE_TO_DISPLAY.get(config.generation.qsl_mark, "Leer lassen")
         )
-        self.mode_section.portable.set(
+        self.sender_section.portable.set(
             PORTABLE_CODE_TO_DISPLAY.get(config.generation.portable_mark, "Keins")
         )
 
@@ -157,8 +168,8 @@ class App(tk.Tk):
             default_via=self.base_config.generation.default_via,
             page_orientation=self.base_config.generation.page_orientation,
             static_footer=self.base_config.generation.static_footer,
-            qsl_mark=QSL_MARK_TO_CODE.get(self.mode_section.qsl_mark.get(), "none"),
-            portable_mark=PORTABLE_TO_CODE.get(self.mode_section.portable.get(), "none"),
+            qsl_mark=QSL_MARK_TO_CODE.get(self.sender_section.qsl_mark.get(), "none"),
+            portable_mark=PORTABLE_TO_CODE.get(self.sender_section.portable.get(), "none"),
         )
         return AppConfig(sender=sender, lookup=lookup, generation=generation)
 
@@ -185,6 +196,7 @@ class App(tk.Tk):
         path = filedialog.askopenfilename(title="ADIF-Logbuch wählen", filetypes=ADIF_TYPES)
         if path:
             self.file_section.path_var.set(path)
+            self._load_log()  # Hot-Load: direkt nach Auswahl laden
 
     def _load_log(self) -> None:
         path = self.file_section.path_var.get().strip()
