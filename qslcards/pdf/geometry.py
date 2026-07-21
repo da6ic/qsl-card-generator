@@ -190,3 +190,4 @@ FOOTER_MARK_YT = mm(99)
 # --------------------------------------------------------------------------- #
 
 CHECKBOX_SIZE = mm(3)  # Seitenlänge des Kästchens
+CHECKBOX_GAP = mm(1.5)  # Abstand zwischen Kästchen und Label

@@ -4,6 +4,7 @@ lookup_cache.json
 
 # Ausgabe
 /output/
+back_preview.pdf
 
 # Python
 __pycache__/
