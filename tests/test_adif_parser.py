@@ -1,0 +1,153 @@
+"""Tests für den ADIF-Parser (Fälle aus SPECIFICATION.md §4.4)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from qslcards.adif.parser import parse_file, parse_text
+
+SAMPLE_LOG = Path(__file__).resolve().parent.parent / "Log.adi"
+
+
+def test_with_header():
+    text = (
+        "<ADIF_VER:5>3.1.6<PROGRAMID:5>HAMRS<EOH>\n"
+        "<CALL:6>DL2SCT<QSO_DATE:8>20260719<TIME_ON:6>143825"
+        "<FREQ:6>14.230<MODE:3>SSB<RST_SENT:2>59<EOR>\n"
+    )
+    qsos = parse_text(text)
+    assert len(qsos) == 1
+    q = qsos[0]
+    assert q.call == "DL2SCT"
+    assert q.qso_date == "20260719"
+    assert q.time_on == "143825"
+    assert q.freq == "14.230"
+    assert q.mode == "SSB"
+    assert q.rst_sent == "59"
+    # Header-Felder dürfen nicht im Record landen
+    assert "adif_ver" not in q.raw
+    assert "programid" not in q.raw
+
+
+def test_without_header():
+    text = "<CALL:5>DL2ND<QSO_DATE:8>20260719<TIME_ON:4>1508<EOR>"
+    qsos = parse_text(text)
+    assert len(qsos) == 1
+    assert qsos[0].call == "DL2ND"
+    assert qsos[0].time_on == "1508"
+
+
+def test_mixed_case_field_names():
+    text = "<Call:5>DL2ND<Qso_Date:8>20260719<TIME_on:4>1508<eor>"
+    qsos = parse_text(text)
+    assert len(qsos) == 1
+    assert qsos[0].call == "DL2ND"
+    assert qsos[0].qso_date == "20260719"
+    assert qsos[0].time_on == "1508"
+
+
+def test_type_suffix():
+    text = "<CALL:5>DL2ND<freq:6:N>14.074<QSO_DATE:8>20260719<TIME_ON:4>1508<EOR>"
+    qsos = parse_text(text)
+    assert len(qsos) == 1
+    assert qsos[0].freq == "14.074"
+
+
+def test_newline_inside_value():
+    # Kommentar mit Zeilenumbruch: Länge (13 Bytes) ist maßgeblich, nicht das \n
+    comment = "line1\nline2py"  # 13 Bytes
+    assert len(comment.encode("utf-8")) == 13
+    text = f"<CALL:5>DL2ND<COMMENT:13>{comment}<QSO_DATE:8>20260719<TIME_ON:4>1508<EOR>"
+    qsos = parse_text(text)
+    assert len(qsos) == 1
+    assert qsos[0].raw["comment"] == comment
+    assert qsos[0].qso_date == "20260719"
+
+
+def test_missing_final_eor():
+    text = (
+        "<CALL:6>DL2SCT<QSO_DATE:8>20260719<TIME_ON:4>1438<EOR>"
+        "<CALL:5>DL2ND<QSO_DATE:8>20260719<TIME_ON:4>1508"  # kein abschließendes <EOR>
+    )
+    qsos = parse_text(text)
+    assert len(qsos) == 2
+    assert qsos[1].call == "DL2ND"
+
+
+def test_record_without_call_skipped():
+    text = (
+        "<QSO_DATE:8>20260719<TIME_ON:4>1438<EOR>"  # kein CALL -> übersprungen
+        "<CALL:5>DL2ND<QSO_DATE:8>20260719<TIME_ON:4>1508<EOR>"
+    )
+    qsos = parse_text(text)
+    assert len(qsos) == 1
+    assert qsos[0].call == "DL2ND"
+
+
+def test_multiple_qsos_same_call():
+    text = (
+        "<CALL:5>DL2ND<QSO_DATE:8>20260719<TIME_ON:4>1508<EOR>"
+        "<CALL:5>DL2ND<QSO_DATE:8>20260720<TIME_ON:4>0900<EOR>"
+    )
+    qsos = parse_text(text)
+    assert len(qsos) == 2
+    assert {q.call for q in qsos} == {"DL2ND"}
+    assert [q.qso_date for q in qsos] == ["20260719", "20260720"]
+
+
+def test_via_normalization():
+    text = (
+        "<CALL:5>DL2ND<QSO_DATE:8>20260719<TIME_ON:4>1508<QSL_SENT_VIA:1>d<EOR>"
+        "<CALL:5>DL2ME<QSO_DATE:8>20260719<TIME_ON:4>1509<QSL_SENT_VIA:1>X<EOR>"
+        "<CALL:5>DL2XX<QSO_DATE:8>20260719<TIME_ON:4>1510<EOR>"
+    )
+    qsos = parse_text(text)
+    assert qsos[0].qsl_sent_via == "D"  # kleingeschrieben -> Großbuchstabe
+    assert qsos[1].qsl_sent_via is None  # unbekannter Code -> None
+    assert qsos[2].qsl_sent_via is None  # Feld fehlt -> None
+
+
+def test_utf8_umlaut_value():
+    name = "Axel Tüner"  # ü = 2 Bytes in UTF-8
+    length = len(name.encode("utf-8"))
+    text = f"<CALL:5>DL2ND<NAME:{length}>{name}<QSO_DATE:8>20260719<TIME_ON:4>1508<EOR>"
+    qsos = parse_text(text)
+    assert qsos[0].name == name
+
+
+def test_recipient_fields_mapped():
+    text = (
+        "<CALL:5>DL2ND<QSO_DATE:8>20260719<TIME_ON:4>1508"
+        "<NAME:10>Uwe Czaika<QTH:11>ST. EGIDIEN<COUNTRY:7>GERMANY"
+        "<GRIDSQUARE:6>JO60hs<EOR>"
+    )
+    q = parse_text(text)[0]
+    assert q.name == "Uwe Czaika"
+    assert q.qth == "ST. EGIDIEN"
+    assert q.country == "GERMANY"
+    assert q.gridsquare == "JO60hs"
+
+
+def test_own_station_fields_not_promoted():
+    # Eigene Stationsfelder bleiben roh, werden NICHT zu QSO-Attributen.
+    text = (
+        "<CALL:5>DL2ND<QSO_DATE:8>20260719<TIME_ON:4>1508"
+        "<OPERATOR:5>DL0MT<MY_GRIDSQUARE:6>JN48PK<STATION_CALLSIGN:5>DL0MT<EOR>"
+    )
+    q = parse_text(text)[0]
+    assert not hasattr(q, "operator")
+    assert not hasattr(q, "my_gridsquare")
+    # nur roh verfügbar
+    assert q.raw["operator"] == "DL0MT"
+    assert q.raw["my_gridsquare"] == "JN48PK"
+
+
+def test_parse_real_sample_log():
+    qsos = parse_file(SAMPLE_LOG)
+    assert len(qsos) > 0
+    first = qsos[0]
+    assert first.call == "DL2SCT"
+    assert first.rst_sent == "59"
+    assert first.band == "20m"
+    # jeder QSO hat ein Rufzeichen
+    assert all(q.call for q in qsos)
