@@ -128,7 +128,7 @@ def test_row_height_positive_and_fits():
     # Kopfzeile + MAX_ROWS Datenzeilen füllen die Tabellenhöhe genau aus
     total = g.HEAD_H + g.MAX_ROWS * g.ROW_H
     assert total == pytest.approx(g.TABLE_YT_BOTTOM - g.TABLE_YT_TOP)
-    assert g.MAX_ROWS == 3
+    assert g.MAX_ROWS == 1
 
 
 # --- Alle Positionen liegen im Blattbereich -------------------------------

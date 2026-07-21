@@ -76,10 +76,10 @@ FONT_REGULAR, FONT_BOLD = _register_fonts()
 
 SIZE_CALLSIGN = 22
 SIZE_SUBTITLE = 7
-SIZE_ADDRESS = 9
-SIZE_LABEL = 8  # "To Amateur…", "Via:", Checkbox-Labels
-SIZE_CALL_BOX = 12  # Empfänger-Rufzeichen in der Box
-SIZE_VIA = 9
+SIZE_ADDRESS = 8  # Absenderadresse (kompakter unter dem Untertitel)
+SIZE_LABEL = 10  # "To Amateur…", "Via:" (größer, besser lesbar)
+SIZE_CALL_BOX = 16  # Empfänger-Rufzeichen in der Box (größer)
+SIZE_VIA = 11
 SIZE_STATION = 8  # Locator/DOK/WAZ/ITU-Zeile
 SIZE_CHECK = 8  # Bestätigungs-Checkboxen
 SIZE_TABLE_HEAD = 6.5
@@ -93,10 +93,11 @@ SIZE_FOOTER = 8
 SENDER_X = mm(6)
 CALLSIGN_YT = mm(6)
 SUBTITLE_YT = mm(16)
-ADDR_Z1_YT = mm(24)  # name
-ADDR_Z2_YT = mm(29)  # street
-ADDR_Z3_YT = mm(34)  # zip + city
-ADDR_Z4_YT = mm(39)  # country
+# Adresse dichter unter "Responsive" und enger gesetzt (kleinere Schrift)
+ADDR_Z1_YT = mm(21)  # name
+ADDR_Z2_YT = mm(25.5)  # street
+ADDR_Z3_YT = mm(30)  # zip + city
+ADDR_Z4_YT = mm(34.5)  # country
 
 # --------------------------------------------------------------------------- #
 # Kopf rechts: Empfänger + Via (§3)
@@ -105,29 +106,30 @@ ADDR_Z4_YT = mm(39)  # country
 TO_LABEL_X = mm(78)
 TO_LABEL_YT = mm(6)
 
+# /p und /m sitzen zwischen dem Label und der Rufzeichen-Box.
+PORTABLE_P_X = mm(78)
+PORTABLE_M_X = mm(92)
+PORTABLE_YT = mm(12)
+
 CALL_BOX_X = mm(78)
-CALL_BOX_YT = mm(10)
-CALL_BOX_W = mm(62)
-CALL_BOX_H = mm(9)
+CALL_BOX_YT = mm(17)
+CALL_BOX_W = mm(64)  # bis zur rechten Inhaltskante (78+64=142)
+CALL_BOX_H = mm(12)  # größer
 
 VIA_LABEL_X = mm(78)
-VIA_LABEL_YT = mm(22)
+VIA_LABEL_YT = mm(33)
 
-VIA_BOX_X = mm(88)
-VIA_BOX_YT = mm(21)
-VIA_BOX_W = mm(52)
-VIA_BOX_H = mm(8)
-
-PORTABLE_P_X = mm(78)
-PORTABLE_M_X = mm(90)
-PORTABLE_YT = mm(33)
+VIA_BOX_X = mm(90)
+VIA_BOX_YT = mm(33)
+VIA_BOX_W = mm(52)  # 90+52=142
+VIA_BOX_H = mm(10)  # größer
 
 # --------------------------------------------------------------------------- #
 # Stationsblock (§3)
 # --------------------------------------------------------------------------- #
 
 STATION_X = mm(6)
-STATION_YT = mm(45)
+STATION_YT = mm(40)
 
 # --------------------------------------------------------------------------- #
 # Bestätigungs-Checkboxen (§3)
@@ -135,7 +137,7 @@ STATION_YT = mm(45)
 
 CONFIRM_QSO_X = mm(6)
 CONFIRM_SWL_X = mm(60)
-CONFIRM_YT = mm(51)
+CONFIRM_YT = mm(46)
 
 # --------------------------------------------------------------------------- #
 # QSO-Tabelle (§3)
@@ -144,12 +146,12 @@ CONFIRM_YT = mm(51)
 TABLE_X0 = mm(6)  # linke Kante
 TABLE_X1 = mm(142)  # rechte Kante
 TABLE_WIDTH = mm(136)  # = TABLE_X1 - TABLE_X0
-TABLE_YT_TOP = mm(56)  # obere Kante (von oben)
-TABLE_YT_BOTTOM = mm(84)  # untere Kante (von oben)
+TABLE_YT_TOP = mm(52)  # obere Kante (von oben)
+TABLE_YT_BOTTOM = mm(67)  # untere Kante (von oben)
 
 HEAD_H = mm(8)  # Höhe der Kopfzeile
-MAX_ROWS = 3  # maximale Datenzeilen pro Karte (Überlauf -> Folge-Karte)
-# Höhe einer Datenzeile: (Tabellenhöhe - Kopfzeile) / MAX_ROWS  (~6.7 mm)
+MAX_ROWS = 1  # Datenzeilen pro Karte: genau ein QSO (siehe Builder-Kopplung)
+# Höhe einer Datenzeile: (Tabellenhöhe - Kopfzeile) / MAX_ROWS  (= 7 mm)
 ROW_H = ((TABLE_YT_BOTTOM - TABLE_YT_TOP) - HEAD_H) / MAX_ROWS
 
 # Spaltenbreiten (Summe = TABLE_WIDTH = 136 mm)
@@ -171,19 +173,22 @@ SUB_RST_W = mm(10)  # je R, S, T
 # --------------------------------------------------------------------------- #
 
 REMARKS_LABEL_X = mm(6)
-REMARKS_LABEL_YT = mm(86)
+REMARKS_LABEL_YT = mm(70)
 
+# Box-Unterkante bei yt=99: gleicher Abstand (1 mm) zum unteren Rahmen (yt=100)
+# wie links (Box-Kante x=6 zum linken Rahmen x=5).
 REMARKS_BOX_X = mm(6)
-REMARKS_BOX_YT = mm(89)
-REMARKS_BOX_W = mm(48)
-REMARKS_BOX_H = mm(13)
+REMARKS_BOX_YT = mm(73)
+REMARKS_BOX_W = mm(60)
+REMARKS_BOX_H = mm(26)
 
-FOOTER_TEXT_X = mm(6)
-FOOTER_TEXT_YT = mm(99)
+# Footer-Text und PSE/TNX rechts neben der REMARKS-Box.
+FOOTER_TEXT_X = mm(72)
+FOOTER_TEXT_YT = mm(78)
 
-PSE_QSL_X = mm(70)
-TNX_QSL_X = mm(92)
-FOOTER_MARK_YT = mm(99)
+PSE_QSL_X = mm(72)
+TNX_QSL_X = mm(100)
+FOOTER_MARK_YT = mm(88)
 
 # --------------------------------------------------------------------------- #
 # Checkbox-Hilfsmaß (§4)

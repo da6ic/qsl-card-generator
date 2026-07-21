@@ -95,16 +95,19 @@ def test_per_qso_one_card_per_qso():
 
 
 def test_per_station_groups_same_call_and_via():
+    # per_station sammelt QSOs einer (Call, Via) und teilt sie in MAX_ROWS-große
+    # Karten auf; die Zeilen bleiben nach Datum/Zeit sortiert.
+    import math
+
     qsos = [
         make_qso("DL1AA", date="20260720", time="1100", via="B"),
         make_qso("DL1AA", date="20260719", time="1000", via="B"),
     ]
     cards = build_cards(qsos, config(card_mode="per_station", via_filter=["B"]))
-    assert len(cards) == 1
-    rows = cards[0].rows
-    assert len(rows) == 2
-    # innerhalb der Station nach Datum/Zeit sortiert
-    assert [r.date_d for r in rows] == ["19", "20"]
+    assert len(cards) == math.ceil(len(qsos) / MAX_ROWS)
+    all_rows = [r for c in cards for r in c.rows]
+    assert [r.date_d for r in all_rows] == ["19", "20"]  # sortiert über alle Karten
+    assert all(len(c.rows) <= MAX_ROWS for c in cards)
 
 
 def test_per_station_different_via_not_merged():
