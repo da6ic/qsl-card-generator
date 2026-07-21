@@ -29,7 +29,7 @@ def mm(v: float) -> float:
 
 PAGE_W = mm(148)  # A6 quer: Breite
 PAGE_H = mm(105)  # A6 quer: Höhe
-MARGIN = mm(5)  # Außenrand ringsum
+MARGIN = mm(3)  # Außenrand des Rahmens (näher am Blattrand)
 
 LINE_WIDTH = 0.6  # Standard-Rahmenlinienstärke in pt
 
@@ -76,11 +76,11 @@ FONT_REGULAR, FONT_BOLD = _register_fonts()
 
 SIZE_CALLSIGN = 22
 SIZE_SUBTITLE = 7
-SIZE_ADDRESS = 8  # Absenderadresse (kompakter unter dem Untertitel)
+SIZE_ADDRESS = 9  # Absenderadresse
 SIZE_LABEL = 10  # "To Amateur…", "Via:" (größer, besser lesbar)
 SIZE_CALL_BOX = 16  # Empfänger-Rufzeichen in der Box (größer)
 SIZE_VIA = 11
-SIZE_STATION = 8  # Locator/DOK/WAZ/ITU-Zeile
+SIZE_STATION = 9  # Locator/DOK/WAZ/ITU-Block (neben der Adresse)
 SIZE_CHECK = 8  # Bestätigungs-Checkboxen
 SIZE_TABLE_HEAD = 6.5
 SIZE_TABLE_CELL = 8
@@ -93,51 +93,60 @@ SIZE_FOOTER = 8
 SENDER_X = mm(6)
 CALLSIGN_YT = mm(6)
 SUBTITLE_YT = mm(16)
-# Adresse dichter unter "Responsive" und enger gesetzt (kleinere Schrift)
-ADDR_Z1_YT = mm(21)  # name
-ADDR_Z2_YT = mm(25.5)  # street
-ADDR_Z3_YT = mm(30)  # zip + city
-ADDR_Z4_YT = mm(34.5)  # country
+# Adresse direkt unter "Responsive"
+ADDR_Z1_YT = mm(23)  # name
+ADDR_Z2_YT = mm(28.5)  # street
+ADDR_Z3_YT = mm(34)  # zip + city
+ADDR_Z4_YT = mm(39.5)  # country
 
 # --------------------------------------------------------------------------- #
 # Kopf rechts: Empfänger + Via (§3)
 # --------------------------------------------------------------------------- #
 
-TO_LABEL_X = mm(78)
-TO_LABEL_YT = mm(6)
+TO_LABEL_X = mm(88)
+TO_LABEL_YT = mm(8)
 
-# /p und /m sitzen zwischen dem Label und der Rufzeichen-Box.
-PORTABLE_P_X = mm(78)
-PORTABLE_M_X = mm(92)
-PORTABLE_YT = mm(12)
+CALL_BOX_X = mm(88)
+CALL_BOX_YT = mm(12)
+CALL_BOX_W = mm(54)  # bis zur rechten Inhaltskante (88+54=142)
+CALL_BOX_H = mm(15)
 
-CALL_BOX_X = mm(78)
-CALL_BOX_YT = mm(17)
-CALL_BOX_W = mm(64)  # bis zur rechten Inhaltskante (78+64=142)
-CALL_BOX_H = mm(12)  # größer
+VIA_LABEL_X = mm(88)
+VIA_LABEL_YT = mm(31)
 
-VIA_LABEL_X = mm(78)
-VIA_LABEL_YT = mm(33)
-
-VIA_BOX_X = mm(90)
-VIA_BOX_YT = mm(33)
-VIA_BOX_W = mm(52)  # 90+52=142
-VIA_BOX_H = mm(10)  # größer
+VIA_BOX_X = mm(88)
+VIA_BOX_YT = mm(35)
+VIA_BOX_W = mm(54)  # 88+54=142
+VIA_BOX_H = mm(12)
 
 # --------------------------------------------------------------------------- #
-# Stationsblock (§3)
+# Portabel-Markierungen /p /m: oben-mittig, zwischen eigenem Call und dem
+# "To Amateur…"-Block (wie Referenzkarte).
 # --------------------------------------------------------------------------- #
 
-STATION_X = mm(6)
-STATION_YT = mm(40)
+PORTABLE_P_X = mm(52)
+PORTABLE_M_X = mm(66)
+PORTABLE_YT = mm(8)
+
+# --------------------------------------------------------------------------- #
+# Stationsblock (§3): rechts neben der Adresse, als Label/Wert-Spalten,
+# vertikal auf Höhe der Adresszeilen.
+# --------------------------------------------------------------------------- #
+
+STATION_LABEL_X = mm(50)  # "Locator:", "DOK:", ...
+STATION_VALUE_X = mm(64)  # Werte, eingerückt ausgerichtet
+STATION_Z1_YT = ADDR_Z1_YT  # Locator (auf Höhe name)
+STATION_Z2_YT = ADDR_Z2_YT  # DOK
+STATION_Z3_YT = ADDR_Z3_YT  # WAZ
+STATION_Z4_YT = ADDR_Z4_YT  # ITU
 
 # --------------------------------------------------------------------------- #
 # Bestätigungs-Checkboxen (§3)
 # --------------------------------------------------------------------------- #
 
 CONFIRM_QSO_X = mm(6)
-CONFIRM_SWL_X = mm(60)
-CONFIRM_YT = mm(46)
+CONFIRM_SWL_X = mm(48)
+CONFIRM_YT = mm(45)
 
 # --------------------------------------------------------------------------- #
 # QSO-Tabelle (§3)
@@ -146,12 +155,12 @@ CONFIRM_YT = mm(46)
 TABLE_X0 = mm(6)  # linke Kante
 TABLE_X1 = mm(142)  # rechte Kante
 TABLE_WIDTH = mm(136)  # = TABLE_X1 - TABLE_X0
-TABLE_YT_TOP = mm(52)  # obere Kante (von oben)
+TABLE_YT_TOP = mm(50)  # obere Kante (von oben)
 TABLE_YT_BOTTOM = mm(67)  # untere Kante (von oben)
 
 HEAD_H = mm(8)  # Höhe der Kopfzeile
 MAX_ROWS = 1  # Datenzeilen pro Karte: genau ein QSO (siehe Builder-Kopplung)
-# Höhe einer Datenzeile: (Tabellenhöhe - Kopfzeile) / MAX_ROWS  (= 7 mm)
+# Höhe einer Datenzeile: (Tabellenhöhe - Kopfzeile) / MAX_ROWS  (= 9 mm)
 ROW_H = ((TABLE_YT_BOTTOM - TABLE_YT_TOP) - HEAD_H) / MAX_ROWS
 
 # Spaltenbreiten (Summe = TABLE_WIDTH = 136 mm)
@@ -172,23 +181,22 @@ SUB_RST_W = mm(10)  # je R, S, T
 # Fuß (§3)
 # --------------------------------------------------------------------------- #
 
+# REMARKS-Box über die volle Breite, flach.
 REMARKS_LABEL_X = mm(6)
-REMARKS_LABEL_YT = mm(70)
+REMARKS_LABEL_YT = mm(71)
 
-# Box-Unterkante bei yt=99: gleicher Abstand (1 mm) zum unteren Rahmen (yt=100)
-# wie links (Box-Kante x=6 zum linken Rahmen x=5).
 REMARKS_BOX_X = mm(6)
-REMARKS_BOX_YT = mm(73)
-REMARKS_BOX_W = mm(60)
-REMARKS_BOX_H = mm(26)
+REMARKS_BOX_YT = mm(74)
+REMARKS_BOX_W = mm(136)  # volle Inhaltsbreite (6..142)
+REMARKS_BOX_H = mm(14)  # flach
 
-# Footer-Text und PSE/TNX rechts neben der REMARKS-Box.
-FOOTER_TEXT_X = mm(72)
-FOOTER_TEXT_YT = mm(78)
+# Footer-Text und PSE/TNX unter der REMARKS-Box.
+FOOTER_TEXT_X = mm(6)
+FOOTER_TEXT_YT = mm(92)
 
-PSE_QSL_X = mm(72)
-TNX_QSL_X = mm(100)
-FOOTER_MARK_YT = mm(88)
+PSE_QSL_X = mm(62)
+TNX_QSL_X = mm(92)
+FOOTER_MARK_YT = mm(91)
 
 # --------------------------------------------------------------------------- #
 # Checkbox-Hilfsmaß (§4)

@@ -20,7 +20,7 @@ def test_page_size_a6_landscape():
     assert g.PAGE_W == pytest.approx(g.mm(148))
     assert g.PAGE_H == pytest.approx(g.mm(105))
     assert g.PAGE_W > g.PAGE_H  # Querformat
-    assert g.MARGIN == pytest.approx(g.mm(5))
+    assert g.MARGIN == pytest.approx(g.mm(3))
 
 
 # --- Alle erwarteten Konstanten sind definiert ---------------------------
@@ -66,8 +66,12 @@ REQUIRED_CONSTANTS = [
     "PORTABLE_P_X",
     "PORTABLE_M_X",
     "PORTABLE_YT",
-    "STATION_X",
-    "STATION_YT",
+    "STATION_LABEL_X",
+    "STATION_VALUE_X",
+    "STATION_Z1_YT",
+    "STATION_Z2_YT",
+    "STATION_Z3_YT",
+    "STATION_Z4_YT",
     "CONFIRM_QSO_X",
     "CONFIRM_SWL_X",
     "CONFIRM_YT",
@@ -141,7 +145,8 @@ X_POSITIONS = [
     "VIA_BOX_X",
     "PORTABLE_P_X",
     "PORTABLE_M_X",
-    "STATION_X",
+    "STATION_LABEL_X",
+    "STATION_VALUE_X",
     "CONFIRM_QSO_X",
     "CONFIRM_SWL_X",
     "TABLE_X0",
@@ -165,7 +170,10 @@ YT_POSITIONS = [
     "VIA_LABEL_YT",
     "VIA_BOX_YT",
     "PORTABLE_YT",
-    "STATION_YT",
+    "STATION_Z1_YT",
+    "STATION_Z2_YT",
+    "STATION_Z3_YT",
+    "STATION_Z4_YT",
     "CONFIRM_YT",
     "TABLE_YT_TOP",
     "TABLE_YT_BOTTOM",

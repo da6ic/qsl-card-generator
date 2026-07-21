@@ -222,9 +222,17 @@ def _draw_recipient(c: Canvas, card: Card) -> None:
 
 
 def _draw_station(c: Canvas, config: AppConfig) -> None:
+    # Stationsblock als Label/Wert-Spalten rechts neben der Adresse.
     s = config.sender
-    line = f"Locator: {s.locator}   DOK: {s.dok}   WAZ: {s.waz}   ITU: {s.itu}"
-    text(c, g.STATION_X, g.STATION_YT, line, g.FONT_REGULAR, g.SIZE_STATION)
+    rows = (
+        ("Locator:", s.locator, g.STATION_Z1_YT),
+        ("DOK:", s.dok, g.STATION_Z2_YT),
+        ("WAZ:", s.waz, g.STATION_Z3_YT),
+        ("ITU:", s.itu, g.STATION_Z4_YT),
+    )
+    for label, value, yt in rows:
+        text(c, g.STATION_LABEL_X, yt, label, g.FONT_REGULAR, g.SIZE_STATION)
+        text(c, g.STATION_VALUE_X, yt, value, g.FONT_REGULAR, g.SIZE_STATION)
 
 
 def _draw_confirm(c: Canvas) -> None:
