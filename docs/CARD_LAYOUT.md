@@ -106,8 +106,10 @@ Label-Spalte `x=50`, Wert-Spalte `x=64`; Zeilen `Locator:` / `DOK:` / `WAZ:` / `
 ### Bestätigungs-Checkboxen
 | Element                    | x  | yt | Font/Size |
 |----------------------------|----|----|-----------|
-| ☐ Confirming QSO           | 6  | 45 | Regular 8 |
-| ☐ Confirming SWL-Report    | 48 | 45 | Regular 8 |
+| ☐ Confirming QSO           | 6  | 44 | Regular 8 |
+| ☐ Confirming SWL-Report    | 48 | 44 | Regular 8 |
+
+(yt=44 -> Kästchen-Unterkante bündig mit der Via-Box-Unterkante.)
 
 ### QSO-Tabelle
 - Bounding-Box: `x=6 … 142` (Breite 136), oben `yt=50`, unten `yt=67`.
@@ -136,21 +138,23 @@ Label-Spalte `x=50`, Wert-Spalte `x=64`; Zeilen `Locator:` / `DOK:` / `WAZ:` / `
 
 ### Fuß
 REMARKS-Box über die volle Breite und flach; Footer-Text und PSE/TNX **darunter**.
+Das Konstrukt sitzt unten mit ~3 mm Abstand zum Rahmen (wie seitlich); Abstand
+Label→Box wie „Via:"→Via-Box (4 mm).
 | Element              | Inhalt / Quelle                 | x   | yt | Font/Size |
 |----------------------|---------------------------------|-----|----|-----------|
-| Label „REMARKS"      | statisch                        | 6   | 71 | Regular 8 |
-| REMARKS-Box          | leer (b=136, h=14)              | 6   | 74 | Rahmen 0.6pt |
-| Footer-Text          | `generation.static_footer`      | 6   | 92 | Bold 8    |
-| ☐ PSE QSL            | checked, wenn `qsl_mark=="pse"` | 62  | 91 | Regular 8 |
-| ☐ TNX QSL            | checked, wenn `qsl_mark=="tnx"` | 92  | 91 | Regular 8 |
+| Label „REMARKS"      | statisch                        | 6   | 79 | Regular 8 |
+| REMARKS-Box          | leer (b=136, h=10)              | 6   | 83 | Rahmen 0.6pt |
+| Footer-Text          | `generation.static_footer`      | 6   | 96 | Bold 8    |
+| ☐ PSE QSL            | checked, wenn `qsl_mark=="pse"` | 62  | 96 | Regular 8 |
+| ☐ TNX QSL            | checked, wenn `qsl_mark=="tnx"` | 92  | 96 | Regular 8 |
 
 ---
 
 ## 4. Checkbox- & Hilfsfunktionen (in `layout_back.py`)
 
 - `checkbox(c, x, yt, label, checked=False, size=8)`: kleines Quadrat
-  (Seite ≈ 3mm) + Text rechts daneben. `checked=True` zeichnet ein X/gefülltes
-  Kreuz im Kästchen (für die gewählte PSE/TNX-Markierung), sonst leer.
+  (Seite ≈ 3mm) + Text rechts daneben. `checked=True` zeichnet ein Kreuz, das
+  über das Kästchen hinausragt (`CHECKBOX_CROSS_OVERHANG`), sonst leer.
 - Text-Helfer `text(c, x, yt, s, font, size, align="left")` mit interner
   `y_pdf = PAGE_H - mm(yt)`-Umrechnung, damit im Zeichencode nur „von-oben"-mm
   benutzt werden.
