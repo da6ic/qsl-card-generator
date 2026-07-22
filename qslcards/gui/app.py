@@ -46,6 +46,10 @@ PORTABLE_CODE_TO_DISPLAY = {v: k for k, v in PORTABLE_TO_CODE.items()}
 
 THUMB_MAX = (360, 260)
 
+# Auto-Sync der Config
+SAVE_DEBOUNCE_MS = 600  # Verzögerung nach der letzten Änderung vor dem Speichern
+POLL_MS = 1500  # Intervall, in dem config.yaml auf externe Änderungen geprüft wird
+
 
 class _ScrollableFrame:
     """Vertikal scrollbarer Container (Canvas + inneres Frame + Scrollbar).
@@ -94,9 +98,17 @@ class App(tk.Tk):
         # (default_via, static_footer, program_id, page_orientation).
         self.base_config: AppConfig = AppConfig()
 
+        # Auto-Sync-Zustand
+        self._suppress_save = False  # unterdrückt Auto-Save beim programmatischen Setzen
+        self._save_after_id: str | None = None  # laufender Debounce-Timer
+        self._last_mtime: float | None = None  # zuletzt bekannte mtime von config.yaml
+
         self._build_ui()
         self._wire_commands()
         self._load_initial_config()
+        self._last_mtime = self._config_mtime()
+        self._wire_autosave()
+        self.after(POLL_MS, self._poll_config)
 
     # ---------------------------------------------------------------- UI
     def _build_ui(self) -> None:
@@ -139,10 +151,11 @@ class App(tk.Tk):
         self.file_section.browse_btn.config(command=self._browse_log)
         self.file_section.load_btn.config(command=self._load_log)
         self.image_section.choose_btn.config(command=self._choose_image)
-        self.sender_section.save_btn.config(command=self._save_config)
-        self.sender_section.load_btn.config(command=self._load_config)
         self.output_section.browse_btn.config(command=self._browse_output)
         self.output_section.generate_btn.config(command=self._on_generate)
+
+        # Enter in einem Eingabefeld gibt den Fokus frei -> kein Highlight/Auswahl.
+        self.bind_class("TEntry", "<Return>", self._defocus_entry)
 
         # Vorschau automatisch neu aufbauen, wenn Filter/Modus/Markierungen sich
         # ändern (die Markierungen fließen in build_cards ein).
@@ -165,26 +178,31 @@ class App(tk.Tk):
         self._apply_config_to_widgets(self.base_config)
 
     def _apply_config_to_widgets(self, config: AppConfig) -> None:
-        for field, _ in SENDER_FIELDS:
-            self.sender_section.vars[field].set(getattr(config.sender, field))
+        # Programmatisches Setzen darf keinen Auto-Save auslösen.
+        self._suppress_save = True
+        try:
+            for field, _ in SENDER_FIELDS:
+                self.sender_section.vars[field].set(getattr(config.sender, field))
 
-        self.lookup_section.hamqth_user.set(config.lookup.hamqth_user)
-        self.lookup_section.hamqth_pass.set(config.lookup.hamqth_pass)
-        self.lookup_section.qrz_user.set(config.lookup.qrz_user)
-        self.lookup_section.qrz_pass.set(config.lookup.qrz_pass)
-        self.lookup_section.lookup_addresses.set(config.lookup.lookup_addresses)
-        self.lookup_section.address_export.set(config.lookup.address_export)
+            self.lookup_section.hamqth_user.set(config.lookup.hamqth_user)
+            self.lookup_section.hamqth_pass.set(config.lookup.hamqth_pass)
+            self.lookup_section.qrz_user.set(config.lookup.qrz_user)
+            self.lookup_section.qrz_pass.set(config.lookup.qrz_pass)
+            self.lookup_section.lookup_addresses.set(config.lookup.lookup_addresses)
+            self.lookup_section.address_export.set(config.lookup.address_export)
 
-        for code, var in self.filter_section.via_vars.items():
-            var.set(code in config.generation.via_filter)
-        self.filter_section.include_missing.set(config.generation.include_missing_via)
-        self.mode_section.card_mode.set(config.generation.card_mode)
-        self.sender_section.qsl_mark.set(
-            QSL_CODE_TO_DISPLAY.get(config.generation.qsl_mark, "Leer lassen")
-        )
-        self.sender_section.portable.set(
-            PORTABLE_CODE_TO_DISPLAY.get(config.generation.portable_mark, "Keins")
-        )
+            for code, var in self.filter_section.via_vars.items():
+                var.set(code in config.generation.via_filter)
+            self.filter_section.include_missing.set(config.generation.include_missing_via)
+            self.mode_section.card_mode.set(config.generation.card_mode)
+            self.sender_section.qsl_mark.set(
+                QSL_CODE_TO_DISPLAY.get(config.generation.qsl_mark, "Leer lassen")
+            )
+            self.sender_section.portable.set(
+                PORTABLE_CODE_TO_DISPLAY.get(config.generation.portable_mark, "Keins")
+            )
+        finally:
+            self._suppress_save = False
 
     def _gather_config(self) -> AppConfig:
         sender = SenderConfig(
@@ -212,23 +230,84 @@ class App(tk.Tk):
         )
         return AppConfig(sender=sender, lookup=lookup, generation=generation)
 
-    def _save_config(self) -> None:
+    def _defocus_entry(self, event: tk.Event) -> str:
+        """Enter im Eingabefeld: Auswahl aufheben und Fokus abgeben (kein Highlight)."""
+        try:
+            event.widget.selection_clear()
+        except tk.TclError:
+            pass
+        self.focus_set()
+        return "break"
+
+    # --------------------------------------------------- Auto-Sync (Config)
+    def _config_mtime(self) -> float | None:
+        try:
+            return Path(CONFIG_PATH).stat().st_mtime
+        except OSError:
+            return None
+
+    def _wire_autosave(self) -> None:
+        """Alle Eingabe-Variablen beobachten -> Änderung speichert automatisch."""
+        watched: list[tk.Variable] = [
+            *self.sender_section.vars.values(),
+            self.sender_section.qsl_mark,
+            self.sender_section.portable,
+            self.lookup_section.hamqth_user,
+            self.lookup_section.hamqth_pass,
+            self.lookup_section.qrz_user,
+            self.lookup_section.qrz_pass,
+            self.lookup_section.lookup_addresses,
+            self.lookup_section.address_export,
+            *self.filter_section.via_vars.values(),
+            self.filter_section.include_missing,
+            self.mode_section.card_mode,
+        ]
+        for var in watched:
+            var.trace_add("write", self._on_var_change)
+
+    def _on_var_change(self, *_args) -> None:
+        if self._suppress_save:
+            return
+        if self._save_after_id is not None:
+            self.after_cancel(self._save_after_id)
+        self._save_after_id = self.after(SAVE_DEBOUNCE_MS, self._auto_save)
+
+    def _auto_save(self) -> None:
+        self._save_after_id = None
+        if self._write_config():
+            self.output_section.status_var.set("Config automatisch gespeichert")
+
+    def _write_config(self) -> bool:
+        """Sammelt die Config und schreibt sie; hält _last_mtime aktuell."""
         config = self._gather_config()
         try:
             cfg.save(config, CONFIG_PATH)
         except OSError as exc:
-            messagebox.showerror("Fehler", f"Config konnte nicht gespeichert werden:\n{exc}")
+            self.output_section.status_var.set(f"Speichern fehlgeschlagen: {exc}")
+            return False
+        self.base_config = config
+        self._last_mtime = self._config_mtime()
+        return True
+
+    def _poll_config(self) -> None:
+        """Prüft periodisch, ob config.yaml extern geändert wurde -> neu laden."""
+        try:
+            mtime = self._config_mtime()
+            if mtime is not None and mtime != self._last_mtime:
+                self._reload_from_file()
+        finally:
+            self.after(POLL_MS, self._poll_config)
+
+    def _reload_from_file(self) -> None:
+        try:
+            config = cfg.load(CONFIG_PATH)
+        except OSError:
             return
         self.base_config = config
-        messagebox.showinfo("Gespeichert", f"Config gespeichert: {CONFIG_PATH}")
-
-    def _load_config(self) -> None:
-        if not Path(CONFIG_PATH).exists():
-            messagebox.showwarning("Nicht gefunden", f"{CONFIG_PATH} existiert nicht.")
-            return
-        self.base_config = cfg.load(CONFIG_PATH)
-        self._apply_config_to_widgets(self.base_config)
+        self._apply_config_to_widgets(config)  # unterdrückt Auto-Save intern
+        self._last_mtime = self._config_mtime()
         self._rebuild_cards()
+        self.output_section.status_var.set("Config neu geladen (Datei geändert)")
 
     # ------------------------------------------------------------- ADIF
     def _browse_log(self) -> None:

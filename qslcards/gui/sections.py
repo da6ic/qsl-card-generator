@@ -70,7 +70,7 @@ class ImageSection:
         )
         # Vorschaufeld füllt den restlichen Platz; das Thumbnail (feste Größe,
         # PhotoImage in app.py gesetzt/gehalten) wird darin zentriert.
-        self.thumb_label = ttk.Label(self.frame, text="(keine Vorschau)", anchor="center")
+        self.thumb_label = ttk.Label(self.frame, text="keine Vorschau", anchor="center")
         self.thumb_label.grid(row=1, column=0, columnspan=2, padx=4, pady=4, sticky="nsew")
         self.frame.columnconfigure(1, weight=1)
         self.frame.rowconfigure(1, weight=1)
@@ -80,7 +80,7 @@ class SenderSection:
     """3. Absender (Config) inkl. globaler Markierungen (QSL/Portabel)."""
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="3. Absender (Config)")
+        self.frame = ttk.LabelFrame(parent, text="3. Absender")
         self.vars: dict[str, tk.StringVar] = {}
 
         row = 0
@@ -123,14 +123,9 @@ class SenderSection:
             width=14,
         )
         self.portable_combo.grid(row=row, column=1, padx=4, pady=1, sticky="w")
-        row += 1
 
-        btns = ttk.Frame(self.frame)
-        btns.grid(row=row, column=0, columnspan=2, pady=4)
-        self.save_btn = ttk.Button(btns, text="Speichern")
-        self.save_btn.pack(side="left", padx=2)
-        self.load_btn = ttk.Button(btns, text="Laden")
-        self.load_btn.pack(side="left", padx=2)
+        # Kein Speichern/Laden-Button mehr: die Config wird automatisch
+        # gespeichert und bei externer Änderung neu geladen.
         self.frame.columnconfigure(1, weight=1)
 
 
@@ -183,7 +178,7 @@ class LookupSection:
     """6. Lookups (optional)."""
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="6. Lookups (optional)")
+        self.frame = ttk.LabelFrame(parent, text="6. Lookups")
         self.hamqth_user = tk.StringVar()
         self.hamqth_pass = tk.StringVar()
         self.qrz_user = tk.StringVar()

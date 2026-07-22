@@ -24,7 +24,7 @@ class PreviewTable:
     """Treeview der Karten; Zeilen per Klick auf die Spalte 'Drucken' abwählbar."""
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="7. Vorschau (Karten)")
+        self.frame = ttk.LabelFrame(parent, text="7. Vorschau")
         # height=6 -> immer mindestens ~5 Einträge sichtbar; bei mehr Karten
         # scrollt die Tabelle intern (zusätzlich zum Seiten-Scroll).
         self.tree = ttk.Treeview(self.frame, columns=_COLUMNS, show="headings", height=6)
