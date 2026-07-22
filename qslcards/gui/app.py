@@ -47,10 +47,45 @@ PORTABLE_CODE_TO_DISPLAY = {v: k for k, v in PORTABLE_TO_CODE.items()}
 THUMB_MAX = (360, 260)
 
 
+class _ScrollableFrame:
+    """Vertikal scrollbarer Container (Canvas + inneres Frame + Scrollbar).
+
+    Bei kleinem Fenster kann so der gesamte Inhalt gescrollt werden, nichts wird
+    abgeschnitten. `inner` ist das Elternelement für die eigentlichen Abschnitte.
+    """
+
+    def __init__(self, parent: tk.Misc) -> None:
+        self.outer = ttk.Frame(parent)
+        self.canvas = tk.Canvas(self.outer, highlightthickness=0)
+        self.vscroll = ttk.Scrollbar(self.outer, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.vscroll.set)
+        self.vscroll.pack(side="right", fill="y")
+        self.canvas.pack(side="left", fill="both", expand=True)
+
+        self.inner = ttk.Frame(self.canvas)
+        self._window = self.canvas.create_window((0, 0), window=self.inner, anchor="nw")
+        self.inner.bind("<Configure>", self._on_inner_configure)
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+
+    def _on_inner_configure(self, _event: tk.Event) -> None:
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def _on_canvas_configure(self, event: tk.Event) -> None:
+        # Inneres Frame auf Canvas-Breite ziehen (horizontal füllen).
+        self.canvas.itemconfigure(self._window, width=event.width)
+
+    def _on_mousewheel(self, event: tk.Event) -> None:
+        step = -1 if event.delta > 0 else 1
+        self.canvas.yview_scroll(step, "units")
+
+
 class App(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("QSL-Karten-Generator")
+        self.geometry("980x760")
+        self.minsize(720, 480)
 
         # Zustand
         self.qsos: list = []
@@ -65,39 +100,40 @@ class App(tk.Tk):
 
     # ---------------------------------------------------------------- UI
     def _build_ui(self) -> None:
-        # Linke Spalte: ADIF (fix) + Frontbild (dehnt sich bis zur Unterkante
-        # der Absender-Config in der rechten Spalte).
-        self._left = ttk.Frame(self)
+        # Gesamte Oberfläche in einen scrollbaren Container -> bei kleinem
+        # Fenster ist alles per Scrollbar/Mausrad erreichbar (Export zuletzt).
+        self.body = _ScrollableFrame(self)
+        self.body.outer.pack(fill="both", expand=True)
+        root = self.body.inner
+
+        # Oben links: ADIF (fix) + Frontbild (dehnt sich bündig zur Absender-Config).
+        self._left = ttk.Frame(root)
         self.file_section = FileSection(self._left)
         self.image_section = ImageSection(self._left)
         self.file_section.frame.pack(side="top", fill="x")
         self.image_section.frame.pack(side="top", fill="both", expand=True, pady=(8, 0))
 
-        self.sender_section = SenderSection(self)
-        self.filter_section = FilterSection(self)
-        self.mode_section = ModeSection(self)
-        self.lookup_section = LookupSection(self)
-        self.preview = PreviewTable(self)
-        self.output_section = OutputSection(self)
+        # Mitte links: Filter(4) über Modus(5); Modus dehnt sich bündig zu Lookups(6).
+        self._midleft = ttk.Frame(root)
+        self.filter_section = FilterSection(self._midleft)
+        self.mode_section = ModeSection(self._midleft)
+        self.filter_section.frame.pack(side="top", fill="x")
+        self.mode_section.frame.pack(side="top", fill="both", expand=True, pady=(8, 0))
+
+        self.sender_section = SenderSection(root)
+        self.lookup_section = LookupSection(root)
+        self.preview = PreviewTable(root)
+        self.output_section = OutputSection(root)
 
         self._left.grid(row=0, column=0, padx=6, pady=4, sticky="nsew")
         self.sender_section.frame.grid(row=0, column=1, padx=6, pady=4, sticky="nsew")
+        self._midleft.grid(row=1, column=0, padx=6, pady=4, sticky="nsew")
+        self.lookup_section.frame.grid(row=1, column=1, padx=6, pady=4, sticky="nsew")
+        self.preview.frame.grid(row=2, column=0, columnspan=2, padx=6, pady=4, sticky="nsew")
+        self.output_section.frame.grid(row=3, column=0, columnspan=2, padx=6, pady=4, sticky="we")
 
-        # Links Filter(4) über Modus(5) gestapelt; rechts Lookups(6) über beide
-        # Zeilen -> Modus schließt bündig mit den Lookups ab, die Vorschau (7)
-        # rutscht direkt darunter.
-        self.filter_section.frame.grid(row=1, column=0, padx=6, pady=4, sticky="nwe")
-        self.mode_section.frame.grid(row=2, column=0, padx=6, pady=4, sticky="nwe")
-        self.lookup_section.frame.grid(row=1, column=1, rowspan=2, padx=6, pady=4, sticky="nwe")
-
-        self.preview.frame.grid(row=3, column=0, columnspan=2, padx=6, pady=4, sticky="nsew")
-        self.output_section.frame.grid(row=4, column=0, columnspan=2, padx=6, pady=4, sticky="we")
-
-        self.columnconfigure(0, weight=1)
-        self.columnconfigure(1, weight=1)
-        # Nur die Vorschau bekommt Extra-Höhe -> Zeile 0 bleibt auf natürlicher
-        # (Absender-)Höhe, sodass die Bild-Vorschau bündig damit abschließt.
-        self.rowconfigure(3, weight=1)
+        root.columnconfigure(0, weight=1)
+        root.columnconfigure(1, weight=1)
 
     def _wire_commands(self) -> None:
         self.file_section.browse_btn.config(command=self._browse_log)

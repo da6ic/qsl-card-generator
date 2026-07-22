@@ -25,7 +25,9 @@ class PreviewTable:
 
     def __init__(self, parent: tk.Misc) -> None:
         self.frame = ttk.LabelFrame(parent, text="7. Vorschau (Karten)")
-        self.tree = ttk.Treeview(self.frame, columns=_COLUMNS, show="headings", height=10)
+        # height=6 -> immer mindestens ~5 Einträge sichtbar; bei mehr Karten
+        # scrollt die Tabelle intern (zusätzlich zum Seiten-Scroll).
+        self.tree = ttk.Treeview(self.frame, columns=_COLUMNS, show="headings", height=6)
         for col in _COLUMNS:
             self.tree.heading(col, text=_HEADINGS[col])
             self.tree.column(col, width=70, anchor="center")
@@ -42,6 +44,13 @@ class PreviewTable:
         # iid -> (Card, included?)
         self._rows: dict[str, tuple[Card, bool]] = {}
         self.tree.bind("<Button-1>", self._on_click)
+        # Mausrad über der Tabelle scrollt die Tabelle (nicht die Seite).
+        self.tree.bind("<MouseWheel>", self._on_wheel)
+
+    def _on_wheel(self, event: tk.Event) -> str:
+        step = -1 if event.delta > 0 else 1
+        self.tree.yview_scroll(step, "units")
+        return "break"
 
     def set_cards(self, cards: list[Card]) -> None:
         self.tree.delete(*self.tree.get_children())
