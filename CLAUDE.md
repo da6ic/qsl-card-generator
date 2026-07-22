@@ -107,8 +107,8 @@ Jede `Card` erzeugt genau zwei Seiten: `layout_front` + `layout_back`.
 2. **Via-Filter** = ADIF-Feld `QSL_SENT_VIA`. Enum: `B`=Büro, `D`=Direkt,
    `E`=Elektronisch, `M`=Manager. Nur QSOs mit ausgewähltem Via werden zu Karten.
    Fehlt das Feld, gilt ein konfigurierbarer Default (siehe Config).
-3. **Absenderblock** (Call, „Responsive", Name, Straße, PLZ/Ort, Land, Locator,
-   DOK, WAZ, ITU) kommt **immer aus der Config**, nie aus dem Log.
+3. **Absenderblock** (Call, Name, Straße, PLZ/Ort, Land, Locator, DOK, WAZ, ITU)
+   kommt **immer aus der Config**, nie aus dem Log.
 4. **Empfänger** auf der Karte = **nur das Rufzeichen** (`CALL`) im Feld
    „To Amateur Radio Station:". Name/Adresse des Empfängers stehen **nicht** auf
    der Karte — sie werden nur für den **optionalen Adress-/Label-Export** (Kuvert
@@ -221,16 +221,14 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
 
 ## 9. Definition of Done (MVP)
 
-- [ ] ADIF-Datei wählbar, Parser liefert korrekte QSO-Liste (Tests grün).
-- [ ] Frontbild wählbar + Vorschau.
-- [ ] Absender-Config editierbar, wird gespeichert/geladen.
+- [x] ADIF-Datei wählbar, Parser liefert korrekte QSO-Liste (Tests grün).
+- [x] Frontbild wählbar + Vorschau.
+- [x] Absender-Config editierbar, wird gespeichert/geladen.
 - [ ] Via-Filter (B/D/E/M) und Modus (pro QSO / pro Station) wählbar.
 - [ ] Vorschau-Tabelle zeigt, welche Karten erzeugt werden.
-- [ ] „PDF erzeugen" liefert eine PDF mit 2 A6-Seiten pro Karte.
+- [x] „PDF erzeugen" liefert eine PDF mit 2 A6-Seiten pro Karte.
 - [ ] Rückseite entspricht `docs/CARD_LAYOUT.md` (visuell iteriert).
 - [ ] HamQTH-Lookup + Cache funktionieren; Ausfälle sind nicht fatal.
-- [ ] Optionaler Adress-/Label-Export für via=D.
-
 ---
 
 ## 10. Nicht raten — nachschlagen

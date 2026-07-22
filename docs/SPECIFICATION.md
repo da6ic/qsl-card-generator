@@ -18,22 +18,28 @@ Erzeugung wählt er ADIF, Frontbild, Absenderdaten, Via-Filter und Kartenmodus.
 Ein Hauptfenster mit klaren Abschnitten (top → bottom), jeweils in `gui/sections.py`:
 
 1. **ADIF-Logbuch**: `Durchsuchen…`-Button, Pfadanzeige, Button `Log laden`.
-   Nach dem Laden: Anzahl gelesener QSOs.
+   Nach der Auswahl wird das Log **automatisch geladen** (Hot-Load); der Button
+   dient als manueller Reload. Nach dem Laden: Anzahl gelesener QSOs.
 2. **Frontbild**: `Bild wählen…` (png/jpg/jpeg/webp), kleine Vorschau (Thumbnail).
-3. **Absender (Config)**: Eingabefelder für Call, Untertitel („Responsive"),
-   Name, Straße, PLZ, Ort, Land, Locator, DOK, WAZ, ITU. Buttons
-   `Speichern` / `Laden` (schreibt/liest `config.yaml`).
+3. **Absender**: Eingabefelder für Call, Name, Straße, PLZ, Ort, Land, Locator,
+   DOK, WAZ, ITU. Zusätzlich die beiden globalen Dropdowns (gelten für **alle**
+   Karten):
+   - **QSL-Markierung** (`qsl_mark`): `PSE QSL` / `TNX QSL` / `Leer lassen`.
+   - **Portabel-Markierung** (`portable_mark`): `Keins` / `/p` / `/m`.
+   Kein „Untertitel"/„Responsive" mehr. Keine Speichern/Laden-Buttons: die
+   Config wird **automatisch** gespeichert (debounced) und bei externer Änderung
+   von `config.yaml` **automatisch neu geladen**.
 4. **Via-Filter**: vier Checkboxen `B Büro`, `D Direkt`, `E Elektronisch`,
    `M Manager`. Zusätzlich Checkbox „QSOs ohne Via einbeziehen" (nutzt Default-Via).
 5. **Kartenmodus**: Radiobuttons `Eine Karte pro QSO` / `Eine Karte pro Station`.
-   Zusätzlich zwei manuelle Dropdowns (gelten für **alle** Karten):
-   - **QSL-Markierung** (`qsl_mark`): `PSE QSL` / `TNX QSL` / `Leer lassen`.
-   - **Portabel-Markierung** (`portable_mark`): `Keins` / `/p` / `/m`.
+   (Die globalen Markierungen QSL/Portabel stehen in Abschnitt 3.)
 6. **Lookups (optional)**: HamQTH-Benutzer/Passwort, QRZ-Benutzer/Passwort,
    Checkbox „Adressen für Direkt-Karten nachschlagen", Checkbox „Adress-/
    Label-Export erzeugen".
 7. **Vorschau**: Tabelle (`ttk.Treeview`) der Karten, die erzeugt werden
-   (Call, #QSOs, Via, Datum). Zeilen abwählbar (Karte auslassen).
+   (Call, #QSOs, Via, Datum, UTC). Zeilen über die Spalte „Drucken" abwählbar
+   (Karte auslassen). Die gesamte Oberfläche ist scrollbar; die Tabelle zeigt
+   mindestens ~5 Einträge.
 8. **Ausgabe**: Zielpfad der PDF, Button `PDF erzeugen`, Fortschrittsbalken
    (`ttk.Progressbar`) + Statuszeile.
 
@@ -50,7 +56,6 @@ YAML-Datei `config.yaml`. Dataclass-Struktur:
 @dataclass
 class SenderConfig:
     callsign: str            # "DN5MT"
-    subtitle: str            # "Responsive"
     name: str                # "Axel Tüner"
     street: str              # "Wilhelmstr. 76"
     zip: str                 # "72124"
@@ -185,9 +190,10 @@ class Card:
 4. **freq_mhz**: aus `freq`; fehlt es, aus `band` ableiten (optionale Tabelle).
 5. **Gruppieren**:
    - `per_qso`: eine `Card` je QSO, `rows` mit genau einer Zeile.
-   - `per_station`: alle QSOs je (Call, Via) → eine `Card`, `rows` = alle Zeilen,
-     sortiert nach Datum/Zeit. Übersteigt `rows` die max. Zeilenzahl aus
-     `CARD_LAYOUT.md` (`MAX_ROWS`), weitere Karte(n) mit demselben Call anlegen.
+   - `per_station`: QSOs je (Call, Via) sortiert nach Datum/Zeit, dann in
+     `MAX_ROWS`-große Blöcke aufgeteilt. Da aktuell **`MAX_ROWS = 1`** ist
+     (eine Zeile pro Karte, siehe `CARD_LAYOUT.md`), ergibt eine mehrfach
+     gearbeitete Station mehrere Einzelkarten.
 6. **Sortierung**: Karten deterministisch nach `recipient_call`, dann Datum.
 7. **Markierungen (global, manuell)**: jede Karte erhält unverändert die
    Werte aus der Config:
@@ -237,9 +243,10 @@ class Card:
 - **Reihenfolge**: für jede Karte zuerst Vorderseite, dann Rückseite, dann
   `canvas.showPage()`. So entsteht Seite 1=Front(Karte1), 2=Back(Karte1),
   3=Front(Karte2), … → passt für Duplexdruck (lange Kante).
-- **Front** (`layout_front.py`): Frontbild seitenfüllend einpassen,
-  Seitenverhältnis wahren, zentriert, optional kleiner Rand. Einmal geladen,
-  für alle Karten wiederverwenden (Pillow-Objekt cachen).
+- **Front** (`layout_front.py`): Frontbild im **Cover-Modus** die ganze Seite
+  füllen (kein weißer Rand), Seitenverhältnis wahren, Überstand am Seitenrand
+  beschneiden (Clip), zentriert. Einmal via Pillow geladen und als ImageReader
+  gecacht, für alle Karten wiederverwenden.
 - **Back** (`layout_back.py`): exakt nach `CARD_LAYOUT.md`. Alle Positionen/
   Größen aus `geometry.py`.
 - **Fortschritt**: `generator.generate(..., progress_cb)` ruft
