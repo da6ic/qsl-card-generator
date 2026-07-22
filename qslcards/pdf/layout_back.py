@@ -74,8 +74,12 @@ def checkbox(
     c.setLineWidth(g.LINE_WIDTH)
     c.rect(x, box_bottom, g.CHECKBOX_SIZE, g.CHECKBOX_SIZE, stroke=1, fill=0)
     if checked:
-        c.line(x, box_bottom, x + g.CHECKBOX_SIZE, box_bottom + g.CHECKBOX_SIZE)
-        c.line(x, box_bottom + g.CHECKBOX_SIZE, x + g.CHECKBOX_SIZE, box_bottom)
+        # Kreuz größer als das Kästchen: Endpunkte ragen um CROSS_OVERHANG hinaus.
+        o = g.CHECKBOX_CROSS_OVERHANG
+        left, right = x - o, x + g.CHECKBOX_SIZE + o
+        bottom, top = box_bottom - o, box_bottom + g.CHECKBOX_SIZE + o
+        c.line(left, bottom, right, top)
+        c.line(left, top, right, bottom)
     # Label vertikal mittig zum Kästchen.
     _text_in_band(
         c,

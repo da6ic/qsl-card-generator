@@ -144,7 +144,7 @@ STATION_Z4_YT = ADDR_Z4_YT  # ITU
 
 CONFIRM_QSO_X = mm(6)
 CONFIRM_SWL_X = mm(48)
-CONFIRM_YT = mm(45)
+CONFIRM_YT = mm(44)  # Kästchen-Unterkante bündig mit der Via-Box-Unterkante (yt 47)
 
 # --------------------------------------------------------------------------- #
 # QSO-Tabelle (§3)
@@ -179,22 +179,24 @@ SUB_RST_W = mm(10)  # je R, S, T
 # Fuß (§3)
 # --------------------------------------------------------------------------- #
 
-# REMARKS-Box über die volle Breite, flach.
+# REMARKS-Box über die volle Breite, flach. Das Fuß-Konstrukt sitzt unten mit
+# ~3 mm Abstand zum Rahmen (gleich wie seitlich: Inhalt x=6, Rahmen x=3).
+# Label -> Box mit gleichem Abstand wie "Via:" -> Via-Box (4 mm).
 REMARKS_LABEL_X = mm(6)
-REMARKS_LABEL_YT = mm(71)
+REMARKS_LABEL_YT = mm(79)
 
 REMARKS_BOX_X = mm(6)
-REMARKS_BOX_YT = mm(74)
+REMARKS_BOX_YT = mm(83)
 REMARKS_BOX_W = mm(136)  # volle Inhaltsbreite (6..142)
-REMARKS_BOX_H = mm(14)  # flach
+REMARKS_BOX_H = mm(10)  # flacher
 
-# Footer-Text und PSE/TNX unter der REMARKS-Box.
+# Footer-Text und PSE/TNX unter der REMARKS-Box (Unterkante ~yt 99).
 FOOTER_TEXT_X = mm(6)
-FOOTER_TEXT_YT = mm(92)
+FOOTER_TEXT_YT = mm(96)
 
 PSE_QSL_X = mm(62)
 TNX_QSL_X = mm(92)
-FOOTER_MARK_YT = mm(91)
+FOOTER_MARK_YT = mm(96)
 
 # --------------------------------------------------------------------------- #
 # Checkbox-Hilfsmaß (§4)
@@ -202,3 +204,4 @@ FOOTER_MARK_YT = mm(91)
 
 CHECKBOX_SIZE = mm(3)  # Seitenlänge des Kästchens
 CHECKBOX_GAP = mm(1.5)  # Abstand zwischen Kästchen und Label
+CHECKBOX_CROSS_OVERHANG = mm(1.2)  # Überstand des Kreuzes über das Kästchen
