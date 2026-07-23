@@ -15,3 +15,7 @@ __pycache__/
 
 # Virtuelle Umgebung
 .venv/
+
+# IDE / OS
+.idea/
+.DS_Store
