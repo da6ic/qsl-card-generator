@@ -44,7 +44,10 @@ QSL_CODE_TO_DISPLAY = {v: k for k, v in QSL_MARK_TO_CODE.items()}
 PORTABLE_TO_CODE = {"Keins": "none", "/p": "p", "/m": "m"}
 PORTABLE_CODE_TO_DISPLAY = {v: k for k, v in PORTABLE_TO_CODE.items()}
 
-THUMB_MAX = (360, 260)
+# Thumbnail-Maximalgröße. Die Höhe bleibt unter der natürlichen Höhe des
+# Absender-Blocks, damit ein geladenes Bild die linke Spalte (und damit das
+# Fenster) nicht höher zieht.
+THUMB_MAX = (340, 210)
 
 # Auto-Sync der Config
 SAVE_DEBOUNCE_MS = 600  # Verzögerung nach der letzten Änderung vor dem Speichern
