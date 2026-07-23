@@ -237,3 +237,64 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
 - Exakte Layout-Koordinaten: `docs/CARD_LAYOUT.md`.
 - API-Endpunkte/Session-Flow: `docs/SPECIFICATION.md` §Lookups. Vor Implementierung
   gegen die **aktuelle** HamQTH-/QRZ-Doku gegenprüfen (APIs können sich ändern).
+
+---
+
+## 11. Arbeitsweise & gelernte Fakten (schnelles Wiedereinsteigen)
+
+**Umgebung / Tooling**
+- Python liegt im venv: **`.venv/bin/python`** benutzen (Interpreter ist 3.14).
+  Abhängigkeiten: `.venv/bin/python -m pip install -r requirements.txt`.
+- Vor jedem Commit: `.venv/bin/python -m black qslcards/ tests/ scripts/` und
+  `.venv/bin/python -m ruff check ...` und `.venv/bin/python -m pytest tests/ -q`.
+- `ruff`/`black` schreiben gelegentlich nach dem Write nach (Trailing-Newline,
+  `Callable` aus `collections.abc`, `UP037` Quotes an Annotationen) — einfach
+  `black` laufen lassen und ruff-Hinweise übernehmen.
+
+**Ergebnis ansehen (Pflicht: der Nutzer will jedes Ergebnis sehen)**
+- Karten-Preview: `.venv/bin/python scripts/preview_card.py` → schreibt
+  **`card_preview.pdf`** in den Projekt-Root (gitignored) → mit `open card_preview.pdf`
+  zeigen. Es sind 3 Beispiel-QSOs (6 Seiten).
+- PDF-Seite als Bild prüfen (kein Display nötig):
+  `qlmanage -t -s 1400 -o <ausgabeordner> datei.pdf` erzeugt `datei.pdf.png`.
+  Nur Seite 1; für andere Seiten mit `pypdf` (PdfReader/PdfWriter) einzelne Seiten
+  heraussplitten. Seitenzahl prüfen: `pypdf.PdfReader(...).pages`.
+- **Scratchpad** für temporäre PDFs/PNGs nutzen, nicht den Projekt-Root zumüllen.
+
+**GUI ist headless testbar (macOS, ohne sichtbares Fenster):** `App()` baut den
+kompletten Widget-Baum; damit Struktur/Größen prüfen
+(`winfo_reqheight`, Variablenwerte), z. B. `THUMB_MAX` gegen Absender-Höhe.
+Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
+`config.yaml` nicht zu überschreiben.
+
+**Layout-Wahrheit**
+- **Alle** Layout-Zahlen stehen in `pdf/geometry.py` (maßgeblich; `docs/CARD_LAYOUT.md`
+  ist nur Beschreibung). Positionen als `yt` (von oben), Umrechnung in den
+  `text`/`checkbox`/`_box`-Helfern. Font-Metriken (`getAscent`/`getDescent`) statt
+  Magic-Faktoren fürs Zentrieren.
+- **DejaVuSans** (regular+bold) liegt gebündelt in `qslcards/assets/fonts/` und wird
+  in `geometry.py` registriert (Umlaute); Fallback Helvetica, Registrierung nie fatal.
+
+**Wichtige, mit dem Nutzer getroffene Entscheidungen (nicht ohne Rückfrage kippen)**
+- **`MAX_ROWS = 1`**: genau ein QSO pro Karte. Koppelt Layout **und** Builder;
+  `per_station` teilt Mehrfach-QSOs in Einzelkarten. (Weicht von „bis 3 Zeilen" ab.)
+- **Kein `subtitle`/„Responsive"** — komplett entfernt.
+- **Front im Cover-Modus** (füllt die Seite randlos, Überstand wird geclippt).
+- `MARGIN = 3 mm`; `/p`/`/m` oben mittig; Stationsdaten als Label/Wert-Spalte neben
+  der Adresse; REMARKS über volle Breite; Fuß unten mit ~3 mm Rahmenabstand.
+- **GUI: keine Speichern/Laden-Buttons** — Config wird automatisch gespeichert
+  (debounced) und bei externer Datei-Änderung neu geladen (mtime-Poll, Loop-Schutz
+  via `_suppress_save`). Enter in Eingabefeldern gibt den Fokus frei.
+
+**Realität der Testdaten (`Log.adi`)**
+- Enthält **kein** `QSL_SENT_VIA` → ohne `include_missing_via: true` (+ `default_via`)
+  entstehen 0 Karten. Jede Station kommt nur 1× vor.
+- FT8-QSOs haben dB-Rapporte (z. B. `-07`), die **bewusst** nicht sinnvoll ins
+  R/S/T-Raster passen (so vom Nutzer akzeptiert).
+
+**Workflow-Konventionen**
+- Branch **`build/mvp`**. **Nicht selbst committen** — erst nach Review; committen,
+  wenn der Nutzer die nächste Aufgabe vorschlägt. Commit-Messages Deutsch, Präfixe
+  `feat/fix/docs/chore`, GUI-Zwischenstände als **WIP** markieren.
+- IDE-Dateien (`.idea/`, `.DS_Store`) nie mitcommitten.
+- Doku-Änderungen erst nach Abnahme des Codes.
