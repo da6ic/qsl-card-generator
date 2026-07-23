@@ -32,13 +32,13 @@ def test_load_example_all_fields():
     assert c.lookup.qrz_user == ""
     assert c.lookup.qrz_pass == ""
     assert c.lookup.program_id == "qslcards"
-    assert c.lookup.lookup_addresses is False
     assert c.lookup.address_export is False
+    assert not hasattr(c.lookup, "lookup_addresses")
 
     # Generation
     assert c.generation.card_mode == "per_qso"
-    assert c.generation.via_filter == ["B", "D", "E", "M"]
-    assert c.generation.include_missing_via is False
+    assert c.generation.via_filter == ["B", "D", "M"]
+    assert not hasattr(c.generation, "include_missing_via")
     assert c.generation.default_via == "B"
     assert c.generation.page_orientation == "landscape"
     assert c.generation.static_footer == "TNX FR NICE CONTACT, 73"
@@ -67,7 +67,7 @@ def test_missing_fields_use_defaults(tmp_path: Path):
     assert c.generation.card_mode == "per_station"
     # fehlende Felder -> Defaults
     assert c.sender.name == ""
-    assert c.generation.via_filter == ["B", "D", "E", "M"]
+    assert c.generation.via_filter == ["B", "D", "M"]
     assert c.lookup.program_id == "qslcards"
 
 

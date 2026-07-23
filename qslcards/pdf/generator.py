@@ -54,29 +54,33 @@ def generate(
 
 
 def _export_addresses(cards: list[Card], output_path: str | Path) -> Path:
-    """Schreibt eine simple CSV mit Empfängeradressen für Direkt-Karten (via=D).
+    """Schreibt eine simple CSV mit Empfängeradressen **aller** Stationen, die
+    per Lookup eine Adresse haben (dedupliziert pro Rufzeichen).
 
-    Genutzt werden die (optional) per Lookup gefüllten `card.recipient`-Daten;
-    fehlen sie, bleiben die Felder leer. Datei liegt neben der PDF.
+    Genutzt werden die per Lookup gefüllten `card.recipient`-Daten; Stationen
+    ohne jegliche Adressdaten werden übersprungen. Datei liegt neben der PDF.
     """
     out = Path(output_path)
     export_path = out.with_name(f"{out.stem}_addresses.csv")
 
     with open(export_path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
-        writer.writerow(["call", "name", "street", "zip", "city", "country"])
+        writer.writerow(["call", "name", "street", "zip", "city", "country", "via"])
+        seen: set[str] = set()
         for card in cards:
-            if card.via_code != "D":
+            call = card.recipient_call
+            if call in seen:
                 continue
             r = card.recipient
-            writer.writerow(
-                [
-                    card.recipient_call,
-                    getattr(r, "name", "") or "",
-                    getattr(r, "street", "") or "",
-                    getattr(r, "zip", "") or "",
-                    getattr(r, "city", "") or "",
-                    getattr(r, "country", "") or "",
-                ]
-            )
+            fields = [
+                getattr(r, "name", "") or "",
+                getattr(r, "street", "") or "",
+                getattr(r, "zip", "") or "",
+                getattr(r, "city", "") or "",
+                getattr(r, "country", "") or "",
+            ]
+            if not any(fields):  # keine Adressdaten -> nicht exportieren
+                continue
+            seen.add(call)
+            writer.writerow([call, *fields, card.via_code])
     return export_path

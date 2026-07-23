@@ -15,6 +15,9 @@ sender:
   itu: "28"
 
 lookup:
+  # Der Lookup bestimmt je Station die Versandart (Via), den QSL-Manager und die
+  # Adresse. Er läuft AUTOMATISCH beim Log-Laden im Hintergrund, sobald hier
+  # Credentials stehen. Ohne Credentials: keine Netzcalls, alle Via = default_via.
   # HamQTH: kostenloses Konto genügt (https://www.hamqth.com/ registrieren)
   hamqth_user: ""
   hamqth_pass: ""
@@ -22,14 +25,17 @@ lookup:
   qrz_user: ""
   qrz_pass: ""
   program_id: "qslcards"       # Kennung, die HamQTH als prg-Parameter erwartet
-  lookup_addresses: false      # nur einschalten, wenn Adressen gebraucht werden
-  address_export: false        # zusätzliche Adress-/Label-Ausgabe für Direkt-Karten
+  address_export: false        # Adress-/Label-CSV für ALLE nachgeschlagenen Stationen
 
 generation:
   card_mode: "per_qso"         # "per_qso" oder "per_station"
-  via_filter: ["B", "D", "E", "M"]   # B=Büro, D=Direkt, E=Elektronisch, M=Manager
-  include_missing_via: false   # QSOs ohne QSL_SENT_VIA einbeziehen?
-  default_via: "B"             # gilt, wenn oben true und Via im QSO fehlt
+  via_filter: ["B", "D", "M"]  # welche Versandarten gedruckt werden: B=Büro,
+                               #   D=Direkt, M=Manager. E (Elektronisch) ist KEIN
+                               #   Druckweg -> nie im Filter; reine LoTW/eQSL-
+                               #   Stationen werden angezeigt, aber nicht gedruckt.
+  default_via: "B"             # Fallback, wenn der Lookup nichts/"?" liefert
+                               #   (nur hier in der Config, kein GUI-Feld).
+                               #   Via-Priorität sonst: Manager > Büro > Direkt > E.
   page_orientation: "landscape"  # A6 quer (Referenz). Alternativ "portrait"
   static_footer: "TNX FR NICE CONTACT, 73"
   qsl_mark: "none"             # welches Kästchen ankreuzen (global): pse|tnx|none

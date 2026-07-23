@@ -1,14 +1,28 @@
-"""Karten-Erzeugung: QSOs filtern, umformen, gruppieren (siehe SPECIFICATION.md §5.2)."""
+"""Karten-Erzeugung: QSOs umformen und gruppieren (siehe SPECIFICATION.md §5.2).
+
+**Kein Via-Filter**: es entstehen Karten für *alle* QSOs. Die Versandart (Via),
+der QSL-Manager und die Adresse kommen aus dem Lookup (Map `CALL -> LookupResult`,
+optional); ohne Treffer gilt `default_via`. Welche Karten am Ende gedruckt werden,
+entscheidet die GUI anhand des Via-Filters — nicht dieses Modul.
+"""
 
 from __future__ import annotations
 
 from collections import OrderedDict
+from typing import TYPE_CHECKING
 
 from qslcards.adif.models import QSO
 from qslcards.config import AppConfig
+from qslcards.lookup import derive_via
 from qslcards.pdf.geometry import MAX_ROWS
 
 from .models import Card, CardRow
+
+if TYPE_CHECKING:
+    from qslcards.lookup.base import LookupResult
+
+# Map CALL (Großbuchstaben) -> Lookup-Ergebnis; None-Werte sind erlaubt.
+Lookups = dict[str, "LookupResult | None"]
 
 # Optionale Tabelle Band -> repräsentative Frequenz (MHz), falls FREQ im Log fehlt.
 # Untere Bandkante als Näherung; nur zur Anzeige auf der Karte.
@@ -70,84 +84,86 @@ def _make_row(qso: QSO) -> CardRow:
     )
 
 
-def _effective_via(qso: QSO, config: AppConfig) -> str | None:
-    """Liefert den wirksamen Via-Code für ein QSO oder None (= verwerfen).
+def _resolve_via(
+    call: str, lookups: Lookups | None, default_via: str
+) -> tuple[str, str, LookupResult | None]:
+    """Ermittelt (via_code, via_text, recipient) für ein Rufzeichen aus dem Lookup.
 
-    Schritt 1: QSO behalten, wenn qsl_sent_via im via_filter liegt. QSOs ohne Via
-    nur, wenn include_missing_via gesetzt ist (dann default_via verwenden).
+    - `via_code` via `derive_via` (Priorität M>B>D>E, Fallback `default_via`).
+    - `via_text` = QSL-Manager (oder leer) → Feld „Via:" auf der Karte.
+    - `recipient` = das volle Lookup-Ergebnis (Adresse) für den Export, oder None.
+    """
+    result = lookups.get((call or "").strip().upper()) if lookups else None
+    via_code = derive_via(result, default_via)
+    via_text = (result.manager or "").strip() if result and result.manager else ""
+    return via_code, via_text, result
+
+
+def build_cards(qsos: list[QSO], config: AppConfig, lookups: Lookups | None = None) -> list[Card]:
+    """Wandelt **alle** QSOs in Karten um (Umformung, Gruppierung, Sortierung).
+
+    `lookups` liefert je Rufzeichen Via/Manager/Adresse; ohne Eintrag gilt
+    `default_via` und ein leeres „Via:"-Feld. Es wird **nicht** nach Via gefiltert.
     """
     gen = config.generation
-    via = qso.qsl_sent_via
-    if via is None:
-        if gen.include_missing_via:
-            return gen.default_via
-        return None
-    if via in gen.via_filter:
-        return via
-    return None
-
-
-def build_cards(qsos: list[QSO], config: AppConfig) -> list[Card]:
-    """Wandelt QSOs in Karten um (Filter, Umformung, Gruppierung, Sortierung)."""
-    gen = config.generation
-
-    # 1. Filtern + wirksamen Via-Code bestimmen.
-    kept: list[tuple[QSO, str]] = []
-    for qso in qsos:
-        via = _effective_via(qso, config)
-        if via is not None:
-            kept.append((qso, via))
 
     if gen.card_mode == "per_station":
-        cards = _group_per_station(kept)
+        cards = _group_per_station(qsos, lookups, gen.default_via)
     else:  # "per_qso" (Default)
-        cards = _group_per_qso(kept)
+        cards = _group_per_qso(qsos, lookups, gen.default_via)
 
-    # 7. Globale, manuelle Markierungen aus der Config je Karte übernehmen.
+    # Globale, manuelle Markierungen aus der Config je Karte übernehmen.
     for card in cards:
         card.qsl_mark = gen.qsl_mark
         card.portable_mark = gen.portable_mark
 
-    # 6. Deterministische Sortierung: Call, dann Datum/Zeit, dann Via.
+    # Deterministische Sortierung: Call, dann Datum/Zeit, dann Via.
     cards.sort(key=_card_sort_key)
     return cards
 
 
-def _group_per_qso(kept: list[tuple[QSO, str]]) -> list[Card]:
+def _group_per_qso(qsos: list[QSO], lookups: Lookups | None, default_via: str) -> list[Card]:
     cards: list[Card] = []
-    for qso, via in kept:
+    for qso in qsos:
+        via_code, via_text, recipient = _resolve_via(qso.call, lookups, default_via)
         cards.append(
             Card(
                 recipient_call=qso.call,
-                via_text=(qso.qsl_via or "").strip(),
-                via_code=via,
+                via_text=via_text,
+                via_code=via_code,
                 rows=[_make_row(qso)],
+                recipient=recipient,
             )
         )
     return cards
 
 
-def _group_per_station(kept: list[tuple[QSO, str]]) -> list[Card]:
-    # Gruppieren nach (Call, Via). OrderedDict wahrt Ersteinfüge-Reihenfolge
-    # (die endgültige Sortierung erfolgt ohnehin am Ende).
-    groups: OrderedDict[tuple[str, str], list[QSO]] = OrderedDict()
-    for qso, via in kept:
-        groups.setdefault((qso.call, via), []).append(qso)
+def _group_per_station(qsos: list[QSO], lookups: Lookups | None, default_via: str) -> list[Card]:
+    # Gruppieren nach (Call, Via). Da die Via je Rufzeichen aus dem Lookup kommt,
+    # ist sie für denselben Call konstant; der Schlüssel bleibt zur Sicherheit
+    # (Call, Via). OrderedDict wahrt die Ersteinfüge-Reihenfolge.
+    groups: OrderedDict[tuple[str, str], dict] = OrderedDict()
+    for qso in qsos:
+        via_code, via_text, recipient = _resolve_via(qso.call, lookups, default_via)
+        key = (qso.call, via_code)
+        entry = groups.setdefault(key, {"qsos": [], "via_text": via_text, "recipient": recipient})
+        entry["qsos"].append(qso)
 
     cards: list[Card] = []
-    for (call, via), group in groups.items():
+    for (call, via_code), entry in groups.items():
+        group: list[QSO] = entry["qsos"]
         # innerhalb der Station nach Datum/Zeit sortieren
         group.sort(key=lambda q: (q.qso_date, q.time_on))
-        via_text = next((q.qsl_via.strip() for q in group if q.qsl_via), "")
         rows = [_make_row(q) for q in group]
         # MAX_ROWS-Überlauf: Folge-Karten mit demselben Call/Via anlegen.
         for start in range(0, len(rows), MAX_ROWS):
             cards.append(
                 Card(
                     recipient_call=call,
-                    via_text=via_text,
-                    via_code=via,
+                    via_text=entry["via_text"],
+                    via_code=via_code,
                     rows=rows[start : start + MAX_ROWS],
+                    recipient=entry["recipient"],
                 )
             )
     return cards

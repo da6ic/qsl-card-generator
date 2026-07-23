@@ -34,16 +34,17 @@ class LookupConfig:
     qrz_user: str = ""
     qrz_pass: str = ""
     program_id: str = "qslcards"  # HamQTH verlangt prg-Kennung
-    lookup_addresses: bool = False  # nur wenn Adress-/Label-Export nötig
-    address_export: bool = False
+    address_export: bool = False  # Adress-/Label-CSV für alle Stationen
+    # Kein `lookup_addresses` mehr: der Lookup läuft automatisch beim Log-Laden,
+    # sobald Credentials gesetzt sind (siehe docs/SPECIFICATION.md §6).
 
 
 @dataclass
 class GenerationConfig:
     card_mode: str = "per_qso"  # "per_qso" | "per_station"
-    via_filter: list[str] = field(default_factory=lambda: ["B", "D", "E", "M"])
-    include_missing_via: bool = False
-    default_via: str = "B"  # gilt für QSOs ohne QSL_SENT_VIA
+    via_filter: list[str] = field(default_factory=lambda: ["B", "D", "M"])
+    default_via: str = "B"  # Fallback, wenn der Lookup nichts/"?" liefert
+    #   -> nur hier in der Config, kein GUI-Widget. Via kommt sonst aus dem Lookup.
     page_orientation: str = "landscape"  # A6, siehe CARD_LAYOUT.md
     static_footer: str = "TNX FR NICE CONTACT, 73"
     qsl_mark: str = "none"  # "pse" | "tnx" | "none" (global)

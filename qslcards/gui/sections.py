@@ -23,10 +23,10 @@ SENDER_FIELDS: list[tuple[str, str]] = [
     ("itu", "ITU"),
 ]
 
+# Druck-Kategorien im Filter (E = Elektronisch ist kein Druckweg -> nicht hier).
 VIA_CODES: list[tuple[str, str]] = [
     ("B", "B Büro"),
     ("D", "D Direkt"),
-    ("E", "E Elektronisch"),
     ("M", "M Manager"),
 ]
 
@@ -130,14 +130,13 @@ class SenderSection:
 
 
 class FilterSection:
-    """4. Via-Filter."""
+    """4. Via-Filter (markiert nur, welche Karten gedruckt werden)."""
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="4. Via-Filter")
+        self.frame = ttk.LabelFrame(parent, text="4. Via-Filter (Drucken)")
         self.via_vars: dict[str, tk.BooleanVar] = {}
-        self.include_missing = tk.BooleanVar(value=False)
 
-        # command wird in app.py gesetzt (Auto-Refresh der Vorschau).
+        # command wird in app.py gesetzt (Drucken-Markierung neu setzen).
         self.checkbuttons: list[ttk.Checkbutton] = []
         for i, (code, label) in enumerate(VIA_CODES):
             var = tk.BooleanVar(value=True)
@@ -146,12 +145,11 @@ class FilterSection:
             cb.grid(row=0, column=i, padx=4, pady=4, sticky="w")
             self.checkbuttons.append(cb)
 
-        self.include_cb = ttk.Checkbutton(
+        ttk.Label(
             self.frame,
-            text="QSOs ohne Via einbeziehen",
-            variable=self.include_missing,
-        )
-        self.include_cb.grid(row=1, column=0, columnspan=4, padx=4, pady=(0, 4), sticky="w")
+            text="Via kommt aus dem Lookup. E (elektronisch) wird nicht gedruckt.",
+            foreground="gray",
+        ).grid(row=1, column=0, columnspan=3, padx=4, pady=(0, 4), sticky="w")
 
 
 class ModeSection:
@@ -183,7 +181,6 @@ class LookupSection:
         self.hamqth_pass = tk.StringVar()
         self.qrz_user = tk.StringVar()
         self.qrz_pass = tk.StringVar()
-        self.lookup_addresses = tk.BooleanVar(value=False)
         self.address_export = tk.BooleanVar(value=False)
 
         rows = [
@@ -201,10 +198,10 @@ class LookupSection:
                 show="•" if secret else "",
             ).grid(row=i, column=1, padx=4, pady=1, sticky="we")
 
-        ttk.Checkbutton(
+        ttk.Label(
             self.frame,
-            text="Adressen für Direkt-Karten nachschlagen",
-            variable=self.lookup_addresses,
+            text="Lookup läuft automatisch beim Log-Laden.",
+            foreground="gray",
         ).grid(row=4, column=0, columnspan=2, padx=4, pady=1, sticky="w")
         ttk.Checkbutton(
             self.frame,

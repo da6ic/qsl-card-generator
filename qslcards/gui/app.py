@@ -18,6 +18,7 @@ from qslcards import config as cfg
 from qslcards.adif.parser import parse_file
 from qslcards.cards.builder import build_cards
 from qslcards.config import AppConfig, GenerationConfig, LookupConfig, SenderConfig
+from qslcards.lookup import has_lookup_credentials, lookup_calls
 from qslcards.pdf.generator import generate
 
 from .preview import PreviewTable
@@ -101,6 +102,11 @@ class App(tk.Tk):
         # (default_via, static_footer, program_id, page_orientation).
         self.base_config: AppConfig = AppConfig()
 
+        # Lookup-Zustand: Map CALL -> LookupResult|None (Via/Manager/Adresse).
+        self.lookups: dict = {}
+        self._lookup_running = False
+        self._generating = False
+
         # Auto-Sync-Zustand
         self._suppress_save = False  # unterdrückt Auto-Save beim programmatischen Setzen
         self._save_after_id: str | None = None  # laufender Debounce-Timer
@@ -160,17 +166,21 @@ class App(tk.Tk):
         # Enter in einem Eingabefeld gibt den Fokus frei -> kein Highlight/Auswahl.
         self.bind_class("TEntry", "<Return>", self._defocus_entry)
 
-        # Vorschau automatisch neu aufbauen, wenn Filter/Modus/Markierungen sich
-        # ändern (die Markierungen fließen in build_cards ein).
+        # Der Via-Filter entfernt keine Zeilen mehr, sondern setzt nur die
+        # Drucken-Markierung (kein Rebuild nötig).
         for cb in self.filter_section.checkbuttons:
-            cb.config(command=self._rebuild_cards)
-        self.filter_section.include_cb.config(command=self._rebuild_cards)
+            cb.config(command=self._apply_filter)
+        # Modus/Markierungen ändern die Karten selbst -> Rebuild (mit Lookups).
         self.mode_section.radio_qso.config(command=self._rebuild_cards)
         self.mode_section.radio_station.config(command=self._rebuild_cards)
         self.sender_section.qsl_combo.bind("<<ComboboxSelected>>", lambda _e: self._rebuild_cards())
         self.sender_section.portable_combo.bind(
             "<<ComboboxSelected>>", lambda _e: self._rebuild_cards()
         )
+        # „Neu abrufen": fehlende/abgebrochene Stationen erneut nachschlagen.
+        self.preview.refresh_btn.config(command=self._refresh_lookups)
+        # Nach einer Via-Bearbeitung die Drucken-Markierung der Zeile nachziehen.
+        self.preview.on_cell_edited = self._on_cell_edited
 
     # ----------------------------------------------------------- Config
     def _load_initial_config(self) -> None:
@@ -191,12 +201,10 @@ class App(tk.Tk):
             self.lookup_section.hamqth_pass.set(config.lookup.hamqth_pass)
             self.lookup_section.qrz_user.set(config.lookup.qrz_user)
             self.lookup_section.qrz_pass.set(config.lookup.qrz_pass)
-            self.lookup_section.lookup_addresses.set(config.lookup.lookup_addresses)
             self.lookup_section.address_export.set(config.lookup.address_export)
 
             for code, var in self.filter_section.via_vars.items():
                 var.set(code in config.generation.via_filter)
-            self.filter_section.include_missing.set(config.generation.include_missing_via)
             self.mode_section.card_mode.set(config.generation.card_mode)
             self.sender_section.qsl_mark.set(
                 QSL_CODE_TO_DISPLAY.get(config.generation.qsl_mark, "Leer lassen")
@@ -217,14 +225,12 @@ class App(tk.Tk):
             qrz_user=self.lookup_section.qrz_user.get(),
             qrz_pass=self.lookup_section.qrz_pass.get(),
             program_id=self.base_config.lookup.program_id,
-            lookup_addresses=self.lookup_section.lookup_addresses.get(),
             address_export=self.lookup_section.address_export.get(),
         )
         via_filter = [c for c, v in self.filter_section.via_vars.items() if v.get()]
         generation = GenerationConfig(
             card_mode=self.mode_section.card_mode.get(),
             via_filter=via_filter,
-            include_missing_via=self.filter_section.include_missing.get(),
             default_via=self.base_config.generation.default_via,
             page_orientation=self.base_config.generation.page_orientation,
             static_footer=self.base_config.generation.static_footer,
@@ -259,10 +265,8 @@ class App(tk.Tk):
             self.lookup_section.hamqth_pass,
             self.lookup_section.qrz_user,
             self.lookup_section.qrz_pass,
-            self.lookup_section.lookup_addresses,
             self.lookup_section.address_export,
             *self.filter_section.via_vars.values(),
-            self.filter_section.include_missing,
             self.mode_section.card_mode,
         ]
         for var in watched:
@@ -330,7 +334,9 @@ class App(tk.Tk):
             messagebox.showerror("Fehler", f"Logbuch nicht lesbar:\n{exc}")
             return
         self.file_section.count_var.set(f"{len(self.qsos)} QSOs geladen")
-        self._rebuild_cards()
+        # Frische Lookups: alte Ergebnisse verwerfen und automatisch neu abrufen.
+        self.lookups = {}
+        self._start_lookups([q.call for q in self.qsos])
 
     # ------------------------------------------------------------ Bild
     def _choose_image(self) -> None:
@@ -352,15 +358,100 @@ class App(tk.Tk):
         self.image_section.thumb_label.config(image=self._thumb, text="")
 
     # ---------------------------------------------------------- Karten
+    def _via_filter_set(self) -> set[str]:
+        return {code for code, var in self.filter_section.via_vars.items() if var.get()}
+
+    def _included_default(self, card) -> bool:
+        """Drucken-Voreinstellung: nur Karten mit ausgewählter Via (E nie im Filter)."""
+        return card.via_code in self._via_filter_set()
+
     def _rebuild_cards(self) -> None:
         if not self.qsos:
             self.preview.set_cards([])
             return
-        cards = build_cards(self.qsos, self._gather_config())
-        self.preview.set_cards(cards)
+        cards = build_cards(self.qsos, self._gather_config(), self.lookups)
+        self.preview.set_cards(cards, included=self._included_default, pending=self._lookup_running)
+
+    def _apply_filter(self) -> None:
+        """Via-Filter geändert: nur die Drucken-Markierung neu setzen (kein Rebuild)."""
+        self.preview.apply_via_filter(self._via_filter_set())
+
+    def _on_cell_edited(self, iid: str, card, column: str) -> None:
+        """Nach einer Via-Bearbeitung die Drucken-Markierung der Zeile nachziehen
+        (neue Via im Filter -> drucken, sonst nicht). Route-Edits ändern nur den
+        Kartentext und lassen die Markierung unberührt."""
+        if column == "via":
+            self.preview.set_row_included(iid, card.via_code in self._via_filter_set())
+
+    # ------------------------------------------------------- Lookup (async)
+    def _start_lookups(self, calls: list[str], *, force: bool = False) -> None:
+        """Schlägt `calls` im Hintergrund nach (Via/Manager/Adresse).
+
+        Ohne Zugangsdaten passiert kein Netzcall: alle Via fallen auf den
+        Standard. Während des Laufs ist „PDF erzeugen" gesperrt.
+        """
+        if self._lookup_running or not calls:
+            self._rebuild_cards()
+            return
+        config = self._gather_config()
+        if not has_lookup_credentials(config.lookup):
+            self._rebuild_cards()
+            self.preview.set_status("Keine Lookup-Zugangsdaten – Via = Standard.")
+            self._update_generate_state()
+            return
+
+        self._lookup_running = True
+        self._rebuild_cards()  # zeigt „…" für Via/Route
+        self.preview.set_status("Schlage Stationen nach…")
+        self.preview.refresh_btn.config(state="disabled")
+        self._update_generate_state()
+
+        thread = threading.Thread(
+            target=self._lookups_worker,
+            args=(list(calls), config.lookup, force),
+            daemon=True,
+        )
+        thread.start()
+
+    def _refresh_lookups(self) -> None:
+        """„Neu abrufen": offene (nicht aufgelöste) Stationen erneut versuchen;
+        sind alle aufgelöst, wird ein vollständiger Force-Refresh gemacht."""
+        if self._lookup_running or not self.qsos:
+            return
+        unresolved = [
+            q.call for q in self.qsos if self.lookups.get((q.call or "").strip().upper()) is None
+        ]
+        self._start_lookups(unresolved or [q.call for q in self.qsos], force=True)
+
+    def _lookups_worker(self, calls, lookup_config, force) -> None:
+        def progress(done: int, total: int) -> None:
+            self.after(0, self.preview.set_status, f"Schlage Stationen nach… {done}/{total}")
+
+        # lookup_calls fängt Netz-/Auth-Fehler ab (nie fatal).
+        results = lookup_calls(calls, lookup_config, force=force, progress_cb=progress)
+        self.after(0, self._lookups_done, results)
+
+    def _lookups_done(self, results: dict) -> None:
+        self._lookup_running = False
+        self.lookups.update(results)
+        self._rebuild_cards()
+        self.preview.refresh_btn.config(state="normal")
+        total = len({(q.call or "").strip().upper() for q in self.qsos if q.call})
+        found = sum(1 for r in self.lookups.values() if r is not None)
+        self.preview.set_status(f"Lookup fertig – {found}/{total} Stationen gefunden.")
+        self._update_generate_state()
+
+    def _update_generate_state(self) -> None:
+        busy = self._lookup_running or self._generating
+        self.output_section.generate_btn.config(state="disabled" if busy else "normal")
 
     # ---------------------------------------------------- PDF-Erzeugung
     def _on_generate(self) -> None:
+        if self._lookup_running:
+            messagebox.showinfo(
+                "Lookup läuft", "Bitte warten, bis die Stationen nachgeschlagen sind."
+            )
+            return
         cards = self.preview.included_cards()
         if not cards:
             messagebox.showwarning("Keine Karten", "Es sind keine Karten zum Erzeugen ausgewählt.")
@@ -375,7 +466,8 @@ class App(tk.Tk):
             return
 
         config = self._gather_config()
-        self.output_section.generate_btn.config(state="disabled")
+        self._generating = True
+        self._update_generate_state()
         self.output_section.progress.config(maximum=len(cards), value=0)
         self.output_section.status_var.set("Erzeuge PDF…")
 
@@ -387,6 +479,8 @@ class App(tk.Tk):
         thread.start()
 
     def _worker_generate(self, cards, config, front, output) -> None:
+        # Via/Manager/Adresse stecken bereits in den Karten (Auto-Lookup beim
+        # Laden). Hier wird nur noch die PDF (+ optionaler Adress-Export) erzeugt.
         def progress(done: int, total: int) -> None:
             self.after(0, self._update_progress, done, total)
 
@@ -402,7 +496,8 @@ class App(tk.Tk):
         self.output_section.status_var.set(f"Erzeuge PDF… {done}/{total}")
 
     def _generate_done(self, output: str, error: Exception | None) -> None:
-        self.output_section.generate_btn.config(state="normal")
+        self._generating = False
+        self._update_generate_state()
         if error is not None:
             self.output_section.status_var.set(f"Fehler: {error}")
             messagebox.showerror("Fehler", f"PDF-Erzeugung fehlgeschlagen:\n{error}")
