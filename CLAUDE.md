@@ -16,8 +16,10 @@ automatisch **QSL-Karten** erzeugt und als **eine große PDF** ausgibt.
   (Vorlage: DARC-QSL-Karte, Rückseite von DN5MT).
 - Ein **einziges Frontbild** wird für **alle** Karten verwendet.
 - Absenderdaten kommen aus der **Config**, QSO-Daten aus dem **ADIF-Log**,
-  Empfängerdaten bei Bedarf aus **HamQTH** (primär) bzw. **QRZ** (optional).
-- Karten werden nach **Via** gefiltert (`QSL_SENT_VIA`: B/D/E/M).
+  Empfänger-/Routing-Daten aus **HamQTH** (primär) bzw. **QRZ** (optional).
+- Die **Versandart (Via)** steht **nicht** im Log — sie wird je Station per
+  **Lookup** bestimmt (Manager > Büro > Direkt > Elektronisch, siehe §5). Der
+  Via-Filter (B/D/M) markiert dann nur, welche Karten gedruckt werden.
 - Modus wählbar: **eine Karte pro QSO** oder **eine Karte pro Station**.
 
 ---
@@ -69,10 +71,11 @@ qslcards/
     __init__.py
     app.py                # Hauptfenster, verdrahtet alles
     sections.py           # UI-Abschnitte (Datei, Bild, Absender, Filter, ...)
-    preview.py            # Tabelle: geparste & gefilterte QSOs/Karten
+    preview.py            # Tabelle: ALLE QSOs/Karten + Via/Route, Drucken-Flag
 tests/
   test_adif_parser.py
   test_card_builder.py
+  test_lookup.py
   test_geometry.py
 config.example.yaml       # Vorlage -> Nutzer kopiert nach config.yaml
 requirements.txt
@@ -87,13 +90,18 @@ docs/
 ## 4. Datenfluss (Big Picture)
 
 ```
-ADIF-Datei ──parser──> [QSO, QSO, ...] ──builder(Filter Via + Gruppierung)──> [Card, ...]
+ADIF-Datei ──parser──> [QSO, QSO, ...]
+                            │
+HamQTH/QRZ (auto beim Laden, alle Stationen, gecacht)
+   └─> je CALL: Via (M>B>D>E) + Manager + Adresse
+                            │
+                            ▼
+        builder(alle QSOs, Via aus Lookup, Gruppierung) ──> [Card, ...]
                                                     │
 Config (Absender) ──────────────────────────────────┤
-                                                    │
 Frontbild ──────────────────────────────────────────┤
                                                     ▼
-HamQTH/QRZ (nur bei Bedarf, gecacht) ──> Recipient-Adresse ──> generator ──> gesamt.pdf
+GUI: Via-Filter markiert Drucken/nicht ──> generator ──> gesamt.pdf (+ Adress-CSV)
 ```
 
 Jede `Card` erzeugt genau zwei Seiten: `layout_front` + `layout_back`.
@@ -104,18 +112,27 @@ Jede `Card` erzeugt genau zwei Seiten: `layout_front` + `layout_back`.
 
 1. **Signalrapport auf der Karte = `RST_SENT`** (der Rapport, den *wir* dem
    Gegenüber gegeben haben = wie wir ihn gehört haben). Nicht `RST_RCVD`.
-2. **Via-Filter** = ADIF-Feld `QSL_SENT_VIA`. Enum: `B`=Büro, `D`=Direkt,
-   `E`=Elektronisch, `M`=Manager. Nur QSOs mit ausgewähltem Via werden zu Karten.
-   Fehlt das Feld, gilt ein konfigurierbarer Default (siehe Config).
+2. **Via kommt aus dem Lookup, NICHT aus dem Log.** Das Log enthält keine
+   Versandart. `derive_via(result, default_via)` bestimmt je Station eine
+   Kategorie nach fester Priorität **M > B > D > E**:
+   - Manager (`qsl_via`/`qslmgr`) vorhanden → `M` (drucken; Manager ins Feld „Via:").
+   - sonst Büro (`qsl=Y`) → `B`; sonst Direkt (`qsldirect=Y`) → `D`.
+   - sonst LoTW/eQSL (`lotw=Y`/`eqsl=Y`) → `E` = **Ausschluss** (angezeigt, aber
+     standardmäßig **nicht** gedruckt; manuell aktivierbar). `E` ist kein Druckweg.
+   - sonst (nichts/„?"/Fehler) → `default_via` (Config-only, Default `B`).
+   Der **Via-Filter** (Checkboxen `B`/`D`/`M`, kein `E`) entfernt keine Zeilen,
+   sondern setzt nur die Drucken-Markierung. Kein `include_missing_via` mehr.
 3. **Absenderblock** (Call, Name, Straße, PLZ/Ort, Land, Locator, DOK, WAZ, ITU)
    kommt **immer aus der Config**, nie aus dem Log.
 4. **Empfänger** auf der Karte = **nur das Rufzeichen** (`CALL`) im Feld
-   „To Amateur Radio Station:". Name/Adresse des Empfängers stehen **nicht** auf
-   der Karte — sie werden nur für den **optionalen Adress-/Label-Export** (Kuvert
-   bei Direkt-Karten) per Lookup geholt, und nur **wenn benötigt**.
-5. **Lookup nur bei Bedarf**: Adress-Lookup standardmäßig nur für via=`D`
-   (Direkt) und nur, wenn der Adress-/Label-Export aktiviert ist. Ergebnisse
-   werden gecacht (`lookup/cache.py`), um API-Limits zu schonen.
+   „To Amateur Radio Station:". Der **Manager** (aus dem Lookup) steht im Feld
+   „Via:". Name/Adresse des Empfängers stehen **nicht** auf der Karte — sie gehen
+   nur in den **optionalen Adress-/Label-Export** (für **alle** Stationen).
+5. **Lookup läuft automatisch** beim Log-Laden für **alle** Stationen im
+   Hintergrund-Thread (kein `lookup_addresses`-Schalter), sofern HamQTH-/QRZ-
+   Credentials gesetzt sind; sonst kein Netzcall und alle Via = `default_via`.
+   Ergebnisse (auch negative) werden gecacht (`lookup/cache.py`). „PDF erzeugen"
+   ist gesperrt, bis der Lookup fertig ist; „Neu abrufen" holt Fehlende nach.
 6. **Karte pro QSO vs. pro Station**: Bei „pro Station" werden alle QSOs mit
    demselben Call (innerhalb desselben Via) zu **einer** Karte zusammengefasst;
    die Tabelle bekommt dann **mehrere Zeilen** (max. Zeilenzahl aus
@@ -162,20 +179,31 @@ class LookupResult:
     city: str | None
     country: str | None
     grid: str | None
+    # QSL-Routing (fürs Via + Feld „Via:"):
+    manager: str | None         # qsl_via (HamQTH) / qslmgr (QRZ)
+    accepts_bureau: str | None  # HamQTH qsl      ("Y"/"N"/"?")
+    accepts_direct: str | None  # HamQTH qsldirect
+    lotw: str | None            # HamQTH lotw
+    eqsl: str | None            # HamQTH eqsl
     source: str          # "hamqth" | "qrz" | "cache" | "none"
 
 class LookupProvider(Protocol):
     def lookup(self, call: str) -> LookupResult | None: ...
+
+def derive_via(result, default_via) -> str: ...  # "B"|"M"|"D"|"E" (M>B>D>E)
 ```
 - HamQTH: Session per `u`/`p` holen, dann `id`+`callsign` abfragen; Session ~1h
   gültig, bei Ablauf neu anmelden. Endpunkte/Details in `docs/SPECIFICATION.md`.
 - QRZ: nur wenn Credentials gesetzt; ohne bezahltes Abo liefert QRZ nur
   eingeschränkte Felder → als „best effort" behandeln, Fehler nicht fatal.
+- `enrich_recipients(...)` schlägt **alle** Stationen nach und füllt je Karte
+  `via_code`/`via_text`/`recipient`. Netz-/Auth-Fehler nie fatal.
 
 ### `cards/builder.py`
-- `build_cards(qsos, config) -> list[Card]`
-- filtert nach `config.via_filter`, gruppiert nach `config.card_mode`
-  (`per_qso` | `per_station`), sortiert deterministisch (Call, dann Datum/Zeit).
+- `build_cards(qsos, config, lookups=None) -> list[Card]`
+- **kein Via-Filter**: baut Karten für **alle** QSOs; `via_code` via
+  `derive_via(lookups[call], config.default_via)`, `via_text` = Manager. Gruppiert
+  nach `config.card_mode` (`per_qso`|`per_station`), sortiert deterministisch.
 
 ### `pdf/generator.py`
 - `generate(cards, config, front_image_path, output_path, progress_cb=None)`
@@ -224,11 +252,13 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
 - [x] ADIF-Datei wählbar, Parser liefert korrekte QSO-Liste (Tests grün).
 - [x] Frontbild wählbar + Vorschau.
 - [x] Absender-Config editierbar, wird gespeichert/geladen.
-- [ ] Via-Filter (B/D/E/M) und Modus (pro QSO / pro Station) wählbar.
-- [ ] Vorschau-Tabelle zeigt, welche Karten erzeugt werden.
+- [ ] Via-Filter (B/D/M) und Modus (pro QSO / pro Station) wählbar; Filter setzt
+      nur die Drucken-Markierung, Via kommt aus dem Lookup.
+- [ ] Vorschau-Tabelle zeigt **alle** QSOs mit Via/Route; Lookup-Status sichtbar.
 - [x] „PDF erzeugen" liefert eine PDF mit 2 A6-Seiten pro Karte.
 - [ ] Rückseite entspricht `docs/CARD_LAYOUT.md` (visuell iteriert).
-- [ ] HamQTH-Lookup + Cache funktionieren; Ausfälle sind nicht fatal.
+- [ ] Auto-Lookup beim Laden bestimmt Via (M>B>D>E) + Manager + Adresse für alle
+      Stationen; Cache funktioniert; Ausfälle sind nicht fatal.
 ---
 
 ## 10. Nicht raten — nachschlagen
@@ -287,8 +317,10 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   via `_suppress_save`). Enter in Eingabefeldern gibt den Fokus frei.
 
 **Realität der Testdaten (`Log.adi`)**
-- Enthält **kein** `QSL_SENT_VIA` → ohne `include_missing_via: true` (+ `default_via`)
-  entstehen 0 Karten. Jede Station kommt nur 1× vor.
+- Enthält **kein** `QSL_SENT_VIA` (und keine Via-Info) — das ist der **Normalfall**:
+  die Via kommt aus dem Lookup, nicht aus dem Log. Ohne Lookup-Credentials fallen
+  alle Karten auf `default_via` (Default `B`); mit Credentials wird je Station
+  M>B>D>E bestimmt. Jede Station kommt nur 1× vor.
 - FT8-QSOs haben dB-Rapporte (z. B. `-07`), die **bewusst** nicht sinnvoll ins
   R/S/T-Raster passen (so vom Nutzer akzeptiert).
 
