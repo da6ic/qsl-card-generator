@@ -29,6 +29,7 @@ class Card:
     via_code: str  # B/D/E/M (für Export/Sortierung)
     rows: list[CardRow]  # 1..N (per_station kann mehrere haben)
     qsl_mark: str = "none"  # global aus config: "pse" | "tnx" | "none"
-    portable_mark: str = "none"  # global aus config: "none" | "p" | "m"
+    portable_mark: str = "none"  # global aus config: "none" | "p" | "m" | "t" | "r"
+    confirm_mark: str = "none"  # global aus config: "qso" | "swl" | "none"
     # Empfängeradresse nur bei Bedarf gefüllt (Export), NICHT auf der Karte:
     recipient: LookupResult | None = None

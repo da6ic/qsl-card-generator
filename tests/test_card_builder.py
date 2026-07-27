@@ -101,7 +101,7 @@ def test_freq_from_field_then_band():
     ]
     by_call = {c.recipient_call: c.rows[0].freq_mhz for c in build_cards(qsos, config())}
     assert by_call["DL1AA"] == "14.074"
-    assert by_call["DL2BB"] == "7.0"
+    assert by_call["DL2BB"] == "7.000"  # aus Band abgeleitet, auf 3 Nachkommastellen
     assert by_call["DL3CC"] == ""
 
 
@@ -155,16 +155,18 @@ def test_max_rows_overflow_creates_followup_cards():
 
 def test_marks_taken_from_config_no_auto_logic():
     qsos = [make_qso("DL1AA"), make_qso("DL2BB")]
-    cards = build_cards(qsos, config(qsl_mark="tnx", portable_mark="p"))
+    cards = build_cards(qsos, config(qsl_mark="tnx", portable_mark="t", confirm_mark="swl"))
     assert cards
     assert all(c.qsl_mark == "tnx" for c in cards)
-    assert all(c.portable_mark == "p" for c in cards)
+    assert all(c.portable_mark == "t" for c in cards)
+    assert all(c.confirm_mark == "swl" for c in cards)
 
 
 def test_marks_default_none():
     card = build_cards([make_qso("DL1AA")], config())[0]
     assert card.qsl_mark == "none"
     assert card.portable_mark == "none"
+    assert card.confirm_mark == "none"
 
 
 # --- Sortierung -----------------------------------------------------------

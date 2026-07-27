@@ -19,7 +19,7 @@ SENDER_FIELDS: list[tuple[str, str]] = [
     ("country", "Land"),
     ("locator", "Locator"),
     ("dok", "DOK"),
-    ("waz", "WAZ"),
+    ("waz", "CQ-Zone"),
     ("itu", "ITU"),
 ]
 
@@ -31,7 +31,12 @@ VIA_CODES: list[tuple[str, str]] = [
 ]
 
 QSL_MARK_CHOICES = ["Leer lassen", "PSE QSL", "TNX QSL"]
-PORTABLE_CHOICES = ["Keins", "/p", "/m"]
+PORTABLE_CHOICES = ["Keins", "/p", "/m", "/t", "/r"]
+CONFIRM_MARK_CHOICES = ["Leer lassen", "Confirming QSO", "Confirming SWL-Report"]
+
+# Breite der Absender-Textfelder; Dropdowns bekommen dieselbe Breite, damit
+# alle Eingabeelemente in Abschnitt 3 gleich lang sind.
+SENDER_FIELD_WIDTH = 28
 
 
 class FileSection:
@@ -88,7 +93,7 @@ class SenderSection:
             ttk.Label(self.frame, text=label).grid(row=row, column=0, padx=4, pady=1, sticky="w")
             var = tk.StringVar()
             self.vars[field] = var
-            ttk.Entry(self.frame, textvariable=var, width=28).grid(
+            ttk.Entry(self.frame, textvariable=var, width=SENDER_FIELD_WIDTH).grid(
                 row=row, column=1, padx=4, pady=1, sticky="we"
             )
             row += 1
@@ -108,9 +113,9 @@ class SenderSection:
             textvariable=self.qsl_mark,
             values=QSL_MARK_CHOICES,
             state="readonly",
-            width=14,
+            width=SENDER_FIELD_WIDTH,
         )
-        self.qsl_combo.grid(row=row, column=1, padx=4, pady=1, sticky="w")
+        self.qsl_combo.grid(row=row, column=1, padx=4, pady=1, sticky="we")
         row += 1
 
         ttk.Label(self.frame, text="Portabel").grid(row=row, column=0, padx=4, pady=1, sticky="w")
@@ -120,9 +125,23 @@ class SenderSection:
             textvariable=self.portable,
             values=PORTABLE_CHOICES,
             state="readonly",
-            width=14,
+            width=SENDER_FIELD_WIDTH,
         )
-        self.portable_combo.grid(row=row, column=1, padx=4, pady=1, sticky="w")
+        self.portable_combo.grid(row=row, column=1, padx=4, pady=1, sticky="we")
+        row += 1
+
+        ttk.Label(self.frame, text="Bestätigung").grid(
+            row=row, column=0, padx=4, pady=1, sticky="w"
+        )
+        self.confirm_mark = tk.StringVar(value=CONFIRM_MARK_CHOICES[0])
+        self.confirm_combo = ttk.Combobox(
+            self.frame,
+            textvariable=self.confirm_mark,
+            values=CONFIRM_MARK_CHOICES,
+            state="readonly",
+            width=SENDER_FIELD_WIDTH,
+        )
+        self.confirm_combo.grid(row=row, column=1, padx=4, pady=1, sticky="we")
 
         # Kein Speichern/Laden-Button mehr: die Config wird automatisch
         # gespeichert und bei externer Änderung neu geladen.

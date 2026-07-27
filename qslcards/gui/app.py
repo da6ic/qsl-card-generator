@@ -42,8 +42,14 @@ ADIF_TYPES = [("ADIF-Logbuch", "*.adi *.adif"), ("Alle Dateien", "*.*")]
 # Display <-> Code-Mappings der Dropdowns.
 QSL_MARK_TO_CODE = {"Leer lassen": "none", "PSE QSL": "pse", "TNX QSL": "tnx"}
 QSL_CODE_TO_DISPLAY = {v: k for k, v in QSL_MARK_TO_CODE.items()}
-PORTABLE_TO_CODE = {"Keins": "none", "/p": "p", "/m": "m"}
+PORTABLE_TO_CODE = {"Keins": "none", "/p": "p", "/m": "m", "/t": "t", "/r": "r"}
 PORTABLE_CODE_TO_DISPLAY = {v: k for k, v in PORTABLE_TO_CODE.items()}
+CONFIRM_MARK_TO_CODE = {
+    "Leer lassen": "none",
+    "Confirming QSO": "qso",
+    "Confirming SWL-Report": "swl",
+}
+CONFIRM_CODE_TO_DISPLAY = {v: k for k, v in CONFIRM_MARK_TO_CODE.items()}
 
 # Thumbnail-Maximalgröße. Die Höhe bleibt unter der natürlichen Höhe des
 # Absender-Blocks, damit ein geladenes Bild die linke Spalte (und damit das
@@ -177,6 +183,9 @@ class App(tk.Tk):
         self.sender_section.portable_combo.bind(
             "<<ComboboxSelected>>", lambda _e: self._rebuild_cards()
         )
+        self.sender_section.confirm_combo.bind(
+            "<<ComboboxSelected>>", lambda _e: self._rebuild_cards()
+        )
         # „Neu abrufen": fehlende/abgebrochene Stationen erneut nachschlagen.
         self.preview.refresh_btn.config(command=self._refresh_lookups)
         # Nach einer Via-Bearbeitung die Drucken-Markierung der Zeile nachziehen.
@@ -212,6 +221,9 @@ class App(tk.Tk):
             self.sender_section.portable.set(
                 PORTABLE_CODE_TO_DISPLAY.get(config.generation.portable_mark, "Keins")
             )
+            self.sender_section.confirm_mark.set(
+                CONFIRM_CODE_TO_DISPLAY.get(config.generation.confirm_mark, "Leer lassen")
+            )
         finally:
             self._suppress_save = False
 
@@ -236,6 +248,7 @@ class App(tk.Tk):
             static_footer=self.base_config.generation.static_footer,
             qsl_mark=QSL_MARK_TO_CODE.get(self.sender_section.qsl_mark.get(), "none"),
             portable_mark=PORTABLE_TO_CODE.get(self.sender_section.portable.get(), "none"),
+            confirm_mark=CONFIRM_MARK_TO_CODE.get(self.sender_section.confirm_mark.get(), "none"),
         )
         return AppConfig(sender=sender, lookup=lookup, generation=generation)
 
@@ -261,6 +274,7 @@ class App(tk.Tk):
             *self.sender_section.vars.values(),
             self.sender_section.qsl_mark,
             self.sender_section.portable,
+            self.sender_section.confirm_mark,
             self.lookup_section.hamqth_user,
             self.lookup_section.hamqth_pass,
             self.lookup_section.qrz_user,

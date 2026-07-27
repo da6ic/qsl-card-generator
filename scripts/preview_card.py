@@ -31,6 +31,7 @@ SAMPLE_CARDS = [
         rows=[CardRow("19", "07", "26", "14:38", "14.230", "SSB", "59")],
         qsl_mark="tnx",
         portable_mark="p",
+        confirm_mark="qso",
     ),
     Card(
         recipient_call="G3NFV",
@@ -39,6 +40,7 @@ SAMPLE_CARDS = [
         rows=[CardRow("19", "07", "26", "15:11", "7.030", "CW", "599")],
         qsl_mark="tnx",
         portable_mark="none",
+        confirm_mark="swl",
     ),
     Card(
         recipient_call="F5ABC",
@@ -46,7 +48,8 @@ SAMPLE_CARDS = [
         via_code="M",
         rows=[CardRow("20", "07", "26", "09:05", "144.300", "SSB", "57")],
         qsl_mark="pse",
-        portable_mark="m",
+        portable_mark="r",
+        confirm_mark="none",
     ),
 ]
 

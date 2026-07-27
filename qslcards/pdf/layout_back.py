@@ -2,8 +2,8 @@
 
 Der Zeichencode benutzt ausschließlich benannte Konstanten aus geometry.py –
 keine Layout-Zahlen hier. Positionen werden als `yt` (von oben) angegeben; die
-Umrechnung in ReportLab-Koordinaten (Ursprung unten links) übernehmen die
-Helfer `text`, `checkbox` und die internen `_box`/`_hline`/`_vline`.
+Umrechnung in ReportLab-Koordinaten (Ursprung unten links) übernimmt der
+Helfer `text` und die internen `_box`/`_hline`/`_vline`.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 # Statische Kopftexte der Tabelle (Inhalt, kein Layout).
 _HEAD_DATE = "DATE"
 _HEAD_DATE_SUB = ("D", "M", "Y")
-_HEAD_UTC = ("UNIVERSAL TIME", "(UTC)")
+_HEAD_UTC = ("TIME", "(UTC)")
 _HEAD_FREQ = ("FREQUENCY", "MHZ")
 _HEAD_2WAY = ("2-WAY QSO", "IN")
 _HEAD_RST = "SIGNAL REPORT"
@@ -56,41 +56,6 @@ def text(
         c.drawRightString(x, baseline, s)
     else:
         c.drawString(x, baseline, s)
-
-
-def checkbox(
-    c: Canvas,
-    x: float,
-    yt: float,
-    label: str,
-    checked: bool = False,
-    size: float = g.SIZE_CHECK,
-) -> None:
-    """Kleines Quadrat (Seite CHECKBOX_SIZE) mit Label rechts daneben.
-
-    `yt` = Oberkante des Kästchens von oben. Bei `checked=True` wird ein Kreuz
-    ins Kästchen gezeichnet."""
-    box_bottom = g.PAGE_H - yt - g.CHECKBOX_SIZE
-    c.setLineWidth(g.LINE_WIDTH)
-    c.rect(x, box_bottom, g.CHECKBOX_SIZE, g.CHECKBOX_SIZE, stroke=1, fill=0)
-    if checked:
-        # Kreuz größer als das Kästchen: Endpunkte ragen um CROSS_OVERHANG hinaus.
-        o = g.CHECKBOX_CROSS_OVERHANG
-        left, right = x - o, x + g.CHECKBOX_SIZE + o
-        bottom, top = box_bottom - o, box_bottom + g.CHECKBOX_SIZE + o
-        c.line(left, bottom, right, top)
-        c.line(left, top, right, bottom)
-    # Label vertikal mittig zum Kästchen.
-    _text_in_band(
-        c,
-        x + g.CHECKBOX_SIZE + g.CHECKBOX_GAP,
-        yt,
-        g.CHECKBOX_SIZE,
-        label,
-        g.FONT_REGULAR,
-        size,
-        align="left",
-    )
 
 
 # --------------------------------------------------------------------------- #
@@ -155,12 +120,12 @@ def draw_back(c: Canvas, card: Card, config: AppConfig) -> None:
     """Zeichnet die komplette Rückseite für `card` auf das Canvas `c`."""
     c.setLineWidth(g.LINE_WIDTH)
     _draw_frame(c)
-    _draw_sender(c, config)
+    _draw_sender(c, config, card.portable_mark)
     _draw_recipient(c, card)
     _draw_station(c, config)
-    _draw_confirm(c)
+    _draw_confirm(c, card)
     _draw_table(c, card.rows)
-    _draw_footer(c, card, config)
+    _draw_footer(c, config)
 
 
 def _draw_frame(c: Canvas) -> None:
@@ -176,9 +141,12 @@ def _draw_frame(c: Canvas) -> None:
     )
 
 
-def _draw_sender(c: Canvas, config: AppConfig) -> None:
+def _draw_sender(c: Canvas, config: AppConfig, portable_mark: str) -> None:
     s = config.sender
-    text(c, g.SENDER_X, g.CALLSIGN_YT, s.callsign, g.FONT_BOLD, g.SIZE_CALLSIGN)
+    callsign = s.callsign
+    if portable_mark and portable_mark != "none":
+        callsign = f"{callsign}/{portable_mark}"
+    text(c, g.SENDER_X, g.CALLSIGN_YT, callsign, g.FONT_BOLD, g.SIZE_CALLSIGN)
     text(c, g.SENDER_X, g.ADDR_Z1_YT, s.name, g.FONT_REGULAR, g.SIZE_ADDRESS)
     text(c, g.SENDER_X, g.ADDR_Z2_YT, s.street, g.FONT_REGULAR, g.SIZE_ADDRESS)
     text(
@@ -219,9 +187,29 @@ def _draw_recipient(c: Canvas, card: Card) -> None:
         g.SIZE_VIA,
         align="center",
     )
-    # Portabel-Markierungen (global aus der Config über card.portable_mark)
-    checkbox(c, g.PORTABLE_P_X, g.PORTABLE_YT, "/p", checked=card.portable_mark == "p")
-    checkbox(c, g.PORTABLE_M_X, g.PORTABLE_YT, "/m", checked=card.portable_mark == "m")
+    # Confirm-Markierung (global aus der Config über card.confirm_mark): nur die
+    # ausgewählte Option steht hier, kein Kästchen. Position ist fest (zentriert),
+    # unabhängig davon, ob/welche Portabel-Markierung gewählt ist.
+    if card.confirm_mark == "qso":
+        text(
+            c,
+            g.CONFIRM_MARK_X,
+            g.CONFIRM_MARK_YT,
+            "Confirming QSO",
+            g.FONT_REGULAR,
+            g.SIZE_CHECK,
+            align="center",
+        )
+    elif card.confirm_mark == "swl":
+        text(
+            c,
+            g.CONFIRM_MARK_X,
+            g.CONFIRM_MARK_YT,
+            "Confirming SWL-Report",
+            g.FONT_REGULAR,
+            g.SIZE_CHECK,
+            align="center",
+        )
 
 
 def _draw_station(c: Canvas, config: AppConfig) -> None:
@@ -230,7 +218,7 @@ def _draw_station(c: Canvas, config: AppConfig) -> None:
     rows = (
         ("Locator:", s.locator, g.STATION_Z1_YT),
         ("DOK:", s.dok, g.STATION_Z2_YT),
-        ("WAZ:", s.waz, g.STATION_Z3_YT),
+        ("CQ-Zone:", s.waz, g.STATION_Z3_YT),
         ("ITU:", s.itu, g.STATION_Z4_YT),
     )
     for label, value, yt in rows:
@@ -238,10 +226,13 @@ def _draw_station(c: Canvas, config: AppConfig) -> None:
         text(c, g.STATION_VALUE_X, yt, value, g.FONT_REGULAR, g.SIZE_STATION)
 
 
-def _draw_confirm(c: Canvas) -> None:
-    # Manuelle Bestätigungs-Checkboxen (ohne Auto-Logik, standardmäßig leer).
-    checkbox(c, g.CONFIRM_QSO_X, g.CONFIRM_YT, "Confirming QSO", checked=False)
-    checkbox(c, g.CONFIRM_SWL_X, g.CONFIRM_YT, "Confirming SWL-Report", checked=False)
+def _draw_confirm(c: Canvas, card: Card) -> None:
+    # PSE/TNX QSL (global aus der Config über card.qsl_mark): nur die
+    # ausgewählte Option steht hier, kein Kästchen.
+    if card.qsl_mark == "pse":
+        text(c, g.QSL_MARK_X, g.QSL_MARK_YT, "PSE QSL", g.FONT_REGULAR, g.SIZE_CHECK)
+    elif card.qsl_mark == "tnx":
+        text(c, g.QSL_MARK_X, g.QSL_MARK_YT, "TNX QSL", g.FONT_REGULAR, g.SIZE_CHECK)
 
 
 def _column_edges() -> list[float]:
@@ -328,7 +319,7 @@ def _draw_table_row(c: Canvas, edges: list[float], row_top: float, row: CardRow)
         _text_in_band(c, rst_left + g.SUB_RST_W * (k + 0.5), row_top, h, val, font, size)
 
 
-def _draw_footer(c: Canvas, card: Card, config: AppConfig) -> None:
+def _draw_footer(c: Canvas, config: AppConfig) -> None:
     text(c, g.REMARKS_LABEL_X, g.REMARKS_LABEL_YT, "REMARKS", g.FONT_REGULAR, g.SIZE_LABEL)
     _box(c, g.REMARKS_BOX_X, g.REMARKS_BOX_YT, g.REMARKS_BOX_W, g.REMARKS_BOX_H)
     text(
@@ -339,6 +330,3 @@ def _draw_footer(c: Canvas, card: Card, config: AppConfig) -> None:
         g.FONT_BOLD,
         g.SIZE_FOOTER,
     )
-    # PSE/TNX global aus der Config über card.qsl_mark.
-    checkbox(c, g.PSE_QSL_X, g.FOOTER_MARK_YT, "PSE QSL", checked=card.qsl_mark == "pse")
-    checkbox(c, g.TNX_QSL_X, g.FOOTER_MARK_YT, "TNX QSL", checked=card.qsl_mark == "tnx")

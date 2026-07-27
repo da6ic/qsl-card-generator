@@ -63,12 +63,20 @@ def _format_utc(time_on: str) -> str:
 
 
 def _freq_mhz(qso: QSO) -> str:
-    """Frequenz in MHz aus FREQ; fehlt es, aus BAND ableiten."""
-    if qso.freq:
-        return qso.freq.strip()
-    if qso.band:
-        return BAND_TO_MHZ.get(qso.band.strip().lower(), "")
-    return ""
+    """Frequenz in MHz aus FREQ; fehlt es, aus BAND ableiten. Immer 3 Nachkommastellen."""
+    raw = qso.freq.strip() if qso.freq else ""
+    if not raw and qso.band:
+        raw = BAND_TO_MHZ.get(qso.band.strip().lower(), "")
+    return _format_freq(raw)
+
+
+def _format_freq(raw: str) -> str:
+    if not raw:
+        return ""
+    try:
+        return f"{float(raw):.3f}"
+    except ValueError:
+        return raw
 
 
 def _make_row(qso: QSO) -> CardRow:
@@ -116,6 +124,7 @@ def build_cards(qsos: list[QSO], config: AppConfig, lookups: Lookups | None = No
     for card in cards:
         card.qsl_mark = gen.qsl_mark
         card.portable_mark = gen.portable_mark
+        card.confirm_mark = gen.confirm_mark
 
     # Deterministische Sortierung: Call, dann Datum/Zeit, dann Via.
     cards.sort(key=_card_sort_key)

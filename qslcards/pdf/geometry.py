@@ -79,7 +79,7 @@ SIZE_ADDRESS = 9  # Absenderadresse
 SIZE_LABEL = 10  # "To Amateur…", "Via:" (größer, besser lesbar)
 SIZE_CALL_BOX = 16  # Empfänger-Rufzeichen in der Box (größer)
 SIZE_VIA = 11
-SIZE_STATION = 9  # Locator/DOK/WAZ/ITU-Block (neben der Adresse)
+SIZE_STATION = 9  # Locator/DOK/CQ-Zone/ITU-Block (neben der Adresse)
 SIZE_CHECK = 8  # Bestätigungs-Checkboxen
 SIZE_TABLE_HEAD = 6.5
 SIZE_TABLE_CELL = 8
@@ -118,13 +118,19 @@ VIA_BOX_W = mm(54)  # 88+54=142
 VIA_BOX_H = mm(12)
 
 # --------------------------------------------------------------------------- #
-# Portabel-Markierungen /p /m: oben-mittig, zwischen eigenem Call und dem
-# "To Amateur…"-Block (wie Referenzkarte).
+# Confirm-Markierung ("Confirming QSO" / "Confirming SWL-Report"): oben, im
+# Bereich zwischen eigenem Call und dem "To Amateur…"-Block, wo früher die /p
+# /m-Kästchen standen. Nur die ausgewählte Option wird als Text gezeichnet
+# (kein Kästchen mehr, da die Karte ohnehin gezielt für diese Auswahl gedruckt
+# wird). /p /m /t /r stehen stattdessen dynamisch hinter dem eigenen Rufzeichen
+# (siehe _draw_sender). Die Position ist FEST (unabhängig davon, ob/welche
+# Portabel-Markierung gewählt ist): zentriert zwischen dem alten Start der
+# Portabel-Markierung (PORTABLE_P_X wäre 52) und deren theoretischem Ende
+# (PORTABLE_M_X=66 + Kästchen/Label-Breite ≈ 80).
 # --------------------------------------------------------------------------- #
 
-PORTABLE_P_X = mm(52)
-PORTABLE_M_X = mm(66)
-PORTABLE_YT = mm(8)
+CONFIRM_MARK_X = mm(66)  # Zentrum von [52 .. 80]
+CONFIRM_MARK_YT = mm(8)
 
 # --------------------------------------------------------------------------- #
 # Stationsblock (§3): rechts neben der Adresse, als Label/Wert-Spalten,
@@ -132,19 +138,22 @@ PORTABLE_YT = mm(8)
 # --------------------------------------------------------------------------- #
 
 STATION_LABEL_X = mm(50)  # "Locator:", "DOK:", ...
-STATION_VALUE_X = mm(64)  # Werte, eingerückt ausgerichtet
+# Werte beginnen alle an derselben x-Position (vertikal bündige Spalte). Muss
+# breiter sein als das längste Label ("CQ-Zone:" ≈ 15 mm bei SIZE_STATION),
+# sonst rückt der Wert zu dicht an das Label heran.
+STATION_VALUE_X = mm(68)
 STATION_Z1_YT = ADDR_Z1_YT  # Locator (auf Höhe name)
 STATION_Z2_YT = ADDR_Z2_YT  # DOK
-STATION_Z3_YT = ADDR_Z3_YT  # WAZ
+STATION_Z3_YT = ADDR_Z3_YT  # CQ-Zone (WAZ)
 STATION_Z4_YT = ADDR_Z4_YT  # ITU
 
 # --------------------------------------------------------------------------- #
-# Bestätigungs-Checkboxen (§3)
+# PSE/TNX QSL-Markierung (früher als Bestätigungs-Checkboxen an dieser
+# Position; jetzt zeigt nur die ausgewählte Option als Text, kein Kästchen).
 # --------------------------------------------------------------------------- #
 
-CONFIRM_QSO_X = mm(6)
-CONFIRM_SWL_X = mm(48)
-CONFIRM_YT = mm(44)  # Kästchen-Unterkante bündig mit der Via-Box-Unterkante (yt 47)
+QSL_MARK_X = mm(6)
+QSL_MARK_YT = mm(44)
 
 # --------------------------------------------------------------------------- #
 # QSO-Tabelle (§3)
@@ -190,18 +199,7 @@ REMARKS_BOX_YT = mm(83)
 REMARKS_BOX_W = mm(136)  # volle Inhaltsbreite (6..142)
 REMARKS_BOX_H = mm(10)  # flacher
 
-# Footer-Text und PSE/TNX unter der REMARKS-Box (Unterkante ~yt 99).
+# Footer-Text unter der REMARKS-Box (Unterkante ~yt 99). PSE/TNX steht jetzt
+# weiter oben (QSL_MARK_X/QSL_MARK_YT), der Footer bleibt frei dafür.
 FOOTER_TEXT_X = mm(6)
 FOOTER_TEXT_YT = mm(96)
-
-PSE_QSL_X = mm(62)
-TNX_QSL_X = mm(92)
-FOOTER_MARK_YT = mm(96)
-
-# --------------------------------------------------------------------------- #
-# Checkbox-Hilfsmaß (§4)
-# --------------------------------------------------------------------------- #
-
-CHECKBOX_SIZE = mm(3)  # Seitenlänge des Kästchens
-CHECKBOX_GAP = mm(1.5)  # Abstand zwischen Kästchen und Label
-CHECKBOX_CROSS_OVERHANG = mm(1.2)  # Überstand des Kreuzes über das Kästchen
