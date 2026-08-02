@@ -220,9 +220,9 @@ class Card:
 5. **Gruppieren**:
    - `per_qso`: eine `Card` je QSO, `rows` mit genau einer Zeile.
    - `per_station`: QSOs je (Call, Via) sortiert nach Datum/Zeit, dann in
-     `MAX_ROWS`-große Blöcke aufgeteilt. Da aktuell **`MAX_ROWS = 1`** ist
-     (eine Zeile pro Karte, siehe `CARD_LAYOUT.md`), ergibt eine mehrfach
-     gearbeitete Station mehrere Einzelkarten.
+     `MAX_ROWS`-große Blöcke aufgeteilt. Mit **`MAX_ROWS = 3`** (siehe
+     `CARD_LAYOUT.md`) landen bis zu drei QSOs derselben Station als Zeilen auf
+     einer Karte (dynamische Tabelle); mehr → Folge-Karte(n).
 6. **Sortierung**: Karten deterministisch nach `recipient_call`, dann Datum.
 7. **Markierungen (global, manuell)**: jede Karte erhält unverändert die
    Werte aus der Config:

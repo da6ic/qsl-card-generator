@@ -60,9 +60,9 @@ MARGIN = mm(3)
 
 Gegenüber der Original-DARC-Karte bewusst geändert: kein „Responsive"-Untertitel,
 `/p`/`/m` oben zwischen eigenem Call und dem „To Amateur…"-Block, Stationsdaten
-(Locator/DOK/WAZ/ITU) als Spalte neben der Adresse, nur **eine** Datenzeile
-(`MAX_ROWS = 1`), REMARKS über die volle Breite mit Footer darunter (kein
-TRAINEE-Feld).
+(Locator/DOK/WAZ/ITU) als Spalte neben der Adresse, bis zu **drei** Datenzeilen
+(`MAX_ROWS = 3`, dynamisch), REMARKS über die volle Breite mit Footer darunter
+(kein TRAINEE-Feld).
 
 ---
 
@@ -112,10 +112,13 @@ Label-Spalte `x=50`, Wert-Spalte `x=64`; Zeilen `Locator:` / `DOK:` / `WAZ:` / `
 (yt=44 -> Kästchen-Unterkante bündig mit der Via-Box-Unterkante.)
 
 ### QSO-Tabelle
-- Bounding-Box: `x=6 … 142` (Breite 136), oben `yt=50`, unten `yt=67`.
-- **Kopfzeile** Höhe `HEAD_H = 8`. **Datenzeilen**: `MAX_ROWS = 1`, je
-  `ROW_H = ((67-50)-HEAD_H)/MAX_ROWS = 9`. (Genau **ein** QSO pro Karte; im Modus
-  „pro Station" werden Mehrfach-QSOs auf mehrere Einzelkarten aufgeteilt.)
+- Bounding-Box: `x=6 … 142` (Breite 136), oben `yt=50`; die Unterkante ist
+  **dynamisch** (`TABLE_YT_BOTTOM = TABLE_YT_TOP + HEAD_H + n·ROW_H`) und liegt bei
+  voller Belegung bei `yt=76` (immer oberhalb des REMARKS-Blocks).
+- **Kopfzeile** Höhe `HEAD_H = 8`. **Datenzeilen**: bis zu `MAX_ROWS = 3`, feste
+  Höhe `ROW_H = 6`. Die Tabelle wird **dynamisch** gezeichnet — genau so viele
+  Zeilen, wie die Karte QSOs hat (1..3). Im Modus „pro Station" landen bis zu drei
+  QSOs derselben Station auf einer Karte; mehr → Folge-Karte(n).
 - Spalten (Breiten in mm, Summe = 136):
   | Spalte            | Breite | Unterspalten                    |
   |-------------------|--------|---------------------------------|

@@ -306,8 +306,13 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   in `geometry.py` registriert (Umlaute); Fallback Helvetica, Registrierung nie fatal.
 
 **Wichtige, mit dem Nutzer getroffene Entscheidungen (nicht ohne Rückfrage kippen)**
-- **`MAX_ROWS = 1`**: genau ein QSO pro Karte. Koppelt Layout **und** Builder;
-  `per_station` teilt Mehrfach-QSOs in Einzelkarten. (Weicht von „bis 3 Zeilen" ab.)
+- **`MAX_ROWS = 3` (dynamisch)**: bis zu drei QSOs pro Karte. Koppelt Layout
+  **und** Builder; die Rückseiten-Tabelle zeichnet genau so viele Zeilen, wie die
+  Karte QSOs hat (feste `ROW_H`, mitwachsende Tabellenhöhe), `per_station` fasst
+  bis zu drei QSOs derselben Station zusammen (Überlauf → Folge-Karte).
+- **Absender kommt komplett aus der Config** (Rufzeichen, Locator, DOK, …), nie
+  aus dem Log — vom Nutzer bewusst so bestätigt (ein kurzer Versuch, Rufzeichen/
+  Locator aus `STATION_CALLSIGN`/`MY_GRIDSQUARE` zu ziehen, wurde zurückgenommen).
 - **Kein `subtitle`/„Responsive"** — komplett entfernt.
 - **Front im Cover-Modus** (füllt die Seite randlos, Überstand wird geclippt).
 - `MARGIN = 3 mm`; `/p`/`/m` oben mittig; Stationsdaten als Label/Wert-Spalte neben
