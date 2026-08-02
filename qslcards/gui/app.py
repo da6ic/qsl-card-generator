@@ -7,6 +7,9 @@ ausschließlich über `self.after(...)` (Tkinter ist nicht thread-safe).
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 import threading
 import tkinter as tk
 from pathlib import Path
@@ -36,6 +39,21 @@ from .sections import (
 
 CONFIG_PATH = "config.yaml"
 EXAMPLE_CONFIG_PATH = "config.example.yaml"
+
+
+def open_file(path: str) -> None:
+    """Öffnet `path` mit der Standardanwendung des Betriebssystems.
+
+    Plattformübergreifend (Windows, macOS, Linux/Debian). Fehler werden nach
+    oben gereicht, damit der Aufrufer bei Bedarf einen Hinweis anzeigen kann.
+    """
+    if sys.platform.startswith("win"):
+        os.startfile(path)  # type: ignore[attr-defined]  # nur unter Windows
+    elif sys.platform == "darwin":
+        subprocess.run(["open", path], check=True)
+    else:
+        subprocess.run(["xdg-open", path], check=True)
+
 
 IMAGE_TYPES = [("Bilder", "*.png *.jpg *.jpeg *.webp"), ("Alle Dateien", "*.*")]
 ADIF_TYPES = [("ADIF-Logbuch", "*.adi *.adif"), ("Alle Dateien", "*.*")]
@@ -547,8 +565,17 @@ class App(tk.Tk):
             self.output_section.status_var.set(f"Fehler: {error}")
             messagebox.showerror("Fehler", f"PDF-Erzeugung fehlgeschlagen:\n{error}")
             return
-        self.output_section.status_var.set(f"Fertig: {output}")
-        messagebox.showinfo("Fertig", f"PDF erzeugt:\n{output}")
+        # Erfolg: kein Popup — die PDF wird direkt in der Standardanwendung
+        # geöffnet. Schlägt das Öffnen fehl, bleibt nur der Statushinweis.
+        try:
+            open_file(output)
+            self.output_section.status_var.set(f"Fertig: {output} (geöffnet)")
+        except (OSError, subprocess.SubprocessError) as exc:
+            self.output_section.status_var.set(f"Fertig: {output}")
+            messagebox.showinfo(
+                "Fertig",
+                f"PDF erzeugt:\n{output}\n\n(Automatisches Öffnen nicht möglich: {exc})",
+            )
 
     def _browse_output(self) -> None:
         path = filedialog.asksaveasfilename(
