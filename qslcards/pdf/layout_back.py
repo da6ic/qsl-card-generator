@@ -20,16 +20,15 @@ if TYPE_CHECKING:
     from qslcards.cards.models import Card, CardRow
     from qslcards.config import AppConfig
 
-# Statische Kopftexte der Tabelle (Inhalt, kein Layout).
-_HEAD_DATE = "DATE"
+# Statische Kopftexte der Tabelle (Inhalt, kein Layout). Einzeilige Kopfzeile:
+# je Spalte genau ein Label. Die DATE-Spalte hat keinen Titel mehr, nur die
+# Unterlabels D/M/Y. Die Report-Spalte zeigt je Zeile einen Wert (RST wie im Log
+# für Phone/CW, dB für Digimodes wie FT8).
 _HEAD_DATE_SUB = ("D", "M", "Y")
-_HEAD_UTC = ("TIME", "(UTC)")
-_HEAD_FREQ = ("FREQUENCY", "MHZ")
-_HEAD_2WAY = ("2-WAY QSO", "IN")
-# Report-Spalte ohne R/S/T-Unterlabels: der Rapport steht je Zeile als ein Wert
-# (RST wie im Log für Phone/CW, dB für Digimodes wie FT8). Zweizeiliger Kopf wie
-# bei den Nachbarspalten.
-_HEAD_RST = ("SIGNAL", "REPORT")
+_HEAD_UTC = "UTC TIME"
+_HEAD_FREQ = "FREQ MHZ"
+_HEAD_2WAY = "2-WAY QSO IN"
+_HEAD_RST = "SIGNAL REPORT"
 
 
 # --------------------------------------------------------------------------- #
@@ -243,7 +242,6 @@ def _draw_table(c: Canvas, rows: list[CardRow]) -> None:
     n_rows = max(1, min(len(rows), g.MAX_ROWS))
     top = g.TABLE_YT_TOP
     head_bottom = g.TABLE_YT_TOP + g.HEAD_H
-    head_mid = g.TABLE_YT_TOP + g.HEAD_H / 2
     bottom = head_bottom + n_rows * g.ROW_H
 
     # Hauptspalten-Trennlinien über die volle Höhe.
@@ -256,13 +254,14 @@ def _draw_table(c: Canvas, rows: list[CardRow]) -> None:
         _hline(c, g.TABLE_X0, g.TABLE_X1, head_bottom + i * g.ROW_H)
     _hline(c, g.TABLE_X0, g.TABLE_X1, bottom)
 
-    # Unterspalten-Trenner nur für DATE (D/M/Y) ab Kopf-Unterzeile. Die
-    # SIGNAL-REPORT-Spalte hat keine Unterspalten mehr (ein Wert je Zeile).
+    # Unterspalten-Trenner nur für DATE (D/M/Y), über die volle Höhe inkl. der
+    # einzeiligen Kopfzeile (D/M/Y ist dort die Beschriftung). Die SIGNAL-REPORT-
+    # Spalte hat keine Unterspalten (ein Wert je Zeile).
     date_left = edges[0]
-    _vline(c, date_left + g.SUB_DATE_W, head_mid, bottom)
-    _vline(c, date_left + 2 * g.SUB_DATE_W, head_mid, bottom)
+    _vline(c, date_left + g.SUB_DATE_W, top, bottom)
+    _vline(c, date_left + 2 * g.SUB_DATE_W, top, bottom)
 
-    _draw_table_header(c, edges, head_mid)
+    _draw_table_header(c, edges)
     for i, row in enumerate(rows[: g.MAX_ROWS]):
         _draw_table_row(c, edges, head_bottom + i * g.ROW_H, row)
 
@@ -271,27 +270,21 @@ def _col_center(edges: list[float], idx: int) -> float:
     return (edges[idx] + edges[idx + 1]) / 2
 
 
-def _draw_table_header(c: Canvas, edges: list[float], head_mid: float) -> None:
+def _draw_table_header(c: Canvas, edges: list[float]) -> None:
+    # Einzeilige Kopfzeile: je Spalte ein Label, vertikal mittig in der Kopfhöhe.
+    # DATE-Spalte trägt die Unterlabels D/M/Y (kein DATE-Titel mehr).
     top = g.TABLE_YT_TOP
-    half = g.HEAD_H / 2
+    h = g.HEAD_H
     font = g.FONT_BOLD
     size = g.SIZE_TABLE_HEAD
 
-    # Obere Kopf-Halbzeile: Hauptbezeichnungen.
-    _text_in_band(c, _col_center(edges, 0), top, half, _HEAD_DATE, font, size)
-    _text_in_band(c, _col_center(edges, 1), top, half, _HEAD_UTC[0], font, size)
-    _text_in_band(c, _col_center(edges, 2), top, half, _HEAD_FREQ[0], font, size)
-    _text_in_band(c, _col_center(edges, 3), top, half, _HEAD_2WAY[0], font, size)
-    _text_in_band(c, _col_center(edges, 4), top, half, _HEAD_RST[0], font, size)
-
-    # Untere Kopf-Halbzeile: Unterspalten / zweite Textzeile.
     date_left = edges[0]
     for k, lbl in enumerate(_HEAD_DATE_SUB):
-        _text_in_band(c, date_left + g.SUB_DATE_W * (k + 0.5), head_mid, half, lbl, font, size)
-    _text_in_band(c, _col_center(edges, 1), head_mid, half, _HEAD_UTC[1], font, size)
-    _text_in_band(c, _col_center(edges, 2), head_mid, half, _HEAD_FREQ[1], font, size)
-    _text_in_band(c, _col_center(edges, 3), head_mid, half, _HEAD_2WAY[1], font, size)
-    _text_in_band(c, _col_center(edges, 4), head_mid, half, _HEAD_RST[1], font, size)
+        _text_in_band(c, date_left + g.SUB_DATE_W * (k + 0.5), top, h, lbl, font, size)
+    _text_in_band(c, _col_center(edges, 1), top, h, _HEAD_UTC, font, size)
+    _text_in_band(c, _col_center(edges, 2), top, h, _HEAD_FREQ, font, size)
+    _text_in_band(c, _col_center(edges, 3), top, h, _HEAD_2WAY, font, size)
+    _text_in_band(c, _col_center(edges, 4), top, h, _HEAD_RST, font, size)
 
 
 def _draw_table_row(c: Canvas, edges: list[float], row_top: float, row: CardRow) -> None:

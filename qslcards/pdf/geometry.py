@@ -164,17 +164,18 @@ TABLE_X1 = mm(142)  # rechte Kante
 TABLE_WIDTH = mm(136)  # = TABLE_X1 - TABLE_X0
 TABLE_YT_TOP = mm(50)  # obere Kante (von oben)
 
-HEAD_H = mm(8)  # Höhe der Kopfzeile
 # Bis zu drei QSOs (Zeilen) pro Karte. Die Tabelle wird **dynamisch** gezeichnet:
 # sie bekommt genau so viele Datenzeilen, wie die Karte QSOs hat (1..MAX_ROWS);
 # mehr QSOs einer Station -> Folge-Karte(n) (siehe Builder-Kopplung). ROW_H ist
 # daher eine feste Zeilenhöhe, nicht aus der Tabellenhöhe abgeleitet.
 MAX_ROWS = 3  # Datenzeilen pro Karte (Maximum)
 ROW_H = mm(6)  # feste Höhe einer Datenzeile
+# Kopfzeile: einzeilig und so hoch wie eine Datenzeile.
+HEAD_H = ROW_H
 # Untere Kante bei voller Belegung (MAX_ROWS). Bei weniger Zeilen endet die
 # Tabelle entsprechend höher (dynamisch, siehe layout_back._draw_table). Der Wert
 # muss oberhalb des REMARKS-Blocks (REMARKS_LABEL_YT) bleiben.
-TABLE_YT_BOTTOM = TABLE_YT_TOP + HEAD_H + MAX_ROWS * ROW_H  # = mm(76)
+TABLE_YT_BOTTOM = TABLE_YT_TOP + HEAD_H + MAX_ROWS * ROW_H  # = mm(74)
 
 # Spaltenbreiten (Summe = TABLE_WIDTH = 136 mm)
 COL_DATE_W = mm(30)  # Unterspalten D/M/Y

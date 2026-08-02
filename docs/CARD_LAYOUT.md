@@ -44,12 +44,11 @@ MARGIN = mm(3)
 │  │ Deutschland    ITU:     28     ┌────────────────────────┐ │
 │  │                                │ <VIA_TEXT>             │ │
 │  │ ☐ Confirming QSO   ☐ Confirming SWL-Report               │
-│  │ ┌──────┬───────┬─────────┬──────────┬──────────────┐      │
-│  │ │ DATE │ TIME  │FREQUENCY│ 2-WAY    │   SIGNAL     │      │
-│  │ │D M Y │ (UTC) │  MHZ    │ QSO  IN  │   REPORT     │      │
-│  │ ├──┬─┬─┼───────┼─────────┼──────────┼──────────────┤      │
-│  │ │  │ │ │       │         │          │ <rst / dB>   │ row  │
-│  │ └──┴─┴─┴───────┴─────────┴──────────┴──────────────┘      │
+│  │ ┌──┬──┬──┬──────────┬──────────┬────────────┬─────────────┐│
+│  │ │D │M │Y │ UTC TIME │ FREQ MHZ │2-WAY QSO IN│SIGNAL REPORT││
+│  │ ├──┼──┼──┼──────────┼──────────┼────────────┼─────────────┤│
+│  │ │  │  │  │          │          │            │ <rst / dB>  ││
+│  │ └──┴──┴──┴──────────┴──────────┴────────────┴─────────────┘│
 │  │ REMARKS                                                   │
 │  │ ┌────────────────────────────────────────────────────────┐│
 │  │ └────────────────────────────────────────────────────────┘│
@@ -114,22 +113,23 @@ Label-Spalte `x=50`, Wert-Spalte `x=64`; Zeilen `Locator:` / `DOK:` / `WAZ:` / `
 ### QSO-Tabelle
 - Bounding-Box: `x=6 … 142` (Breite 136), oben `yt=50`; die Unterkante ist
   **dynamisch** (`TABLE_YT_BOTTOM = TABLE_YT_TOP + HEAD_H + n·ROW_H`) und liegt bei
-  voller Belegung bei `yt=76` (immer oberhalb des REMARKS-Blocks).
-- **Kopfzeile** Höhe `HEAD_H = 8`. **Datenzeilen**: bis zu `MAX_ROWS = 3`, feste
-  Höhe `ROW_H = 6`. Die Tabelle wird **dynamisch** gezeichnet — genau so viele
-  Zeilen, wie die Karte QSOs hat (1..3). Im Modus „pro Station" landen bis zu drei
-  QSOs derselben Station auf einer Karte; mehr → Folge-Karte(n).
+  voller Belegung bei `yt=74` (immer oberhalb des REMARKS-Blocks).
+- **Kopfzeile einzeilig**, so hoch wie eine Datenzeile (`HEAD_H = ROW_H = 6`).
+  **Datenzeilen**: bis zu `MAX_ROWS = 3`, feste Höhe `ROW_H = 6`. Die Tabelle wird
+  **dynamisch** gezeichnet — genau so viele Zeilen, wie die Karte QSOs hat (1..3).
+  Im Modus „pro Station" landen bis zu drei QSOs derselben Station auf einer Karte;
+  mehr → Folge-Karte(n).
 - Spalten (Breiten in mm, Summe = 136):
   | Spalte            | Breite | Unterspalten                    |
   |-------------------|--------|---------------------------------|
-  | DATE              | 30     | D=10, M=10, Y=10                |
-  | UNIVERSAL TIME UTC| 24     | –                               |
-  | FREQUENCY MHZ     | 26     | –                               |
+  | D M Y (Datum)     | 30     | D=10, M=10, Y=10                |
+  | UTC TIME          | 24     | –                               |
+  | FREQ MHZ          | 26     | –                               |
   | 2-WAY QSO IN      | 26     | –                               |
   | SIGNAL REPORT     | 30     | – (ein Wert je Zeile)           |
-- Kopftexte (zentriert, Bold 6.5, ggf. zweizeilig):
-  `DATE` über `D  M  Y`; `UNIVERSAL TIME (UTC)`; `FREQUENCY MHZ`;
-  `2-WAY QSO IN`; `SIGNAL` über `REPORT`.
+- Kopftexte (zentriert, Bold 6.5, **einzeilig**): DATE-Spalte nur `D  M  Y`
+  (kein DATE-Titel mehr, die D/M/Y-Trenner laufen durch die volle Höhe);
+  `UTC TIME`; `FREQ MHZ`; `2-WAY QSO IN`; `SIGNAL REPORT`.
 - **Datenzeile je `CardRow`** (zentriert, Regular 8):
   - DATE: `date_d` | `date_m` | `date_y` in die drei Unterspalten.
   - UTC: `utc` (z.B. „14:32").
