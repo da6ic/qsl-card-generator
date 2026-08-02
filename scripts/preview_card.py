@@ -77,6 +77,11 @@ SAMPLE_CONFIG = AppConfig(
         dok="P31",
         waz="14",
         itu="28",
+        # Funk-Block (dynamisch, nur Wert): erscheint unter dem Stationsblock,
+        # bündig mit der Via-Box; QSL-Markierung und Tabelle rücken nach unten.
+        receiver="IC-7300",
+        antenna="Dipol 2×20 m",
+        power="100 W",
     ),
     generation=GenerationConfig(
         card_mode="per_station",

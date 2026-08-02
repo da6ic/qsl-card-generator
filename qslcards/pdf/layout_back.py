@@ -108,16 +108,48 @@ def _vline(c: Canvas, x: float, yt0: float, yt1: float) -> None:
 # --------------------------------------------------------------------------- #
 
 
+def _radio_values(config: AppConfig) -> list[str]:
+    """Gefüllte Funk-Werte (Empfänger/Antenne/Leistung) in fester Reihenfolge;
+    leere Felder werden übersprungen (dynamisch, nur der Wert – kein Label)."""
+    s = config.sender
+    return [v.strip() for v in (s.receiver, s.antenna, s.power) if v and v.strip()]
+
+
 def draw_back(c: Canvas, card: Card, config: AppConfig) -> None:
     """Zeichnet die komplette Rückseite für `card` auf das Canvas `c`."""
     c.setLineWidth(g.LINE_WIDTH)
+    # Sind Funk-Werte gesetzt, wird der Funk-Block unter dem Stationsblock
+    # gezeichnet; QSL-Markierung und Tabelle rücken dann nach unten.
+    radio = _radio_values(config)
+    qsl_yt = g.QSL_MARK_YT_RADIO if radio else g.QSL_MARK_YT
+    table_top = g.TABLE_YT_TOP_RADIO if radio else g.TABLE_YT_TOP
+
     _draw_frame(c)
     _draw_sender(c, config, card.portable_mark)
     _draw_recipient(c, card)
     _draw_station(c, config)
-    _draw_confirm(c, card)
-    _draw_table(c, card.rows)
+    _draw_radio(c, radio)
+    _draw_confirm(c, card, qsl_yt)
+    _draw_table(c, card.rows, table_top)
     _draw_footer(c, card, config)
+
+
+def _draw_radio(c: Canvas, values: list[str]) -> None:
+    """Funk-Werte (nur Werte, ohne Label) in EINER horizontalen Zeile, links-
+    bündig, direkt unter dem Stationsblock (Unterkante bei RADIO_BLOCK_BOTTOM_YT)."""
+    if not values:
+        return
+    band_top = g.RADIO_BLOCK_BOTTOM_YT - g.RADIO_ROW_H
+    _text_in_band(
+        c,
+        g.RADIO_BLOCK_X,
+        band_top,
+        g.RADIO_ROW_H,
+        g.RADIO_SEP.join(values),
+        g.FONT_REGULAR,
+        g.SIZE_RADIO,
+        align="left",
+    )
 
 
 def _draw_frame(c: Canvas) -> None:
@@ -218,13 +250,14 @@ def _draw_station(c: Canvas, config: AppConfig) -> None:
         text(c, g.STATION_VALUE_X, yt, value, g.FONT_REGULAR, g.SIZE_STATION)
 
 
-def _draw_confirm(c: Canvas, card: Card) -> None:
+def _draw_confirm(c: Canvas, card: Card, yt: float) -> None:
     # PSE/TNX QSL (global aus der Config über card.qsl_mark): nur die
-    # ausgewählte Option steht hier, kein Kästchen.
+    # ausgewählte Option steht hier, kein Kästchen. `yt` rutscht nach unten,
+    # wenn der Funk-Block gezeichnet wird.
     if card.qsl_mark == "pse":
-        text(c, g.QSL_MARK_X, g.QSL_MARK_YT, "PSE QSL", g.FONT_REGULAR, g.SIZE_CHECK)
+        text(c, g.QSL_MARK_X, yt, "PSE QSL", g.FONT_REGULAR, g.SIZE_CHECK)
     elif card.qsl_mark == "tnx":
-        text(c, g.QSL_MARK_X, g.QSL_MARK_YT, "TNX QSL", g.FONT_REGULAR, g.SIZE_CHECK)
+        text(c, g.QSL_MARK_X, yt, "TNX QSL", g.FONT_REGULAR, g.SIZE_CHECK)
 
 
 def _column_edges() -> list[float]:
@@ -234,14 +267,14 @@ def _column_edges() -> list[float]:
     return edges
 
 
-def _draw_table(c: Canvas, rows: list[CardRow]) -> None:
+def _draw_table(c: Canvas, rows: list[CardRow], top: float) -> None:
     c.setLineWidth(g.LINE_WIDTH)
     edges = _column_edges()
     # Dynamische Tabelle: genau so viele Datenzeilen zeichnen, wie die Karte QSOs
     # hat (mind. 1, höchstens MAX_ROWS). Die Tabellenhöhe wächst mit der Zeilenzahl.
+    # `top` rutscht nach unten, wenn der Funk-Block gezeichnet wird.
     n_rows = max(1, min(len(rows), g.MAX_ROWS))
-    top = g.TABLE_YT_TOP
-    head_bottom = g.TABLE_YT_TOP + g.HEAD_H
+    head_bottom = top + g.HEAD_H
     bottom = head_bottom + n_rows * g.ROW_H
 
     # Hauptspalten-Trennlinien über die volle Höhe.
@@ -261,7 +294,7 @@ def _draw_table(c: Canvas, rows: list[CardRow]) -> None:
     _vline(c, date_left + g.SUB_DATE_W, top, bottom)
     _vline(c, date_left + 2 * g.SUB_DATE_W, top, bottom)
 
-    _draw_table_header(c, edges)
+    _draw_table_header(c, edges, top)
     for i, row in enumerate(rows[: g.MAX_ROWS]):
         _draw_table_row(c, edges, head_bottom + i * g.ROW_H, row)
 
@@ -270,10 +303,9 @@ def _col_center(edges: list[float], idx: int) -> float:
     return (edges[idx] + edges[idx + 1]) / 2
 
 
-def _draw_table_header(c: Canvas, edges: list[float]) -> None:
+def _draw_table_header(c: Canvas, edges: list[float], top: float) -> None:
     # Einzeilige Kopfzeile: je Spalte ein Label, vertikal mittig in der Kopfhöhe.
     # DATE-Spalte trägt die Unterlabels D/M/Y (kein DATE-Titel mehr).
-    top = g.TABLE_YT_TOP
     h = g.HEAD_H
     font = g.FONT_BOLD
     size = g.SIZE_TABLE_HEAD

@@ -13,6 +13,12 @@ sender:
   dok: "P31"
   waz: "14"
   itu: "28"
+  # Funk-Ausrüstung: erscheint dynamisch auf der Karte (nur der Wert, ohne
+  # Label), sobald gefüllt – in einer horizontalen Zeile unter dem Stationsblock.
+  # Leer lassen -> nichts wird gedruckt.
+  receiver: ""                 # Empfänger/TRX, z. B. "IC-7300"
+  antenna: ""                  # Antenne, z. B. "Dipol 2×20 m"
+  power: ""                    # Sendeleistung, z. B. "100 W"
 
 lookup:
   # Der Lookup bestimmt je Station die Versandart (Via), den QSL-Manager und die

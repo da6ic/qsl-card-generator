@@ -9,8 +9,8 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk
 
-# Reihenfolge der Absenderfelder (Attributname, Label).
-SENDER_FIELDS: list[tuple[str, str]] = [
+# Absender-Grunddaten (Adresse + Stationsblock), oben in Abschnitt 3.
+STATION_FIELDS: list[tuple[str, str]] = [
     ("callsign", "Rufzeichen"),
     ("name", "Name"),
     ("street", "Straße"),
@@ -22,6 +22,19 @@ SENDER_FIELDS: list[tuple[str, str]] = [
     ("waz", "CQ-Zone"),
     ("itu", "ITU"),
 ]
+
+# Funk-Ausrüstung: erscheinen dynamisch auf der Karte (nur der Wert, ohne Label),
+# sobald gefüllt. In Abschnitt 3 durch eine Trennlinie von den Stationsdaten
+# abgesetzt.
+RADIO_FIELDS: list[tuple[str, str]] = [
+    ("receiver", "Empfänger"),
+    ("antenna", "Antenne"),
+    ("power", "Leistung"),
+]
+
+# Alle Absenderfelder (Attributname, Label) – für app.py (gather/apply/autosave
+# laufen über self.vars, das beide Gruppen enthält).
+SENDER_FIELDS: list[tuple[str, str]] = STATION_FIELDS + RADIO_FIELDS
 
 # Druck-Kategorien im Filter (E = Elektronisch ist kein Druckweg -> nicht hier).
 VIA_CODES: list[tuple[str, str]] = [
@@ -98,15 +111,16 @@ class SenderSection:
         self.frame = ttk.LabelFrame(parent, text="3. Absender")
         self.vars: dict[str, tk.StringVar] = {}
 
-        row = 0
-        for field, label in SENDER_FIELDS:
-            ttk.Label(self.frame, text=label).grid(row=row, column=0, padx=4, pady=1, sticky="w")
-            var = tk.StringVar()
-            self.vars[field] = var
-            ttk.Entry(self.frame, textvariable=var, width=SENDER_FIELD_WIDTH).grid(
-                row=row, column=1, padx=4, pady=1, sticky="we"
-            )
-            row += 1
+        # Stationsdaten (Adresse + Locator/DOK/CQ/ITU).
+        row = self._add_fields(STATION_FIELDS, 0)
+
+        ttk.Separator(self.frame, orient="horizontal").grid(
+            row=row, column=0, columnspan=2, sticky="we", padx=4, pady=4
+        )
+        row += 1
+
+        # Funk-Ausrüstung (Empfänger/Antenne/Leistung): dynamisch auf der Karte.
+        row = self._add_fields(RADIO_FIELDS, row)
 
         ttk.Separator(self.frame, orient="horizontal").grid(
             row=row, column=0, columnspan=2, sticky="we", padx=4, pady=4
@@ -156,6 +170,19 @@ class SenderSection:
         # Kein Speichern/Laden-Button mehr: die Config wird automatisch
         # gespeichert und bei externer Änderung neu geladen.
         self.frame.columnconfigure(1, weight=1)
+
+    def _add_fields(self, fields: list[tuple[str, str]], row: int) -> int:
+        """Legt Label+Entry je Feld an (dynamisch dehnbar) und liefert die
+        nächste freie Zeile zurück. Die Variablen landen in self.vars."""
+        for field, label in fields:
+            ttk.Label(self.frame, text=label).grid(row=row, column=0, padx=4, pady=1, sticky="w")
+            var = tk.StringVar()
+            self.vars[field] = var
+            ttk.Entry(self.frame, textvariable=var, width=SENDER_FIELD_WIDTH).grid(
+                row=row, column=1, padx=4, pady=1, sticky="we"
+            )
+            row += 1
+        return row
 
 
 class FilterSection:

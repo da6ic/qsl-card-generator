@@ -149,12 +149,34 @@ STATION_Z3_YT = ADDR_Z3_YT  # CQ-Zone (WAZ)
 STATION_Z4_YT = ADDR_Z4_YT  # ITU
 
 # --------------------------------------------------------------------------- #
+# Funk-Block (Empfänger/Antenne/Leistung): dynamisch, nur wenn gefüllt. Nur die
+# Werte werden gezeichnet (kein Label), in EINER horizontalen Zeile durch
+# RADIO_SEP getrennt. Die Zeile ist linksbündig und sitzt **direkt unter dem
+# Stationsblock** (im gleichen Zeilenraster wie Adresse/ITU) – bewusst NICHT
+# bündig mit der Via-Box, damit über der QSL-Markierung Luft bleibt. Ist
+# mindestens ein Feld gesetzt, rücken QSL-Markierung und Tabelle nach unten
+# (QSL_MARK_YT_RADIO / TABLE_YT_TOP_RADIO).
+# --------------------------------------------------------------------------- #
+
+SIZE_RADIO = 8  # Funk-Werte (kompakt)
+RADIO_BLOCK_X = SENDER_X  # x=6, linksbündig unter dem Absender-/Stationsblock
+RADIO_ROW_H = mm(3.5)  # Höhe des Zeilenbands der Funk-Zeile
+# Unterkante der Funk-Zeile: rund eine Zeile unter der ITU-Zeile (Stationsraster
+# ~5,5 mm), sodass die Zeile unter dem Stationsblock sitzt und darunter noch
+# Abstand zur QSL-Markierung bleibt (kein Anschluss an die Via-Box).
+RADIO_BLOCK_BOTTOM_YT = mm(43)
+RADIO_SEP = " · "  # Trenner zwischen den Werten in der horizontalen Zeile
+
+# --------------------------------------------------------------------------- #
 # PSE/TNX QSL-Markierung (früher als Bestätigungs-Checkboxen an dieser
 # Position; jetzt zeigt nur die ausgewählte Option als Text, kein Kästchen).
 # --------------------------------------------------------------------------- #
 
 QSL_MARK_X = mm(6)
 QSL_MARK_YT = mm(44)
+# Wenn der Funk-Block gezeichnet wird, rutscht die QSL-Markierung unter die
+# Funk-Zeile (deren Unterkante bei RADIO_BLOCK_BOTTOM_YT liegt), mit etwas Abstand.
+QSL_MARK_YT_RADIO = mm(47)
 
 # --------------------------------------------------------------------------- #
 # QSO-Tabelle (§3)
@@ -164,6 +186,10 @@ TABLE_X0 = mm(6)  # linke Kante
 TABLE_X1 = mm(142)  # rechte Kante
 TABLE_WIDTH = mm(136)  # = TABLE_X1 - TABLE_X0
 TABLE_YT_TOP = mm(50)  # obere Kante (von oben)
+# Ist der Funk-Block sichtbar, beginnt die Tabelle etwas tiefer (rutscht mit der
+# QSL-Markierung nach unten). Der Versatz ist klein genug, dass weiterhin
+# MAX_ROWS_PLAIN=6 bzw. MAX_ROWS_WITH_REMARKS=3 Zeilen über den Fuß passen.
+TABLE_YT_TOP_RADIO = mm(52)
 
 # Die Tabelle wird **dynamisch** gezeichnet: sie bekommt genau so viele Daten-
 # zeilen, wie die Karte QSOs hat; mehr QSOs einer Station -> Folge-Karte(n)

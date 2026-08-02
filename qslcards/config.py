@@ -25,6 +25,11 @@ class SenderConfig:
     dok: str = ""
     waz: str = ""
     itu: str = ""
+    # Funk-Ausrüstung: erscheinen dynamisch auf der Karte (nur der Wert, ohne
+    # Label), sobald gefüllt. Leer -> Zeile wird nicht gezeichnet.
+    receiver: str = ""  # Empfänger/TRX
+    antenna: str = ""  # Antenne
+    power: str = ""  # Sendeleistung (Watt)
 
 
 @dataclass
