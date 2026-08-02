@@ -42,6 +42,7 @@ REQUIRED_CONSTANTS = [
     "SIZE_CHECK",
     "SIZE_TABLE_HEAD",
     "SIZE_TABLE_CELL",
+    "SIZE_REMARKS",
     "SIZE_FOOTER",
     "SENDER_X",
     "CALLSIGN_YT",
@@ -76,8 +77,11 @@ REQUIRED_CONSTANTS = [
     "TABLE_WIDTH",
     "TABLE_YT_TOP",
     "TABLE_YT_BOTTOM",
+    "TABLE_YT_BOTTOM_WITH_REMARKS",
     "HEAD_H",
     "MAX_ROWS",
+    "MAX_ROWS_PLAIN",
+    "MAX_ROWS_WITH_REMARKS",
     "ROW_H",
     "COL_DATE_W",
     "COL_UTC_W",
@@ -92,6 +96,7 @@ REQUIRED_CONSTANTS = [
     "REMARKS_BOX_YT",
     "REMARKS_BOX_W",
     "REMARKS_BOX_H",
+    "REMARKS_TEXT_PAD",
     "FOOTER_TEXT_X",
     "FOOTER_TEXT_YT",
 ]
@@ -119,12 +124,20 @@ def test_date_subcolumns_sum():
 
 def test_row_height_positive_and_fits():
     assert g.ROW_H > 0
-    # Kopfzeile + MAX_ROWS Datenzeilen ergeben die (maximale) Tabellenhöhe
-    total = g.HEAD_H + g.MAX_ROWS * g.ROW_H
-    assert total == pytest.approx(g.TABLE_YT_BOTTOM - g.TABLE_YT_TOP)
-    assert g.MAX_ROWS == 3
-    # Bei voller Belegung darf die Tabelle nicht in den REMARKS-Block ragen.
-    assert g.TABLE_YT_BOTTOM <= g.REMARKS_LABEL_YT
+    assert g.MAX_ROWS_WITH_REMARKS == 3
+    assert g.MAX_ROWS_PLAIN == 6
+    assert g.MAX_ROWS == g.MAX_ROWS_PLAIN  # absolute Obergrenze je Karte
+
+    # Mit Remarks: Kopfzeile + weniger Datenzeilen; die Tabelle darf nicht in den
+    # REMARKS-Block ragen (der Kasten braucht darunter Platz).
+    with_rem = g.HEAD_H + g.MAX_ROWS_WITH_REMARKS * g.ROW_H
+    assert with_rem == pytest.approx(g.TABLE_YT_BOTTOM_WITH_REMARKS - g.TABLE_YT_TOP)
+    assert g.TABLE_YT_BOTTOM_WITH_REMARKS <= g.REMARKS_LABEL_YT
+
+    # Ohne Remarks: mehr Datenzeilen; die Tabelle muss über dem Footer bleiben.
+    plain = g.HEAD_H + g.MAX_ROWS_PLAIN * g.ROW_H
+    assert plain == pytest.approx(g.TABLE_YT_BOTTOM - g.TABLE_YT_TOP)
+    assert g.TABLE_YT_BOTTOM <= g.FOOTER_TEXT_YT
 
 
 # --- Alle Positionen liegen im Blattbereich -------------------------------
@@ -164,6 +177,7 @@ YT_POSITIONS = [
     "QSL_MARK_YT",
     "TABLE_YT_TOP",
     "TABLE_YT_BOTTOM",
+    "TABLE_YT_BOTTOM_WITH_REMARKS",
     "REMARKS_LABEL_YT",
     "REMARKS_BOX_YT",
     "FOOTER_TEXT_YT",

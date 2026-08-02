@@ -284,7 +284,8 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
 **Ergebnis ansehen (Pflicht: der Nutzer will jedes Ergebnis sehen)**
 - Karten-Preview: `.venv/bin/python scripts/preview_card.py` → schreibt
   **`card_preview.pdf`** in den Projekt-Root (gitignored) → mit `open card_preview.pdf`
-  zeigen. Es sind 3 Beispiel-QSOs (6 Seiten).
+  zeigen. Beispiel zeigt eine volle 6-Zeilen-Karte ohne Remarks (PA3BRB) und zwei
+  Karten mit dynamischem REMARKS-Kasten (3 Karten, 6 Seiten).
 - PDF-Seite als Bild prüfen (kein Display nötig):
   `qlmanage -t -s 1400 -o <ausgabeordner> datei.pdf` erzeugt `datei.pdf.png`.
   Nur Seite 1; für andere Seiten mit `pypdf` (PdfReader/PdfWriter) einzelne Seiten
@@ -306,10 +307,23 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   in `geometry.py` registriert (Umlaute); Fallback Helvetica, Registrierung nie fatal.
 
 **Wichtige, mit dem Nutzer getroffene Entscheidungen (nicht ohne Rückfrage kippen)**
-- **`MAX_ROWS = 3` (dynamisch)**: bis zu drei QSOs pro Karte. Koppelt Layout
-  **und** Builder; die Rückseiten-Tabelle zeichnet genau so viele Zeilen, wie die
-  Karte QSOs hat (feste `ROW_H`, mitwachsende Tabellenhöhe), `per_station` fasst
-  bis zu drei QSOs derselben Station zusammen (Überlauf → Folge-Karte).
+- **Zeilen je Karte hängen am Remarks-Zustand (dynamisch)**: ohne Remarks
+  `MAX_ROWS_PLAIN = 6`, mit Remarks `MAX_ROWS_WITH_REMARKS = 3` (der REMARKS-Kasten
+  braucht darunter Platz; `MAX_ROWS = MAX_ROWS_PLAIN` ist der Layout-Cap). Koppelt
+  Layout **und** Builder; die Rückseiten-Tabelle zeichnet genau so viele Zeilen,
+  wie die Karte QSOs hat (feste `ROW_H`, mitwachsende Höhe), `per_station` fasst
+  entsprechend viele QSOs zusammen (Überlauf → Folge-Karte). Werte nur als
+  Konstanten in `geometry.py`, **kein** GUI-Widget (so mit dem Nutzer vereinbart).
+- **REMARKS dynamisch + je Karte**: der REMARKS-Kasten erscheint nur, wenn die
+  Karte einen Text hat (`card.remarks`). Globales Feld in GUI-Abschnitt 7
+  (`generation.remarks`, alle Karten), je Karte in der Vorschau überschreibbar,
+  **max. 80 Zeichen** (`REMARKS_MAX_LEN`). Remarks sind **pro Karte unabhängig**:
+  `normalize_station_cards` lässt Karten mit Remarks eigenständig und führt nur
+  aufeinanderfolgende Karten **ohne** Remarks wieder zusammen. Sicherung pro Karte
+  zusätzlich im Generator (`regroup_card_by_remarks`). Vom Nutzer iterativ so
+  bestätigt (Split beim Setzen, Merge beim Leeren, Einzel-Remarks möglich).
+- **GUI-Abschnitte**: 1 ADIF, 2 Frontbild, 3 Absender, 4 Via-Filter, 5 Modus,
+  6 Lookups, **7 Bemerkungen**, 8 Vorschau, 9 Ausgabe.
 - **Absender kommt komplett aus der Config** (Rufzeichen, Locator, DOK, …), nie
   aus dem Log — vom Nutzer bewusst so bestätigt (ein kurzer Versuch, Rufzeichen/
   Locator aus `STATION_CALLSIGN`/`MY_GRIDSQUARE` zu ziehen, wurde zurückgenommen).

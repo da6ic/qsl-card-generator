@@ -8,10 +8,15 @@ Lookup-Map `CALL -> LookupResult`; ohne Eintrag gilt `default_via`.
 from __future__ import annotations
 
 from qslcards.adif.models import QSO
-from qslcards.cards.builder import build_cards
+from qslcards.cards.builder import (
+    build_cards,
+    normalize_station_cards,
+    regroup_card_by_remarks,
+)
+from qslcards.cards.models import Card, CardRow
 from qslcards.config import AppConfig, GenerationConfig
 from qslcards.lookup.base import LookupResult
-from qslcards.pdf.geometry import MAX_ROWS
+from qslcards.pdf.geometry import MAX_ROWS, MAX_ROWS_PLAIN, MAX_ROWS_WITH_REMARKS
 
 
 def make_qso(call, date="20260719", time="1508", **kw) -> QSO:
@@ -142,12 +147,109 @@ def test_per_station_different_calls_not_merged():
 
 
 def test_max_rows_overflow_creates_followup_cards():
-    n = MAX_ROWS * 2 + 1  # zwei volle Karten + eine Rest-Karte
+    # Ohne Remarks gilt die höhere Grenze MAX_ROWS_PLAIN.
+    n = MAX_ROWS_PLAIN * 2 + 1  # zwei volle Karten + eine Rest-Karte
     qsos = [make_qso("DL1AA", date="20260719", time=f"{h:02d}00") for h in range(n)]
     cards = build_cards(qsos, config(card_mode="per_station"))
     assert len(cards) == 3
-    assert [len(c.rows) for c in cards] == [MAX_ROWS, MAX_ROWS, 1]
+    assert [len(c.rows) for c in cards] == [MAX_ROWS_PLAIN, MAX_ROWS_PLAIN, 1]
     assert all(c.recipient_call == "DL1AA" for c in cards)
+    assert MAX_ROWS == MAX_ROWS_PLAIN  # Layout-Cap = Plain-Maximum
+
+
+# --- Remarks koppeln die Zeilen-Aufteilung --------------------------------
+
+
+def test_remarks_reduce_rows_per_card():
+    # Mit globalem Remarks-Text passen weniger QSOs auf eine Karte -> mehr Karten.
+    n = MAX_ROWS_WITH_REMARKS * 2 + 1
+    qsos = [make_qso("DL1AA", date="20260719", time=f"{h:02d}00") for h in range(n)]
+    cards = build_cards(qsos, config(card_mode="per_station", remarks="TNX QSO"))
+    assert [len(c.rows) for c in cards] == [MAX_ROWS_WITH_REMARKS, MAX_ROWS_WITH_REMARKS, 1]
+    # Der Remarks-Text landet (als Default) auf jeder Karte.
+    assert all(c.remarks == "TNX QSO" for c in cards)
+
+
+def test_no_remarks_leaves_card_remarks_empty():
+    qsos = [make_qso("DL1AA")]
+    cards = build_cards(qsos, config())
+    assert cards[0].remarks == ""
+
+
+# --- regroup_card_by_remarks: Zeilen je Karte pro Remarks-Zustand ---------
+
+
+def _card(n_rows: int, remarks: str = "") -> Card:
+    rows = [CardRow("19", "07", "26", "14:38", "14.230", "SSB", "59") for _ in range(n_rows)]
+    return Card(recipient_call="DL1AA", via_text="", via_code="B", rows=rows, remarks=remarks)
+
+
+def test_regroup_splits_overflow_with_remarks():
+    parts = regroup_card_by_remarks(_card(MAX_ROWS_PLAIN, remarks="TNX"))
+    # 6 Zeilen + Remarks -> zwei Karten (3 + 3), beide mit demselben Remarks-Text.
+    assert [len(p.rows) for p in parts] == [MAX_ROWS_WITH_REMARKS, MAX_ROWS_WITH_REMARKS]
+    assert all(p.remarks == "TNX" for p in parts)
+    assert all(p.recipient_call == "DL1AA" for p in parts)
+
+
+def test_regroup_noop_without_remarks_up_to_plain_limit():
+    card = _card(MAX_ROWS_PLAIN, remarks="")
+    assert regroup_card_by_remarks(card) == [card]
+
+
+def test_regroup_splits_overflow_without_remarks():
+    # Ohne Remarks gilt die höhere Grenze; erst darüber wird geteilt.
+    parts = regroup_card_by_remarks(_card(MAX_ROWS_PLAIN + 2, remarks=""))
+    assert [len(p.rows) for p in parts] == [MAX_ROWS_PLAIN, 2]
+
+
+def test_regroup_noop_when_fits():
+    card = _card(MAX_ROWS_WITH_REMARKS, remarks="X")
+    assert regroup_card_by_remarks(card) == [card]
+
+
+def test_regroup_is_idempotent():
+    once = regroup_card_by_remarks(_card(MAX_ROWS_PLAIN + 1, remarks="Y"))
+    twice = [p for c in once for p in regroup_card_by_remarks(c)]
+    assert [len(p.rows) for p in once] == [len(p.rows) for p in twice]
+
+
+# --- normalize_station_cards: Remarks pro Karte unabhängig ----------------
+
+
+def test_normalize_merges_consecutive_no_remarks():
+    # Reines Split-Artefakt (beide ohne Remarks) -> wieder eine Karte.
+    out = normalize_station_cards([_card(3, ""), _card(2, "")])
+    assert [(len(c.rows), c.remarks) for c in out] == [(5, "")]
+
+
+def test_normalize_keeps_single_remarks_card_separate():
+    # Genau eine Karte mit Remarks, die andere ohne -> bleiben getrennt.
+    out = normalize_station_cards([_card(3, "TNX"), _card(2, "")])
+    assert [(len(c.rows), c.remarks) for c in out] == [(3, "TNX"), (2, "")]
+
+
+def test_normalize_remarks_card_acts_as_barrier():
+    # No-Remarks / Remarks / No-Remarks -> die beiden No-Remarks NICHT mergen.
+    out = normalize_station_cards([_card(2, ""), _card(2, "X"), _card(2, "")])
+    assert [(len(c.rows), c.remarks) for c in out] == [(2, ""), (2, "X"), (2, "")]
+
+
+def test_normalize_splits_overflow_per_state():
+    assert [len(c.rows) for c in normalize_station_cards([_card(MAX_ROWS_PLAIN + 2, "")])] == [
+        MAX_ROWS_PLAIN,
+        2,
+    ]
+    assert [len(c.rows) for c in normalize_station_cards([_card(5, "A")])] == [
+        MAX_ROWS_WITH_REMARKS,
+        2,
+    ]
+
+
+def test_normalize_is_idempotent():
+    once = normalize_station_cards([_card(5, "A"), _card(4, "")])
+    twice = normalize_station_cards(once)
+    assert [(len(c.rows), c.remarks) for c in once] == [(len(c.rows), c.remarks) for c in twice]
 
 
 # --- Markierungen ---------------------------------------------------------

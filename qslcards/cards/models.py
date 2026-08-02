@@ -31,5 +31,7 @@ class Card:
     qsl_mark: str = "none"  # global aus config: "pse" | "tnx" | "none"
     portable_mark: str = "none"  # global aus config: "none" | "p" | "m" | "t" | "r"
     confirm_mark: str = "none"  # global aus config: "qso" | "swl" | "none"
+    remarks: str = ""  # REMARKS-Text der Karte; leer -> kein Kasten (dynamisch).
+    #   Default = globaler Config-Wert; in der Vorschau je Karte überschreibbar.
     # Empfängeradresse nur bei Bedarf gefüllt (Export), NICHT auf der Karte:
     recipient: LookupResult | None = None

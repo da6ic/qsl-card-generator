@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING
 
 from reportlab.pdfgen import canvas
 
+from qslcards.cards.builder import regroup_card_by_remarks
+
 from .geometry import PAGE_H, PAGE_W
 from .layout_back import draw_back
 from .layout_front import draw_front
@@ -34,6 +36,11 @@ def generate(
     progress_cb: ProgressCb | None = None,
 ) -> None:
     """Erzeugt die Gesamt-PDF (2 Seiten je Karte) und optional den Adress-Export."""
+    # Sicherstellen (pro Karte): keine Karte bekommt mehr Zeilen, als je nach
+    # Remarks-Zustand Platz haben — sonst Aufteilung in Folge-Karten. So kann der
+    # Grenzfall „viele Zeilen + Remarks" gar nicht in die PDF gelangen, egal wie
+    # die Remarks auf die Karte kamen (global, Vorschau, direkte API).
+    cards = [part for card in cards for part in regroup_card_by_remarks(card)]
     total = len(cards)
     c = canvas.Canvas(str(output_path), pagesize=(PAGE_W, PAGE_H))
 

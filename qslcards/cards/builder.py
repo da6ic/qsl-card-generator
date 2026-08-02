@@ -9,12 +9,13 @@ entscheidet die GUI anhand des Via-Filters — nicht dieses Modul.
 from __future__ import annotations
 
 from collections import OrderedDict
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from qslcards.adif.models import QSO
 from qslcards.config import AppConfig
 from qslcards.lookup import derive_via
-from qslcards.pdf.geometry import MAX_ROWS
+from qslcards.pdf.geometry import MAX_ROWS_PLAIN, MAX_ROWS_WITH_REMARKS
 
 from .models import Card, CardRow
 
@@ -115,8 +116,15 @@ def build_cards(qsos: list[QSO], config: AppConfig, lookups: Lookups | None = No
     """
     gen = config.generation
 
+    # Der globale Remarks-Text entscheidet, ob der Remarks-Kasten gezeichnet wird
+    # (dynamisch) — und damit, wie viele QSO-Zeilen je Karte Platz haben: mit
+    # Remarks weniger (der Kasten braucht Raum), ohne Remarks mehr. Der Builder
+    # splittet je Station nach dieser Grenze in Folge-Karten.
+    remarks = (gen.remarks or "").strip()
+    max_rows = MAX_ROWS_WITH_REMARKS if remarks else MAX_ROWS_PLAIN
+
     if gen.card_mode == "per_station":
-        cards = _group_per_station(qsos, lookups, gen.default_via)
+        cards = _group_per_station(qsos, lookups, gen.default_via, max_rows)
     else:  # "per_qso" (Default)
         cards = _group_per_qso(qsos, lookups, gen.default_via)
 
@@ -125,10 +133,70 @@ def build_cards(qsos: list[QSO], config: AppConfig, lookups: Lookups | None = No
         card.qsl_mark = gen.qsl_mark
         card.portable_mark = gen.portable_mark
         card.confirm_mark = gen.confirm_mark
+        card.remarks = remarks
 
     # Deterministische Sortierung: Call, dann Datum/Zeit, dann Via.
     cards.sort(key=_card_sort_key)
     return cards
+
+
+def max_rows_for_remarks(remarks: str | None) -> int:
+    """Zeilen je Karte abhängig vom Remarks-Zustand: mit Remarks weniger (der
+    Kasten braucht Platz), ohne Remarks mehr (siehe geometry.MAX_ROWS_*)."""
+    return MAX_ROWS_WITH_REMARKS if (remarks or "").strip() else MAX_ROWS_PLAIN
+
+
+def regroup_card_by_remarks(card: Card) -> list[Card]:
+    """Teilt die Zeilen **einer** Karte in so viele Karten auf, wie je Karte
+    Platz haben: mit Remarks MAX_ROWS_WITH_REMARKS, ohne Remarks MAX_ROWS_PLAIN.
+
+    Rein **pro Karte** (kein Merge über Karten hinweg); zum Zusammenführen mehrerer
+    Karten einer Station vorher deren Zeilen zu einer Karte verbinden und dann hier
+    durchreichen (so macht es die Vorschau bei einer Remarks-Änderung). Ohne
+    Überlauf bleibt es bei genau dieser einen Karte. Idempotent.
+    """
+    max_rows = max_rows_for_remarks(card.remarks)
+    if len(card.rows) <= max_rows:
+        return [card]
+    return [
+        replace(card, rows=card.rows[start : start + max_rows])
+        for start in range(0, len(card.rows), max_rows)
+    ]
+
+
+def normalize_station_cards(cards: list[Card]) -> list[Card]:
+    """Normalisiert die Karten **einer** Station (Call+Via), Reihenfolge bleibt.
+
+    Remarks sind **pro Karte** unabhängig:
+    - Karten **mit** Remarks bleiben eigenständig (je eigener Text) und werden in
+      Blöcke <= MAX_ROWS_WITH_REMARKS geteilt.
+    - Nur **aufeinanderfolgende** Karten **ohne** Remarks werden zusammengeführt
+      und in Blöcke <= MAX_ROWS_PLAIN geteilt (entfernt reine Split-Artefakte).
+
+    Dadurch kann man ein Remarks auf genau einer Karte haben (die Nachbarn ohne
+    Remarks bleiben separat), und leert man alle zusammenhängenden Karten, führen
+    sie sich wieder zu einer zusammen. Idempotent.
+    """
+    result: list[Card] = []
+    buffer: list[CardRow] = []
+    template: Card | None = None
+
+    def flush() -> None:
+        if buffer and template is not None:
+            merged = replace(template, rows=list(buffer), remarks="")
+            result.extend(regroup_card_by_remarks(merged))
+            buffer.clear()
+
+    for card in cards:
+        if template is None:
+            template = card
+        if (card.remarks or "").strip():
+            flush()  # laufenden No-Remarks-Block abschließen
+            result.extend(regroup_card_by_remarks(card))
+        else:
+            buffer.extend(card.rows)
+    flush()
+    return result
 
 
 def _group_per_qso(qsos: list[QSO], lookups: Lookups | None, default_via: str) -> list[Card]:
@@ -147,7 +215,9 @@ def _group_per_qso(qsos: list[QSO], lookups: Lookups | None, default_via: str) -
     return cards
 
 
-def _group_per_station(qsos: list[QSO], lookups: Lookups | None, default_via: str) -> list[Card]:
+def _group_per_station(
+    qsos: list[QSO], lookups: Lookups | None, default_via: str, max_rows: int
+) -> list[Card]:
     # Gruppieren nach (Call, Via). Da die Via je Rufzeichen aus dem Lookup kommt,
     # ist sie für denselben Call konstant; der Schlüssel bleibt zur Sicherheit
     # (Call, Via). OrderedDict wahrt die Ersteinfüge-Reihenfolge.
@@ -164,15 +234,16 @@ def _group_per_station(qsos: list[QSO], lookups: Lookups | None, default_via: st
         # innerhalb der Station nach Datum/Zeit sortieren
         group.sort(key=lambda q: (q.qso_date, q.time_on))
         rows = [_make_row(q) for q in group]
-        # MAX_ROWS-Überlauf: Folge-Karten mit demselben Call/Via anlegen. Bis zu
-        # MAX_ROWS QSOs landen als Zeilen auf einer Karte (dynamische Tabelle).
-        for start in range(0, len(rows), MAX_ROWS):
+        # Überlauf über max_rows: Folge-Karten mit demselben Call/Via anlegen. Bis
+        # zu max_rows QSOs landen als Zeilen auf einer Karte (dynamische Tabelle);
+        # max_rows hängt davon ab, ob Remarks gedruckt werden (siehe build_cards).
+        for start in range(0, len(rows), max_rows):
             cards.append(
                 Card(
                     recipient_call=call,
                     via_text=entry["via_text"],
                     via_code=via_code,
-                    rows=rows[start : start + MAX_ROWS],
+                    rows=rows[start : start + max_rows],
                     recipient=entry["recipient"],
                 )
             )

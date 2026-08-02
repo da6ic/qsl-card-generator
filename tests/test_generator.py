@@ -53,6 +53,17 @@ def test_generate_two_pages_per_card(tmp_path: Path):
     assert len(reader.pages) == 6  # 3 Karten * 2 Seiten
 
 
+def test_card_with_remarks_over_limit_is_split(tmp_path: Path):
+    # 6 QSO-Zeilen + Remarks passen nicht auf eine Karte -> Aufteilung in zwei
+    # Karten (je 3 Zeilen) -> 2 * 2 = 4 Seiten. Der Grenzfall darf nicht in die
+    # PDF gelangen (Sicherung pro Karte im Generator).
+    rows = [CardRow("19", "07", "26", "14:38", "14.230", "SSB", "59") for _ in range(6)]
+    card = Card(recipient_call="DL1AA", via_text="", via_code="B", rows=rows, remarks="TNX QSO")
+    out = tmp_path / "split.pdf"
+    generate([card], AppConfig(), str(_front_image(tmp_path)), str(out))
+    assert len(PdfReader(str(out)).pages) == 4
+
+
 def test_progress_callback_called_per_card(tmp_path: Path):
     cards = _dummy_cards(3)
     out = tmp_path / "cards.pdf"

@@ -117,7 +117,7 @@ def draw_back(c: Canvas, card: Card, config: AppConfig) -> None:
     _draw_station(c, config)
     _draw_confirm(c, card)
     _draw_table(c, card.rows)
-    _draw_footer(c, config)
+    _draw_footer(c, card, config)
 
 
 def _draw_frame(c: Canvas) -> None:
@@ -302,9 +302,25 @@ def _draw_table_row(c: Canvas, edges: list[float], row_top: float, row: CardRow)
     _text_in_band(c, _col_center(edges, 4), row_top, h, (row.rst_sent or "").strip(), font, size)
 
 
-def _draw_footer(c: Canvas, config: AppConfig) -> None:
-    text(c, g.REMARKS_LABEL_X, g.REMARKS_LABEL_YT, "REMARKS", g.FONT_REGULAR, g.SIZE_LABEL)
-    _box(c, g.REMARKS_BOX_X, g.REMARKS_BOX_YT, g.REMARKS_BOX_W, g.REMARKS_BOX_H)
+def _draw_footer(c: Canvas, card: Card, config: AppConfig) -> None:
+    # REMARKS **dynamisch**: Label + Kasten + Text nur zeichnen, wenn die Karte
+    # einen Remarks-Text hat. Ohne Remarks bleibt der Platz frei (der Builder gibt
+    # solchen Karten mehr QSO-Zeilen, siehe geometry.MAX_ROWS_*). Der Footer-Text
+    # (static_footer) steht unabhängig davon immer unten.
+    remarks = (card.remarks or "").strip()
+    if remarks:
+        text(c, g.REMARKS_LABEL_X, g.REMARKS_LABEL_YT, "REMARKS", g.FONT_REGULAR, g.SIZE_LABEL)
+        _box(c, g.REMARKS_BOX_X, g.REMARKS_BOX_YT, g.REMARKS_BOX_W, g.REMARKS_BOX_H)
+        _text_in_band(
+            c,
+            g.REMARKS_BOX_X + g.REMARKS_TEXT_PAD,
+            g.REMARKS_BOX_YT,
+            g.REMARKS_BOX_H,
+            remarks,
+            g.FONT_REGULAR,
+            g.SIZE_REMARKS,
+            align="left",
+        )
     text(
         c,
         g.FOOTER_TEXT_X,

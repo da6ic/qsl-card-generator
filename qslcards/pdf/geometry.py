@@ -83,6 +83,7 @@ SIZE_STATION = 9  # Locator/DOK/CQ-Zone/ITU-Block (neben der Adresse)
 SIZE_CHECK = 8  # Bestätigungs-Checkboxen
 SIZE_TABLE_HEAD = 6.5
 SIZE_TABLE_CELL = 8
+SIZE_REMARKS = 9  # Remarks-Text (dynamisch, nur wenn gesetzt)
 SIZE_FOOTER = 8
 
 # --------------------------------------------------------------------------- #
@@ -164,18 +165,30 @@ TABLE_X1 = mm(142)  # rechte Kante
 TABLE_WIDTH = mm(136)  # = TABLE_X1 - TABLE_X0
 TABLE_YT_TOP = mm(50)  # obere Kante (von oben)
 
-# Bis zu drei QSOs (Zeilen) pro Karte. Die Tabelle wird **dynamisch** gezeichnet:
-# sie bekommt genau so viele Datenzeilen, wie die Karte QSOs hat (1..MAX_ROWS);
-# mehr QSOs einer Station -> Folge-Karte(n) (siehe Builder-Kopplung). ROW_H ist
-# daher eine feste Zeilenhöhe, nicht aus der Tabellenhöhe abgeleitet.
-MAX_ROWS = 3  # Datenzeilen pro Karte (Maximum)
+# Die Tabelle wird **dynamisch** gezeichnet: sie bekommt genau so viele Daten-
+# zeilen, wie die Karte QSOs hat; mehr QSOs einer Station -> Folge-Karte(n)
+# (siehe Builder-Kopplung). ROW_H ist daher eine feste Zeilenhöhe, nicht aus der
+# Tabellenhöhe abgeleitet.
+#
+# Die **Maximalzahl der Zeilen hängt davon ab, ob ein Remarks-Text auf der Karte
+# steht** (Remarks werden dynamisch gezeichnet, siehe Fuß-Block):
+#   * Mit Remarks braucht der Remarks-Block darunter Platz -> die Tabelle muss
+#     oberhalb von REMARKS_LABEL_YT enden -> MAX_ROWS_WITH_REMARKS Zeilen.
+#   * Ohne Remarks entfällt der Block -> die Tabelle darf bis knapp über den
+#     Footer laufen -> MAX_ROWS_PLAIN Zeilen (mehr).
+# Der Builder splittet je Station nach dieser Grenze in Folge-Karten.
+MAX_ROWS_WITH_REMARKS = 3  # Datenzeilen pro Karte, wenn Remarks gesetzt sind
+MAX_ROWS_PLAIN = 6  # Datenzeilen pro Karte ohne Remarks (mehr Platz)
+MAX_ROWS = MAX_ROWS_PLAIN  # absolute Obergrenze je Karte (Layout-Cap)
 ROW_H = mm(6)  # feste Höhe einer Datenzeile
 # Kopfzeile: einzeilig und so hoch wie eine Datenzeile.
 HEAD_H = ROW_H
-# Untere Kante bei voller Belegung (MAX_ROWS). Bei weniger Zeilen endet die
-# Tabelle entsprechend höher (dynamisch, siehe layout_back._draw_table). Der Wert
-# muss oberhalb des REMARKS-Blocks (REMARKS_LABEL_YT) bleiben.
-TABLE_YT_BOTTOM = TABLE_YT_TOP + HEAD_H + MAX_ROWS * ROW_H  # = mm(74)
+# Untere Kanten der Tabelle bei voller Belegung. Bei weniger Zeilen endet die
+# Tabelle entsprechend höher (dynamisch, siehe layout_back._draw_table).
+#   * mit Remarks: muss oberhalb des REMARKS-Blocks (REMARKS_LABEL_YT) bleiben.
+#   * ohne Remarks: muss oberhalb des Footers (FOOTER_TEXT_YT) bleiben.
+TABLE_YT_BOTTOM_WITH_REMARKS = TABLE_YT_TOP + HEAD_H + MAX_ROWS_WITH_REMARKS * ROW_H  # = mm(74)
+TABLE_YT_BOTTOM = TABLE_YT_TOP + HEAD_H + MAX_ROWS_PLAIN * ROW_H  # = mm(92)
 
 # Spaltenbreiten (Summe = TABLE_WIDTH = 136 mm)
 COL_DATE_W = mm(30)  # Unterspalten D/M/Y
@@ -204,6 +217,7 @@ REMARKS_BOX_X = mm(6)
 REMARKS_BOX_YT = mm(83)
 REMARKS_BOX_W = mm(136)  # volle Inhaltsbreite (6..142)
 REMARKS_BOX_H = mm(10)  # flacher
+REMARKS_TEXT_PAD = mm(2)  # linker Innenabstand des Remarks-Textes in der Box
 
 # Footer-Text unter der REMARKS-Box (Unterkante ~yt 99). PSE/TNX steht jetzt
 # weiter oben (QSL_MARK_X/QSL_MARK_YT), der Footer bleibt frei dafür.

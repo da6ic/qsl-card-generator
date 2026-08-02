@@ -38,6 +38,16 @@ CONFIRM_MARK_CHOICES = ["Leer lassen", "Confirming QSO", "Confirming SWL-Report"
 # alle Eingabeelemente in Abschnitt 3 gleich lang sind.
 SENDER_FIELD_WIDTH = 28
 
+# Maximale Länge des Bemerkungs-/Remarks-Textes (globales Feld UND je Karte in
+# der Vorschau). Passt in eine Zeile des Remarks-Kastens auf der Karte.
+REMARKS_MAX_LEN = 80
+
+
+def limit_entry_length(entry: ttk.Entry, max_len: int) -> None:
+    """Begrenzt die Eingabelänge eines Entry per Tastatur-Validierung."""
+    vcmd = (entry.register(lambda proposed: len(proposed) <= max_len), "%P")
+    entry.config(validate="key", validatecommand=vcmd)
+
 
 class FileSection:
     """1. ADIF-Logbuch."""
@@ -230,11 +240,32 @@ class LookupSection:
         self.frame.columnconfigure(1, weight=1)
 
 
-class OutputSection:
-    """8. Ausgabe."""
+class RemarksSection:
+    """7. Bemerkungen (Remarks). Globaler Text für ALLE Karten.
+
+    Erscheint dynamisch auf der Rückseite: nur wenn Text gesetzt ist, wird der
+    Remarks-Kasten gezeichnet (und die Karte bekommt dann weniger QSO-Zeilen).
+    In der Vorschau (Abschnitt 8) lässt sich der Text je Karte überschreiben.
+    """
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="8. Ausgabe")
+        self.frame = ttk.LabelFrame(parent, text="7. Bemerkungen")
+        self.remarks = tk.StringVar()
+
+        ttk.Label(self.frame, text="Text für alle Karten").grid(
+            row=0, column=0, padx=4, pady=4, sticky="w"
+        )
+        self.remarks_entry = ttk.Entry(self.frame, textvariable=self.remarks)
+        self.remarks_entry.grid(row=0, column=1, padx=4, pady=4, sticky="we")
+        limit_entry_length(self.remarks_entry, REMARKS_MAX_LEN)
+        self.frame.columnconfigure(1, weight=1)
+
+
+class OutputSection:
+    """9. Ausgabe."""
+
+    def __init__(self, parent: tk.Misc) -> None:
+        self.frame = ttk.LabelFrame(parent, text="9. Ausgabe")
         self.output_var = tk.StringVar(value="qsl_karten.pdf")
         self.status_var = tk.StringVar(value="Bereit")
 

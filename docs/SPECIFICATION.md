@@ -41,20 +41,28 @@ Ein Hauptfenster mit klaren Abschnitten (top → bottom), jeweils in `gui/sectio
    Checkbox „Adress-/Label-Export erzeugen". **Kein** Schalter „Adressen
    nachschlagen" mehr — der Lookup läuft **automatisch beim Log-Laden** (§6),
    sofern Credentials gesetzt sind.
-7. **Vorschau**: Tabelle (`ttk.Treeview`) **aller** Karten/QSOs (nicht nur der
+7. **Bemerkungen**: ein Textfeld „Text für alle Karten" (global, `generation.
+   remarks`). Steht Text drin, erscheint auf der Rückseite der REMARKS-Kasten
+   (dynamisch, §7); leer → kein Kasten. Max. **80 Zeichen**. Je Karte in der
+   Vorschau (Abschnitt 8) überschreibbar.
+8. **Vorschau**: Tabelle (`ttk.Treeview`) **aller** Karten/QSOs (nicht nur der
    gefilterten): Spalten `Drucken`, `Call`, `#QSOs`, `Via`, `Route/Manager`,
-   `Datum`, `UTC`. Solange der Lookup läuft, zeigt die `Via`-Zelle „…". Zeilen
-   sind über die Spalte „Drucken" ab-/anwählbar (auch E-Zeilen manuell
-   aktivierbar). **`Via` und `Route/Manager` sind per Doppelklick editierbar**
-   (`Via` als Auswahl B/D/M/E, `Route/Manager` als Textfeld) — so lassen sich
-   Lookup-Fehlklassifizierungen von Hand korrigieren (z. B. wenn im HamQTH-Feld
-   `qsl_via` „bureau" statt eines Managers steht). Eine Via-Änderung zieht die
-   Drucken-Markierung der Zeile nach. Die Korrekturen gelten für die Sitzung; ein
-   erneuter Lookup („Neu abrufen"/Log neu laden) leitet die Via wieder ab.
+   `Remarks`, `Datum`, `UTC`. Solange der Lookup läuft, zeigt die `Via`-Zelle „…".
+   Zeilen sind über die Spalte „Drucken" ab-/anwählbar (auch E-Zeilen manuell
+   aktivierbar). **`Via`, `Route/Manager` und `Remarks` sind per Doppelklick
+   editierbar** (`Via` als Auswahl B/D/M/E, die anderen als Textfeld; `Remarks`
+   max. 80 Zeichen) — so lassen sich Lookup-Fehlklassifizierungen von Hand
+   korrigieren und Remarks je Karte setzen. Eine Via-Änderung zieht die
+   Drucken-Markierung der Zeile nach. Eine **Remarks-Änderung** normalisiert im
+   Modus „pro Station" die Karten der Station: Karten mit Remarks bleiben
+   eigenständig (max. 3 Zeilen), aufeinanderfolgende Karten **ohne** Remarks
+   führen sich wieder zusammen (max. 6 Zeilen) — so ist ein Remarks je Karte
+   unabhängig möglich (§5.2). Die Korrekturen gelten für die Sitzung; ein
+   erneuter Lookup („Neu abrufen"/Log neu laden) leitet Via/Remarks wieder ab.
    **Oben rechts** ein Button „Neu abrufen" (holt fehlende/abgebrochene Stationen
    nach) sowie eine Lookup-Statuszeile. Die gesamte Oberfläche ist scrollbar; die
    Tabelle zeigt mindestens ~5 Einträge.
-8. **Ausgabe**: Zielpfad der PDF, Button `PDF erzeugen`, Fortschrittsbalken
+9. **Ausgabe**: Zielpfad der PDF, Button `PDF erzeugen`, Fortschrittsbalken
    (`ttk.Progressbar`) + Statuszeile. `PDF erzeugen` ist **deaktiviert**, solange
    der Lookup nach dem Log-Laden noch läuft, und wird erst danach wieder aktiv.
 
@@ -102,6 +110,8 @@ class GenerationConfig:
                                        #   -> NUR hier in der Config, kein GUI-Widget
     page_orientation: str = "landscape" # A6, siehe CARD_LAYOUT.md
     static_footer: str = "TNX FR NICE CONTACT, 73"
+    remarks: str = ""                  # globaler REMARKS-Text (alle Karten); leer
+                                       #   -> kein Kasten. Max. 80 Zeichen (GUI).
     qsl_mark: str = "none"             # "pse" | "tnx" | "none" (global)
     portable_mark: str = "none"        # "none" | "p" | "m" (global)
     # Hinweis: KEIN `include_missing_via` mehr — die Via steht nie im Log,
@@ -205,6 +215,8 @@ class Card:
     rows: list[CardRow]        # 1..N (per_station kann mehrere haben)
     qsl_mark: str = "none"     # global aus config: "pse" | "tnx" | "none"
     portable_mark: str = "none" # global aus config: "none" | "p" | "m"
+    remarks: str = ""          # REMARKS-Text dieser Karte (leer -> kein Kasten);
+                               #   Default = config.remarks, je Karte überschreibbar
     # Empfängeradresse nur bei Bedarf gefüllt (Export), NICHT auf der Karte:
     recipient: LookupResult | None = None
 ```
@@ -226,17 +238,28 @@ class Card:
 4. **freq_mhz**: aus `freq`; fehlt es, aus `band` ableiten (optionale Tabelle).
 5. **Gruppieren**:
    - `per_qso`: eine `Card` je QSO, `rows` mit genau einer Zeile.
-   - `per_station`: QSOs je (Call, Via) sortiert nach Datum/Zeit, dann in
-     `MAX_ROWS`-große Blöcke aufgeteilt. Mit **`MAX_ROWS = 3`** (siehe
-     `CARD_LAYOUT.md`) landen bis zu drei QSOs derselben Station als Zeilen auf
-     einer Karte (dynamische Tabelle); mehr → Folge-Karte(n).
+   - `per_station`: QSOs je (Call, Via) sortiert nach Datum/Zeit, dann in Blöcke
+     aufgeteilt. Die Blockgröße hängt vom Remarks-Zustand ab (siehe
+     `CARD_LAYOUT.md`): **ohne** globalen Remarks bis `MAX_ROWS_PLAIN = 6` QSOs je
+     Karte, **mit** globalem Remarks bis `MAX_ROWS_WITH_REMARKS = 3` (der
+     Remarks-Kasten braucht Platz); mehr → Folge-Karte(n).
 6. **Sortierung**: Karten deterministisch nach `recipient_call`, dann Datum.
 7. **Markierungen (global, manuell)**: jede Karte erhält unverändert die
    Werte aus der Config:
    - `card.qsl_mark = config.qsl_mark` (`"pse"` | `"tnx"` | `"none"`).
    - `card.portable_mark = config.portable_mark` (`"none"` | `"p"` | `"m"`).
+   - `card.remarks = config.remarks` (globaler REMARKS-Text; je Karte in der
+     Vorschau überschreibbar).
    Es gibt **keine** automatische Ableitung aus dem Log; der Nutzer wählt die
    Markierungen in der GUI/Config, sie gelten für **alle** Karten gleich.
+
+Hilfsfunktionen fürs Remarks-Splitting (rein, ohne Seiteneffekte):
+- `regroup_card_by_remarks(card)`: teilt die Zeilen **einer** Karte in Blöcke je
+  nach Remarks-Zustand (3 mit / 6 ohne Remarks); idempotent, kein Merge.
+- `normalize_station_cards(cards)`: normalisiert die Karten **einer** Station —
+  Karten mit Remarks bleiben eigenständig, aufeinanderfolgende Karten ohne
+  Remarks werden zusammengeführt (Merge). Nutzt die Vorschau bei einer
+  Remarks-Änderung, damit ein Remarks je Karte unabhängig gesetzt werden kann.
 
 ---
 
@@ -316,7 +339,14 @@ aus, wenn **kein** Papierweg vorhanden ist):
   beschneiden (Clip), zentriert. Einmal via Pillow geladen und als ImageReader
   gecacht, für alle Karten wiederverwenden.
 - **Back** (`layout_back.py`): exakt nach `CARD_LAYOUT.md`. Alle Positionen/
-  Größen aus `geometry.py`.
+  Größen aus `geometry.py`. Der REMARKS-Block (Label + Kasten + Text) wird nur
+  gezeichnet, wenn `card.remarks` gesetzt ist (dynamisch); der Footer-Text steht
+  immer.
+- **Normalisierung vor dem Zeichnen**: `generate` wendet auf jede Karte
+  `regroup_card_by_remarks` an (§5.2) — so bekommt keine Karte mehr Zeilen, als je
+  nach Remarks-Zustand Platz haben (Sicherung pro Karte, egal wie die Remarks auf
+  die Karte kamen: global, Vorschau, direkte API). Die Seitenzahl richtet sich
+  nach der so normalisierten Kartenliste.
 - **Fortschritt**: `generator.generate(..., progress_cb)` ruft
   `progress_cb(done, total)` nach jeder Karte → GUI aktualisiert Balken via
   `root.after`.
@@ -350,7 +380,8 @@ in `geometry.py` referenzieren.
 - `test_adif_parser.py`: alle Fälle aus §4.4.
 - `test_card_builder.py`: alle QSOs (kein Via-Filter mehr), Via aus Lookup-Map +
   `default_via`-Fallback, Datum-Split, Gruppierung per_qso/per_station,
-  MAX_ROWS-Überlauf.
+  Zeilen-Überlauf (MAX_ROWS_PLAIN/WITH_REMARKS), `regroup_card_by_remarks` und
+  `normalize_station_cards` (Split/Merge, Remarks je Karte, Idempotenz).
 - `test_lookup.py`: `derive_via`-Priorität M>B>D>E (inkl. E nur ohne Papierweg,
   Fallback `default_via`), Parsing der Routing-Felder (HamQTH inkl. lotw/eqsl,
   QRZ-Manager), Enrichment über alle Stationen, Cache, Reauth — HTTP gemockt.

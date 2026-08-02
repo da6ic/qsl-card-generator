@@ -47,6 +47,7 @@ class GenerationConfig:
     #   -> nur hier in der Config, kein GUI-Widget. Via kommt sonst aus dem Lookup.
     page_orientation: str = "landscape"  # A6, siehe CARD_LAYOUT.md
     static_footer: str = "TNX FR NICE CONTACT, 73"
+    remarks: str = ""  # globaler REMARKS-Text (alle Karten); leer -> kein Kasten
     qsl_mark: str = "none"  # "pse" | "tnx" | "none" (global)
     portable_mark: str = "none"  # "none" | "p" | "m" | "t" | "r" (global)
     confirm_mark: str = "none"  # "qso" | "swl" | "none" (global)

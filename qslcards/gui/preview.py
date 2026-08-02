@@ -13,21 +13,26 @@ from collections.abc import Callable
 from tkinter import ttk
 from typing import TYPE_CHECKING
 
+from qslcards.cards.builder import normalize_station_cards
+
+from .sections import REMARKS_MAX_LEN, limit_entry_length
+
 if TYPE_CHECKING:
     from qslcards.cards.models import Card
 
-_COLUMNS = ("print", "call", "qsos", "via", "route", "date", "utc")
+_COLUMNS = ("print", "call", "qsos", "via", "route", "remarks", "date", "utc")
 _HEADINGS = {
     "print": "Drucken",
     "call": "Call",
     "qsos": "#QSOs",
     "via": "Via",
     "route": "Route/Manager",
+    "remarks": "Remarks",
     "date": "Datum",
     "utc": "UTC",
 }
 _PENDING = "…"  # Platzhalter, solange der Lookup für die Zeile noch läuft
-_EDITABLE = ("via", "route")  # per Doppelklick editierbare Spalten
+_EDITABLE = ("via", "route", "remarks")  # per Doppelklick editierbare Spalten
 _VIA_CHOICES = ("B", "D", "M", "E")  # Auswahl für die Via-Zelle
 
 
@@ -35,7 +40,7 @@ class PreviewTable:
     """Treeview der Karten; Zeilen per Klick auf die Spalte 'Drucken' abwählbar."""
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="7. Vorschau")
+        self.frame = ttk.LabelFrame(parent, text="8. Vorschau")
 
         # Kopfzeile: Lookup-Status links, „Neu abrufen"-Button rechts.
         header = ttk.Frame(self.frame)
@@ -53,6 +58,7 @@ class PreviewTable:
             self.tree.column(col, width=70, anchor="center")
         self.tree.column("call", width=90)
         self.tree.column("route", width=110)
+        self.tree.column("remarks", width=140, anchor="w")
         self.tree.column("date", width=90)
 
         scroll = ttk.Scrollbar(self.frame, orient="vertical", command=self.tree.yview)
@@ -65,6 +71,9 @@ class PreviewTable:
         # iid -> (Card, included?)
         self._rows: dict[str, tuple[Card, bool]] = {}
         self._pending = False  # während des Lookups keine Bearbeitung
+        # Ob Karten derselben Station zusammengehören (Modus „pro Station"): dann
+        # führt eine Remarks-Änderung die Station neu zusammen/teilt sie neu auf.
+        self._groupable = False
         # Callback (von app.py gesetzt): nach einer Zellen-Bearbeitung aufgerufen
         # mit (iid, card, spaltenname) -> z.B. Drucken-Markierung nachziehen.
         self.on_cell_edited: Callable[[str, Card, str], None] | None = None
@@ -88,39 +97,48 @@ class PreviewTable:
         *,
         included: Callable[[Card], bool] | None = None,
         pending: bool = False,
+        groupable: bool = False,
     ) -> None:
         """Füllt die Tabelle neu.
 
         `included(card)` bestimmt die Drucken-Voreinstellung je Karte (None → alle
         drucken). `pending=True` zeigt „…" für Via/Route (Lookup läuft noch).
+        `groupable=True` (Modus „pro Station") lässt eine Remarks-Änderung die
+        ganze Station neu gruppieren (zusammenführen bzw. aufteilen).
         """
         self._pending = pending
+        self._groupable = groupable
         self.tree.delete(*self.tree.get_children())
         self._rows.clear()
         for card in cards:
             inc = True if included is None else bool(included(card))
-            date = ""
-            utc = ""
-            if card.rows:
-                r = card.rows[0]
-                date = f"{r.date_d}.{r.date_m}.{r.date_y}"
-                utc = r.utc
-            via = _PENDING if pending else card.via_code
-            route = _PENDING if pending else card.via_text
-            iid = self.tree.insert(
-                "",
-                "end",
-                values=(
-                    "Ja" if inc else "Nein",
-                    card.recipient_call,
-                    len(card.rows),
-                    via,
-                    route,
-                    date,
-                    utc,
-                ),
-            )
-            self._rows[iid] = (card, inc)
+            self._insert_card(card, inc)
+
+    def _card_values(self, card: Card, inc: bool) -> tuple:
+        """Werte-Tupel einer Baumzeile in Spaltenreihenfolge (_COLUMNS)."""
+        date = ""
+        utc = ""
+        if card.rows:
+            r = card.rows[0]
+            date = f"{r.date_d}.{r.date_m}.{r.date_y}"
+            utc = r.utc
+        via = _PENDING if self._pending else card.via_code
+        route = _PENDING if self._pending else card.via_text
+        return (
+            "Ja" if inc else "Nein",
+            card.recipient_call,
+            len(card.rows),
+            via,
+            route,
+            card.remarks,
+            date,
+            utc,
+        )
+
+    def _insert_card(self, card: Card, inc: bool, index: int | str = "end") -> str:
+        iid = self.tree.insert("", index, values=self._card_values(card, inc))
+        self._rows[iid] = (card, inc)
+        return iid
 
     def apply_via_filter(self, via_codes: set[str]) -> None:
         """Setzt die Drucken-Markierung je Zeile neu: `via_code ∈ via_codes`."""
@@ -173,9 +191,11 @@ class PreviewTable:
                 self.tree, values=list(_VIA_CHOICES), state="readonly"
             )
             editor.set(card.via_code)
-        else:  # "route"
+        else:  # "route" oder "remarks": freies Textfeld
             editor = ttk.Entry(self.tree)
-            editor.insert(0, card.via_text)
+            editor.insert(0, card.via_text if col_name == "route" else card.remarks)
+            if col_name == "remarks":
+                limit_entry_length(editor, REMARKS_MAX_LEN)
 
         editor.place(x=x, y=y, width=w, height=h)
         editor.focus_set()
@@ -218,6 +238,9 @@ class PreviewTable:
                 return
             card.via_code = value
             display = card.via_code
+        elif col_name == "remarks":  # REMARKS-Text nur dieser Karte
+            card.remarks = value
+            display = card.remarks
         else:  # "route" -> Manager-/Routentext auf der Karte
             card.via_text = value
             display = card.via_text
@@ -228,6 +251,42 @@ class PreviewTable:
 
         if self.on_cell_edited is not None:
             self.on_cell_edited(iid, card, col_name)
+
+        # Remarks-Änderung: im Modus „pro Station" die Station neu normalisieren.
+        # Remarks sind pro Karte unabhängig — Karten mit Remarks bleiben eigen-
+        # ständig, nur aufeinanderfolgende Karten OHNE Remarks führen sich wieder
+        # zusammen (siehe normalize_station_cards). So kann man ein Remarks auf
+        # genau einer Karte haben, und leert man alle, fallen sie wieder zusammen.
+        if col_name == "remarks":
+            self._regroup_station(iid)
+
+    def _regroup_station(self, iid: str) -> None:
+        if iid not in self._rows or not self._groupable:
+            return  # per_qso: 1-Zeilen-Karten, kein Merge/Split nötig
+        card, _inc = self._rows[iid]
+        key = self._station_key(card)
+        # Alle Karten derselben Station (Call + Via) in Baumreihenfolge einsammeln.
+        group_iids = [
+            i
+            for i in self.tree.get_children()
+            if i in self._rows and self._station_key(self._rows[i][0]) == key
+        ]
+        if not group_iids:
+            return
+        inc = self._rows[group_iids[0]][1]
+        station_cards = [self._rows[i][0] for i in group_iids]
+        parts = normalize_station_cards(station_cards)
+
+        index = self.tree.index(group_iids[0])
+        for i in group_iids:
+            self.tree.delete(i)
+            del self._rows[i]
+        for offset, part in enumerate(parts):
+            self._insert_card(part, inc, index + offset)
+
+    @staticmethod
+    def _station_key(card: Card) -> tuple[str, str]:
+        return (card.recipient_call, card.via_code)
 
     def _on_click(self, event: tk.Event) -> None:
         # Nur Klicks in die Spalte "Drucken" (Spalte #1) schalten die Zeile um.

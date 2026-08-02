@@ -30,6 +30,7 @@ from .sections import (
     LookupSection,
     ModeSection,
     OutputSection,
+    RemarksSection,
     SenderSection,
 )
 
@@ -113,6 +114,10 @@ class App(tk.Tk):
         self._lookup_running = False
         self._generating = False
 
+        # Zuletzt für den Karten-Neuaufbau verwendeter globaler Remarks-Text.
+        # Verhindert überflüssige Rebuilds bei jedem FocusOut ohne Textänderung.
+        self._last_remarks_built = ""
+
         # Auto-Sync-Zustand
         self._suppress_save = False  # unterdrückt Auto-Save beim programmatischen Setzen
         self._save_after_id: str | None = None  # laufender Debounce-Timer
@@ -149,6 +154,7 @@ class App(tk.Tk):
 
         self.sender_section = SenderSection(root)
         self.lookup_section = LookupSection(root)
+        self.remarks_section = RemarksSection(root)
         self.preview = PreviewTable(root)
         self.output_section = OutputSection(root)
 
@@ -156,8 +162,10 @@ class App(tk.Tk):
         self.sender_section.frame.grid(row=0, column=1, padx=6, pady=4, sticky="nsew")
         self._midleft.grid(row=1, column=0, padx=6, pady=4, sticky="nsew")
         self.lookup_section.frame.grid(row=1, column=1, padx=6, pady=4, sticky="nsew")
-        self.preview.frame.grid(row=2, column=0, columnspan=2, padx=6, pady=4, sticky="nsew")
-        self.output_section.frame.grid(row=3, column=0, columnspan=2, padx=6, pady=4, sticky="we")
+        # Abschnitt 7 (Remarks) über volle Breite, dann Vorschau (8) und Ausgabe (9).
+        self.remarks_section.frame.grid(row=2, column=0, columnspan=2, padx=6, pady=4, sticky="we")
+        self.preview.frame.grid(row=3, column=0, columnspan=2, padx=6, pady=4, sticky="nsew")
+        self.output_section.frame.grid(row=4, column=0, columnspan=2, padx=6, pady=4, sticky="we")
 
         root.columnconfigure(0, weight=1)
         root.columnconfigure(1, weight=1)
@@ -186,6 +194,10 @@ class App(tk.Tk):
         self.sender_section.confirm_combo.bind(
             "<<ComboboxSelected>>", lambda _e: self._rebuild_cards()
         )
+        # Globaler Remarks-Text: ändert Kartentext UND ggf. die Zeilen-Aufteilung
+        # (mit Remarks weniger Zeilen). Rebuild erst bei Fokusverlust/Enter, nicht
+        # bei jedem Tastendruck (Enter gibt via _defocus_entry den Fokus frei).
+        self.remarks_section.remarks_entry.bind("<FocusOut>", self._on_remarks_commit)
         # „Neu abrufen": fehlende/abgebrochene Stationen erneut nachschlagen.
         self.preview.refresh_btn.config(command=self._refresh_lookups)
         # Nach einer Via-Bearbeitung die Drucken-Markierung der Zeile nachziehen.
@@ -224,6 +236,8 @@ class App(tk.Tk):
             self.sender_section.confirm_mark.set(
                 CONFIRM_CODE_TO_DISPLAY.get(config.generation.confirm_mark, "Leer lassen")
             )
+            self.remarks_section.remarks.set(config.generation.remarks)
+            self._last_remarks_built = config.generation.remarks
         finally:
             self._suppress_save = False
 
@@ -246,6 +260,7 @@ class App(tk.Tk):
             default_via=self.base_config.generation.default_via,
             page_orientation=self.base_config.generation.page_orientation,
             static_footer=self.base_config.generation.static_footer,
+            remarks=self.remarks_section.remarks.get(),
             qsl_mark=QSL_MARK_TO_CODE.get(self.sender_section.qsl_mark.get(), "none"),
             portable_mark=PORTABLE_TO_CODE.get(self.sender_section.portable.get(), "none"),
             confirm_mark=CONFIRM_MARK_TO_CODE.get(self.sender_section.confirm_mark.get(), "none"),
@@ -275,6 +290,7 @@ class App(tk.Tk):
             self.sender_section.qsl_mark,
             self.sender_section.portable,
             self.sender_section.confirm_mark,
+            self.remarks_section.remarks,
             self.lookup_section.hamqth_user,
             self.lookup_section.hamqth_pass,
             self.lookup_section.qrz_user,
@@ -384,11 +400,26 @@ class App(tk.Tk):
             self.preview.set_cards([])
             return
         cards = build_cards(self.qsos, self._gather_config(), self.lookups)
-        self.preview.set_cards(cards, included=self._included_default, pending=self._lookup_running)
+        self.preview.set_cards(
+            cards,
+            included=self._included_default,
+            pending=self._lookup_running,
+            groupable=self.mode_section.card_mode.get() == "per_station",
+        )
 
     def _apply_filter(self) -> None:
         """Via-Filter geändert: nur die Drucken-Markierung neu setzen (kein Rebuild)."""
         self.preview.apply_via_filter(self._via_filter_set())
+
+    def _on_remarks_commit(self, _event=None) -> None:
+        """Globaler Remarks-Text bestätigt (Fokusverlust/Enter): Karten neu bauen,
+        aber nur wenn sich der Text wirklich geändert hat (spart Rebuilds und
+        erhält per-Karte-Überschreibungen bei unverändertem Text)."""
+        value = self.remarks_section.remarks.get()
+        if value == self._last_remarks_built:
+            return
+        self._last_remarks_built = value
+        self._rebuild_cards()
 
     def _on_cell_edited(self, iid: str, card, column: str) -> None:
         """Nach einer Via-Bearbeitung die Drucken-Markierung der Zeile nachziehen

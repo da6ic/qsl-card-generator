@@ -59,9 +59,11 @@ MARGIN = mm(3)
 
 Gegenüber der Original-DARC-Karte bewusst geändert: kein „Responsive"-Untertitel,
 `/p`/`/m` oben zwischen eigenem Call und dem „To Amateur…"-Block, Stationsdaten
-(Locator/DOK/WAZ/ITU) als Spalte neben der Adresse, bis zu **drei** Datenzeilen
-(`MAX_ROWS = 3`, dynamisch), REMARKS über die volle Breite mit Footer darunter
-(kein TRAINEE-Feld).
+(Locator/DOK/WAZ/ITU) als Spalte neben der Adresse, eine **dynamisch hohe**
+Datentabelle (ohne Remarks bis `MAX_ROWS_PLAIN = 6` Zeilen, mit Remarks bis
+`MAX_ROWS_WITH_REMARKS = 3`) und ein **dynamischer** REMARKS-Block, der nur
+erscheint, wenn die Karte einen Remarks-Text hat (Footer darunter, kein
+TRAINEE-Feld).
 
 ---
 
@@ -112,13 +114,17 @@ Label-Spalte `x=50`, Wert-Spalte `x=64`; Zeilen `Locator:` / `DOK:` / `WAZ:` / `
 
 ### QSO-Tabelle
 - Bounding-Box: `x=6 … 142` (Breite 136), oben `yt=50`; die Unterkante ist
-  **dynamisch** (`TABLE_YT_BOTTOM = TABLE_YT_TOP + HEAD_H + n·ROW_H`) und liegt bei
-  voller Belegung bei `yt=74` (immer oberhalb des REMARKS-Blocks).
+  **dynamisch** (`TABLE_YT_TOP + HEAD_H + n·ROW_H`). Ohne Remarks endet sie bei
+  voller Belegung (6 Zeilen) bei `yt=92` (`TABLE_YT_BOTTOM`, oberhalb des Footers);
+  mit Remarks bei voller Belegung (3 Zeilen) bei `yt=74`
+  (`TABLE_YT_BOTTOM_WITH_REMARKS`, oberhalb des REMARKS-Blocks).
 - **Kopfzeile einzeilig**, so hoch wie eine Datenzeile (`HEAD_H = ROW_H = 6`).
-  **Datenzeilen**: bis zu `MAX_ROWS = 3`, feste Höhe `ROW_H = 6`. Die Tabelle wird
-  **dynamisch** gezeichnet — genau so viele Zeilen, wie die Karte QSOs hat (1..3).
-  Im Modus „pro Station" landen bis zu drei QSOs derselben Station auf einer Karte;
-  mehr → Folge-Karte(n).
+  **Datenzeilen**: feste Höhe `ROW_H = 6`. Die Tabelle wird **dynamisch** gezeichnet
+  — genau so viele Zeilen, wie die Karte QSOs hat. Die Maximalzahl hängt vom
+  Remarks-Zustand ab: **ohne** Remarks bis `MAX_ROWS_PLAIN = 6`, **mit** Remarks
+  bis `MAX_ROWS_WITH_REMARKS = 3` (der Remarks-Kasten braucht darunter Platz).
+  Im Modus „pro Station" landen so viele QSOs derselben Station auf einer Karte,
+  wie erlaubt; mehr → Folge-Karte(n). Remarks sind **je Karte** unabhängig.
 - Spalten (Breiten in mm, Summe = 136):
   | Spalte            | Breite | Unterspalten                    |
   |-------------------|--------|---------------------------------|
@@ -142,16 +148,23 @@ Label-Spalte `x=50`, Wert-Spalte `x=64`; Zeilen `Locator:` / `DOK:` / `WAZ:` / `
   Spalte hat keine Unterspalten mehr.
 
 ### Fuß
-REMARKS-Box über die volle Breite und flach; Footer-Text und PSE/TNX **darunter**.
-Das Konstrukt sitzt unten mit ~3 mm Abstand zum Rahmen (wie seitlich); Abstand
-Label→Box wie „Via:"→Via-Box (4 mm).
-| Element              | Inhalt / Quelle                 | x   | yt | Font/Size |
-|----------------------|---------------------------------|-----|----|-----------|
-| Label „REMARKS"      | statisch                        | 6   | 79 | Regular 8 |
-| REMARKS-Box          | leer (b=136, h=10)              | 6   | 83 | Rahmen 0.6pt |
-| Footer-Text          | `generation.static_footer`      | 6   | 96 | Bold 8    |
-| ☐ PSE QSL            | checked, wenn `qsl_mark=="pse"` | 62  | 96 | Regular 8 |
-| ☐ TNX QSL            | checked, wenn `qsl_mark=="tnx"` | 92  | 96 | Regular 8 |
+REMARKS-Block über die volle Breite und flach; Footer-Text und PSE/TNX
+**darunter**. Der REMARKS-Block wird **dynamisch** gezeichnet: nur wenn die Karte
+einen Remarks-Text (`card.remarks`) hat — sonst bleibt der Platz frei (und die
+Tabelle darf mehr Zeilen nutzen, siehe QSO-Tabelle). Der Block sitzt an fester
+Position knapp über dem Footer (~3 mm Abstand zum Rahmen); Abstand Label→Box wie
+„Via:"→Via-Box (4 mm). Der Footer-Text steht **immer** (unabhängig von Remarks).
+| Element              | Inhalt / Quelle                    | x   | yt | Font/Size |
+|----------------------|------------------------------------|-----|----|-----------|
+| Label „REMARKS"      | statisch (nur wenn Remarks)        | 6   | 79 | Regular 10 |
+| REMARKS-Box          | `card.remarks` (b=136, h=10)       | 6   | 83 | Rahmen 0.6pt |
+| REMARKS-Text         | `card.remarks`, links, mittig-vert.| 8   | –  | Regular 9 |
+| Footer-Text          | `generation.static_footer`         | 6   | 96 | Bold 8    |
+| ☐ PSE QSL            | checked, wenn `qsl_mark=="pse"`    | 62  | 96 | Regular 8 |
+| ☐ TNX QSL            | checked, wenn `qsl_mark=="tnx"`    | 92  | 96 | Regular 8 |
+
+Der Remarks-Text ist auf **80 Zeichen** begrenzt (passt in eine Zeile der Box);
+die Begrenzung sitzt in den Eingabefeldern der GUI (global + je Karte).
 
 ---
 

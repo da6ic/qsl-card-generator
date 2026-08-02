@@ -38,6 +38,12 @@ generation:
                                #   Via-Priorität sonst: Manager > Büro > Direkt > E.
   page_orientation: "landscape"  # A6 quer (Referenz). Alternativ "portrait"
   static_footer: "TNX FR NICE CONTACT, 73"
+  remarks: ""                  # globaler REMARKS-Text für ALLE Karten. Leer =
+                               #   kein Remarks-Kasten (dynamisch). Je Karte in
+                               #   der Vorschau überschreibbar. Max. 80 Zeichen.
+                               #   Mit Remarks passen weniger QSO-Zeilen auf eine
+                               #   Karte (Kasten braucht Platz) -> Rest -> Folge-
+                               #   karte.
   qsl_mark: "none"             # welches Kästchen ankreuzen (global): pse|tnx|none
                                #   pse : PSE QSL bei allen Karten (Karte anfordern)
                                #   tnx : TNX QSL bei allen Karten (für Karte danken)
