@@ -2,11 +2,13 @@
 config.yaml
 lookup_cache.json
 
+# ADIF-Logbücher (lokale/persönliche Daten)
+*.adi
+*.adif
+
 # Ausgabe
 /output/
-back_preview.pdf
-card_preview.pdf
-qsl_karten.pdf
+*.pdf
 *_addresses.csv
 
 # Python
