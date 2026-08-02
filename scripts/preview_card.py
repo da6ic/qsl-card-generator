@@ -1,7 +1,12 @@
 """Rendert eine Testauflage mehrerer Karten (Vorder- + Rückseite) als PDF.
 
-Nutzt den echten Generator: pro Karte Seite Front dann Rückseite. Mit 3
-Beispiel-QSOs entstehen 6 Seiten.
+Nutzt den echten Builder + Generator: aus Beispiel-QSOs werden Karten gebaut
+(Modus „pro Station"), pro Karte Seite Front dann Rückseite. So wird das
+aktuelle Feature direkt sichtbar:
+- **mehrere QSOs pro Station auf einer Karte** (dynamische Tabelle, bis 3 Zeilen).
+
+Die Absenderdaten (Rufzeichen, Name, Adresse, Locator, DOK, CQ-Zone, ITU) kommen
+wie gewohnt komplett aus der Config, nicht aus dem Log.
 
 Aufruf:
     python scripts/preview_card.py [AUSGABE.pdf] [FRONTBILD]
@@ -16,57 +21,54 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from qslcards.cards.models import Card, CardRow  # noqa: E402
+from qslcards.adif.models import QSO  # noqa: E402
+from qslcards.cards.builder import build_cards  # noqa: E402
 from qslcards.config import AppConfig, GenerationConfig, SenderConfig  # noqa: E402
 from qslcards.pdf.generator import generate  # noqa: E402
 
 DEFAULT_IMAGE = ROOT / "Bild.jpg"
 
-# Drei Beispiel-QSOs mit etwas Variation (Call, Via, Modus, Markierungen).
-SAMPLE_CARDS = [
-    Card(
-        recipient_call="DL2SCT",
-        via_text="via DARC-Büro",
-        via_code="B",
-        rows=[CardRow("19", "07", "26", "14:38", "14.230", "SSB", "59")],
-        qsl_mark="tnx",
-        portable_mark="p",
-        confirm_mark="qso",
-    ),
-    Card(
-        recipient_call="G3NFV",
-        via_text="",
-        via_code="D",
-        rows=[CardRow("19", "07", "26", "15:11", "7.030", "CW", "599")],
-        qsl_mark="tnx",
-        portable_mark="none",
-        confirm_mark="swl",
-    ),
-    Card(
-        recipient_call="F5ABC",
-        via_text="via F6XYZ",
-        via_code="M",
-        rows=[CardRow("20", "07", "26", "09:05", "144.300", "SSB", "57")],
-        qsl_mark="pse",
-        portable_mark="r",
-        confirm_mark="none",
-    ),
+
+def _qso(call: str, time: str, freq: str, mode: str, rst: str) -> QSO:
+    return QSO(
+        call=call,
+        qso_date="20260719",
+        time_on=time,
+        freq=freq,
+        mode=mode,
+        rst_sent=rst,
+    )
+
+
+# Beispiel-QSOs: PA3BRB dreimal (-> eine Karte mit drei Zeilen), plus zwei
+# Einzelstationen (-> je eine Karte mit einer Zeile).
+SAMPLE_QSOS = [
+    _qso("PA3BRB", "120600", "7.075708", "FT8", "59"),
+    _qso("PA3BRB", "180600", "7.075708", "FT8", "58"),
+    _qso("PA3BRB", "190600", "7.075708", "FT8", "57"),
+    _qso("DL2SCT", "143825", "14.230", "SSB", "59"),
+    _qso("G3NFV", "151147", "7.150", "SSB", "55"),
 ]
 
 SAMPLE_CONFIG = AppConfig(
     sender=SenderConfig(
-        callsign="DN5MT",
+        callsign="DN5MT",  # Fallback, falls das Log kein Rufzeichen hätte
         name="Axel Tüner",
         street="Wilhelmstr. 76",
         zip="72124",
         city="Pliezhausen",
         country="Deutschland",
-        locator="JN48OM",
+        locator="JN48OM",  # Fallback; im Log steht JN48PK
         dok="P31",
         waz="14",
         itu="28",
     ),
-    generation=GenerationConfig(static_footer="TNX FR NICE CONTACT, 73"),
+    generation=GenerationConfig(
+        card_mode="per_station",
+        static_footer="TNX FR NICE CONTACT, 73",
+        qsl_mark="tnx",
+        confirm_mark="qso",
+    ),
 )
 
 
@@ -77,9 +79,14 @@ def main(argv: list[str]) -> int:
     if not image.exists():
         print(f"Warnung: Frontbild fehlt ({image}).")
 
-    generate(SAMPLE_CARDS, SAMPLE_CONFIG, str(image), str(out))
-    pages = 2 * len(SAMPLE_CARDS)
-    print(f"geschrieben: {out} ({len(SAMPLE_CARDS)} Karten, {pages} Seiten, Front={image.name})")
+    cards = build_cards(SAMPLE_QSOS, SAMPLE_CONFIG)
+    generate(cards, SAMPLE_CONFIG, str(image), str(out))
+    pages = 2 * len(cards)
+    rows = [len(c.rows) for c in cards]
+    print(
+        f"geschrieben: {out} ({len(cards)} Karten, Zeilen/Karte={rows}, "
+        f"{pages} Seiten, Front={image.name})"
+    )
     return 0
 
 

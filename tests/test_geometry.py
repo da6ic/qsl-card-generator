@@ -121,10 +121,12 @@ def test_date_and_rst_subcolumns_sum():
 
 def test_row_height_positive_and_fits():
     assert g.ROW_H > 0
-    # Kopfzeile + MAX_ROWS Datenzeilen füllen die Tabellenhöhe genau aus
+    # Kopfzeile + MAX_ROWS Datenzeilen ergeben die (maximale) Tabellenhöhe
     total = g.HEAD_H + g.MAX_ROWS * g.ROW_H
     assert total == pytest.approx(g.TABLE_YT_BOTTOM - g.TABLE_YT_TOP)
-    assert g.MAX_ROWS == 1
+    assert g.MAX_ROWS == 3
+    # Bei voller Belegung darf die Tabelle nicht in den REMARKS-Block ragen.
+    assert g.TABLE_YT_BOTTOM <= g.REMARKS_LABEL_YT
 
 
 # --- Alle Positionen liegen im Blattbereich -------------------------------

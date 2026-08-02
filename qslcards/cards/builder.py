@@ -164,7 +164,8 @@ def _group_per_station(qsos: list[QSO], lookups: Lookups | None, default_via: st
         # innerhalb der Station nach Datum/Zeit sortieren
         group.sort(key=lambda q: (q.qso_date, q.time_on))
         rows = [_make_row(q) for q in group]
-        # MAX_ROWS-Überlauf: Folge-Karten mit demselben Call/Via anlegen.
+        # MAX_ROWS-Überlauf: Folge-Karten mit demselben Call/Via anlegen. Bis zu
+        # MAX_ROWS QSOs landen als Zeilen auf einer Karte (dynamische Tabelle).
         for start in range(0, len(rows), MAX_ROWS):
             cards.append(
                 Card(

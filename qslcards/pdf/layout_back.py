@@ -245,10 +245,13 @@ def _column_edges() -> list[float]:
 def _draw_table(c: Canvas, rows: list[CardRow]) -> None:
     c.setLineWidth(g.LINE_WIDTH)
     edges = _column_edges()
+    # Dynamische Tabelle: genau so viele Datenzeilen zeichnen, wie die Karte QSOs
+    # hat (mind. 1, höchstens MAX_ROWS). Die Tabellenhöhe wächst mit der Zeilenzahl.
+    n_rows = max(1, min(len(rows), g.MAX_ROWS))
     top = g.TABLE_YT_TOP
     head_bottom = g.TABLE_YT_TOP + g.HEAD_H
     head_mid = g.TABLE_YT_TOP + g.HEAD_H / 2
-    bottom = g.TABLE_YT_BOTTOM
+    bottom = head_bottom + n_rows * g.ROW_H
 
     # Hauptspalten-Trennlinien über die volle Höhe.
     for x in edges:
@@ -256,7 +259,7 @@ def _draw_table(c: Canvas, rows: list[CardRow]) -> None:
     # Waagerechte Linien: oben, Kopf/Daten-Trenner, Zeilentrenner, unten.
     _hline(c, g.TABLE_X0, g.TABLE_X1, top)
     _hline(c, g.TABLE_X0, g.TABLE_X1, head_bottom)
-    for i in range(1, g.MAX_ROWS):
+    for i in range(1, n_rows):
         _hline(c, g.TABLE_X0, g.TABLE_X1, head_bottom + i * g.ROW_H)
     _hline(c, g.TABLE_X0, g.TABLE_X1, bottom)
 
