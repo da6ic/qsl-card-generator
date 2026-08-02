@@ -40,14 +40,15 @@ def _qso(call: str, time: str, freq: str, mode: str, rst: str) -> QSO:
     )
 
 
-# Beispiel-QSOs: PA3BRB dreimal (-> eine Karte mit drei Zeilen), plus zwei
-# Einzelstationen (-> je eine Karte mit einer Zeile).
+# Beispiel-QSOs mit verschiedenen Betriebsarten, um die Report-Darstellung zu
+# zeigen: PA3BRB dreimal FT8 (dB-Reports -> eine Karte mit drei Zeilen), plus
+# eine SSB- und eine CW-Station (RST wie im Log).
 SAMPLE_QSOS = [
-    _qso("PA3BRB", "120600", "7.075708", "FT8", "59"),
-    _qso("PA3BRB", "180600", "7.075708", "FT8", "58"),
-    _qso("PA3BRB", "190600", "7.075708", "FT8", "57"),
+    _qso("PA3BRB", "120600", "7.075708", "FT8", "-06"),
+    _qso("PA3BRB", "180600", "7.075708", "FT8", "+00"),
+    _qso("PA3BRB", "190600", "7.075708", "FT8", "+14"),
     _qso("DL2SCT", "143825", "14.230", "SSB", "59"),
-    _qso("G3NFV", "151147", "7.150", "SSB", "55"),
+    _qso("G3NFV", "151147", "7.030", "CW", "599"),
 ]
 
 SAMPLE_CONFIG = AppConfig(

@@ -181,14 +181,13 @@ COL_DATE_W = mm(30)  # Unterspalten D/M/Y
 COL_UTC_W = mm(24)
 COL_FREQ_W = mm(26)
 COL_2WAY_W = mm(26)
-COL_RST_W = mm(30)  # Unterspalten R/S/T
+COL_RST_W = mm(30)  # SIGNAL REPORT (ein Wert je Zeile, keine Unterspalten mehr)
 
 # Reihenfolge der Hauptspalten (links -> rechts)
 COLUMN_WIDTHS = (COL_DATE_W, COL_UTC_W, COL_FREQ_W, COL_2WAY_W, COL_RST_W)
 
-# Unterspaltenbreiten
+# Unterspaltenbreite nur noch für DATE (D/M/Y). Die Report-Spalte hat keine.
 SUB_DATE_W = mm(10)  # je D, M, Y
-SUB_RST_W = mm(10)  # je R, S, T
 
 # --------------------------------------------------------------------------- #
 # Fuß (§3)

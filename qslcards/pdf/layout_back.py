@@ -26,8 +26,10 @@ _HEAD_DATE_SUB = ("D", "M", "Y")
 _HEAD_UTC = ("TIME", "(UTC)")
 _HEAD_FREQ = ("FREQUENCY", "MHZ")
 _HEAD_2WAY = ("2-WAY QSO", "IN")
-_HEAD_RST = "SIGNAL REPORT"
-_HEAD_RST_SUB = ("R", "S", "T")
+# Report-Spalte ohne R/S/T-Unterlabels: der Rapport steht je Zeile als ein Wert
+# (RST wie im Log für Phone/CW, dB für Digimodes wie FT8). Zweizeiliger Kopf wie
+# bei den Nachbarspalten.
+_HEAD_RST = ("SIGNAL", "REPORT")
 
 
 # --------------------------------------------------------------------------- #
@@ -100,15 +102,6 @@ def _hline(c: Canvas, x0: float, x1: float, yt: float) -> None:
 
 def _vline(c: Canvas, x: float, yt0: float, yt1: float) -> None:
     c.line(x, g.PAGE_H - yt0, x, g.PAGE_H - yt1)
-
-
-def _split_rst(rst: str) -> tuple[str, str, str]:
-    """Rapport in R/S/T zerlegen; bei 2-stelligem Rapport bleibt T leer."""
-    digits = list((rst or "").strip())
-    r = digits[0] if len(digits) > 0 else ""
-    s = digits[1] if len(digits) > 1 else ""
-    t = digits[2] if len(digits) > 2 else ""
-    return r, s, t
 
 
 # --------------------------------------------------------------------------- #
@@ -263,13 +256,11 @@ def _draw_table(c: Canvas, rows: list[CardRow]) -> None:
         _hline(c, g.TABLE_X0, g.TABLE_X1, head_bottom + i * g.ROW_H)
     _hline(c, g.TABLE_X0, g.TABLE_X1, bottom)
 
-    # Unterspalten-Trenner (DATE und SIGNAL REPORT) ab Kopf-Unterzeile.
+    # Unterspalten-Trenner nur für DATE (D/M/Y) ab Kopf-Unterzeile. Die
+    # SIGNAL-REPORT-Spalte hat keine Unterspalten mehr (ein Wert je Zeile).
     date_left = edges[0]
     _vline(c, date_left + g.SUB_DATE_W, head_mid, bottom)
     _vline(c, date_left + 2 * g.SUB_DATE_W, head_mid, bottom)
-    rst_left = edges[4]
-    _vline(c, rst_left + g.SUB_RST_W, head_mid, bottom)
-    _vline(c, rst_left + 2 * g.SUB_RST_W, head_mid, bottom)
 
     _draw_table_header(c, edges, head_mid)
     for i, row in enumerate(rows[: g.MAX_ROWS]):
@@ -291,7 +282,7 @@ def _draw_table_header(c: Canvas, edges: list[float], head_mid: float) -> None:
     _text_in_band(c, _col_center(edges, 1), top, half, _HEAD_UTC[0], font, size)
     _text_in_band(c, _col_center(edges, 2), top, half, _HEAD_FREQ[0], font, size)
     _text_in_band(c, _col_center(edges, 3), top, half, _HEAD_2WAY[0], font, size)
-    _text_in_band(c, _col_center(edges, 4), top, half, _HEAD_RST, font, size)
+    _text_in_band(c, _col_center(edges, 4), top, half, _HEAD_RST[0], font, size)
 
     # Untere Kopf-Halbzeile: Unterspalten / zweite Textzeile.
     date_left = edges[0]
@@ -300,9 +291,7 @@ def _draw_table_header(c: Canvas, edges: list[float], head_mid: float) -> None:
     _text_in_band(c, _col_center(edges, 1), head_mid, half, _HEAD_UTC[1], font, size)
     _text_in_band(c, _col_center(edges, 2), head_mid, half, _HEAD_FREQ[1], font, size)
     _text_in_band(c, _col_center(edges, 3), head_mid, half, _HEAD_2WAY[1], font, size)
-    rst_left = edges[4]
-    for k, lbl in enumerate(_HEAD_RST_SUB):
-        _text_in_band(c, rst_left + g.SUB_RST_W * (k + 0.5), head_mid, half, lbl, font, size)
+    _text_in_band(c, _col_center(edges, 4), head_mid, half, _HEAD_RST[1], font, size)
 
 
 def _draw_table_row(c: Canvas, edges: list[float], row_top: float, row: CardRow) -> None:
@@ -316,10 +305,8 @@ def _draw_table_row(c: Canvas, edges: list[float], row_top: float, row: CardRow)
     _text_in_band(c, _col_center(edges, 1), row_top, h, row.utc, font, size)
     _text_in_band(c, _col_center(edges, 2), row_top, h, row.freq_mhz, font, size)
     _text_in_band(c, _col_center(edges, 3), row_top, h, row.mode, font, size)
-    r, s, t = _split_rst(row.rst_sent)
-    rst_left = edges[4]
-    for k, val in enumerate((r, s, t)):
-        _text_in_band(c, rst_left + g.SUB_RST_W * (k + 0.5), row_top, h, val, font, size)
+    # Report als ein Wert: RST wie im Log (Phone/CW) bzw. dB (Digimodes wie FT8).
+    _text_in_band(c, _col_center(edges, 4), row_top, h, (row.rst_sent or "").strip(), font, size)
 
 
 def _draw_footer(c: Canvas, config: AppConfig) -> None:

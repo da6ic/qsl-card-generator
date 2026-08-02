@@ -86,7 +86,6 @@ REQUIRED_CONSTANTS = [
     "COL_RST_W",
     "COLUMN_WIDTHS",
     "SUB_DATE_W",
-    "SUB_RST_W",
     "REMARKS_LABEL_X",
     "REMARKS_LABEL_YT",
     "REMARKS_BOX_X",
@@ -114,9 +113,8 @@ def test_table_width_matches_edges():
     assert g.TABLE_WIDTH == pytest.approx(g.TABLE_X1 - g.TABLE_X0)
 
 
-def test_date_and_rst_subcolumns_sum():
+def test_date_subcolumns_sum():
     assert 3 * g.SUB_DATE_W == pytest.approx(g.COL_DATE_W)  # D+M+Y
-    assert 3 * g.SUB_RST_W == pytest.approx(g.COL_RST_W)  # R+S+T
 
 
 def test_row_height_positive_and_fits():

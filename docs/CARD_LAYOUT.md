@@ -45,11 +45,11 @@ MARGIN = mm(3)
 │  │                                │ <VIA_TEXT>             │ │
 │  │ ☐ Confirming QSO   ☐ Confirming SWL-Report               │
 │  │ ┌──────┬───────┬─────────┬──────────┬──────────────┐      │
-│  │ │ DATE │UNIV.  │FREQUENCY│ 2-WAY    │SIGNAL REPORT │      │
-│  │ │D M Y │TIME UTC│  MHZ   │ QSO  IN  │  R   S   T   │      │
-│  │ ├──┬─┬─┼───────┼─────────┼──────────┼───┬───┬──────┤      │
-│  │ │  │ │ │       │         │          │   │   │      │ row  │
-│  │ └──┴─┴─┴───────┴─────────┴──────────┴───┴───┴──────┘      │
+│  │ │ DATE │ TIME  │FREQUENCY│ 2-WAY    │   SIGNAL     │      │
+│  │ │D M Y │ (UTC) │  MHZ    │ QSO  IN  │   REPORT     │      │
+│  │ ├──┬─┬─┼───────┼─────────┼──────────┼──────────────┤      │
+│  │ │  │ │ │       │         │          │ <rst / dB>   │ row  │
+│  │ └──┴─┴─┴───────┴─────────┴──────────┴──────────────┘      │
 │  │ REMARKS                                                   │
 │  │ ┌────────────────────────────────────────────────────────┐│
 │  │ └────────────────────────────────────────────────────────┘│
@@ -126,18 +126,20 @@ Label-Spalte `x=50`, Wert-Spalte `x=64`; Zeilen `Locator:` / `DOK:` / `WAZ:` / `
   | UNIVERSAL TIME UTC| 24     | –                               |
   | FREQUENCY MHZ     | 26     | –                               |
   | 2-WAY QSO IN      | 26     | –                               |
-  | SIGNAL REPORT     | 30     | R=10, S=10, T=10               |
+  | SIGNAL REPORT     | 30     | – (ein Wert je Zeile)           |
 - Kopftexte (zentriert, Bold 6.5, ggf. zweizeilig):
   `DATE` über `D  M  Y`; `UNIVERSAL TIME (UTC)`; `FREQUENCY MHZ`;
-  `2-WAY QSO IN`; `SIGNAL REPORT` über `R  S  T`.
+  `2-WAY QSO IN`; `SIGNAL` über `REPORT`.
 - **Datenzeile je `CardRow`** (zentriert, Regular 8):
   - DATE: `date_d` | `date_m` | `date_y` in die drei Unterspalten.
   - UTC: `utc` (z.B. „14:32").
   - FREQ: `freq_mhz` (z.B. „14.074").
   - 2-WAY QSO IN: `mode` (z.B. „SSB").
-  - SIGNAL REPORT: `rst_sent` zerlegt in R/S/T (Ziffern einzeln in die
-    Unterspalten; bei 2-stelligem Rapport T leer lassen).
-- Alle Zell-/Unterspalten-Trennlinien zeichnen (Rahmen 0.6pt).
+  - SIGNAL REPORT: `rst_sent` als **ein** Wert (keine R/S/T-Aufteilung mehr, keine
+    Unterlabels). So passt jede Betriebsart: RST wie im Log für Phone/CW
+    (`59`/`599`), dB für Digimodes wie FT8 (`-06`, `+14`); leerer Report bleibt leer.
+- Alle Zell-/Unterspalten-Trennlinien zeichnen (Rahmen 0.6pt); die SIGNAL-REPORT-
+  Spalte hat keine Unterspalten mehr.
 
 ### Fuß
 REMARKS-Box über die volle Breite und flach; Footer-Text und PSE/TNX **darunter**.
