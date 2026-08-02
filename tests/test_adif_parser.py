@@ -142,6 +142,28 @@ def test_own_station_fields_not_promoted():
     assert q.raw["my_gridsquare"] == "JN48PK"
 
 
+def test_overlong_length_does_not_swallow_next_tag():
+    # HAMRS-Realfall: `<RST_SENT:3>0` deklariert Länge 3, der Wert "0" ist aber
+    # nur 1 Zeichen -> der Überlauf würde Zeilenumbruch + das '<' des nächsten
+    # Tags mitlesen ("0\n<") und `RST_RCVD` verschlucken. Der Parser muss den
+    # Wert am '<' abschneiden und das Folgefeld korrekt lesen.
+    text = "<CALL:6>PA3BRB<MODE:3>FT8<RST_SENT:3>0\n<RST_RCVD:3>0\n<EOR>"
+    q = parse_text(text)[0]
+    assert q.rst_sent.strip() == "0"  # kein '<' / Zeilenumbruch mehr im Wert
+    assert "<" not in q.rst_sent
+    assert q.rst_rcvd.strip() == "0"  # Folgefeld nicht verschluckt
+
+
+def test_overlong_length_only_newline_is_trimmed_by_consumer():
+    # `<RST_SENT:3>+9` (Wert "+9", Länge 3) liest den Zeilenumbruch mit; hier ist
+    # kein '<' im Wert, das Folgefeld bleibt korrekt. Der Wert selbst trägt den
+    # Zeilenumbruch, den die Weiterverarbeitung (builder) per strip() entfernt.
+    text = "<CALL:6>PA3BRB<RST_SENT:3>+9\n<RST_RCVD:3>-1\n<EOR>"
+    q = parse_text(text)[0]
+    assert q.rst_sent.strip() == "+9"
+    assert q.rst_rcvd.strip() == "-1"
+
+
 def test_parse_real_sample_log():
     qsos = parse_file(SAMPLE_LOG)
     assert len(qsos) > 0

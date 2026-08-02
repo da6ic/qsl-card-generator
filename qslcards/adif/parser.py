@@ -77,8 +77,20 @@ def _tokenize(text: str) -> list[dict[str, str]]:
             except ValueError:
                 length = 0
 
-        value = data[cursor : cursor + length].decode("utf-8", errors="replace")
-        cursor += length
+        raw_value = data[cursor : cursor + length]
+        # Robustheit gegen zu groß angegebene Feldlängen: Manche Logger (z.B.
+        # HAMRS) zählen kurze Werte falsch und schließen Zeilenumbruch bzw. den
+        # Beginn des nächsten Tags mit ein (etwa `<RST_SENT:3>0` für den Wert
+        # "0"). Ein `<` innerhalb des gelesenen Werts markiert den Start des
+        # nächsten Feld-Specifiers -> Wert dort abschneiden und den Cursor dorthin
+        # zurücksetzen, damit das folgende Tag nicht verschluckt wird.
+        lt = raw_value.find(b"<")
+        if lt != -1:
+            value = raw_value[:lt].decode("utf-8", errors="replace")
+            cursor += lt
+        else:
+            value = raw_value.decode("utf-8", errors="replace")
+            cursor += length
         current[name] = value
 
     if current:  # fehlendes letztes <EOR>

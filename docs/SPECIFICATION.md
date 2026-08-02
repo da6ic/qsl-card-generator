@@ -143,6 +143,13 @@ class AppConfig:
      lesen (Vorsicht: Byte- vs. Zeichenlänge; ADIF ist byteorientiert — bei
      UTF-8 auf Bytes rechnen, dann dekodieren). Wert im Record unter `name` ablegen.
      Cursor hinter den Wert setzen.
+   - **Robustheit gegen zu groß angegebene Längen**: Manche Logger (z.B. HAMRS)
+     zählen kurze Werte falsch und beziehen Zeilenumbruch bzw. den Beginn des
+     nächsten Tags mit ein (etwa `<RST_SENT:3>0` für den Wert „0"). Enthält der
+     nach `length` gelesene Wert ein `<`, markiert das den Start des nächsten
+     Feld-Specifiers → Wert dort abschneiden **und den Cursor dorthin
+     zurücksetzen**, damit das folgende Tag nicht verschluckt wird. Bei korrekt
+     angegebenen Längen ändert das nichts.
 3. Am Ende: falls Record nicht leer, ebenfalls übernehmen (toleranter Umgang mit
    fehlendem letzten `<EOR>`).
 
