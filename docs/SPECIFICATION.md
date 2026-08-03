@@ -47,13 +47,24 @@ Ein Hauptfenster mit klaren Abschnitten (top → bottom), jeweils in `gui/sectio
    Vorschau (Abschnitt 8) überschreibbar.
 8. **Vorschau**: Tabelle (`ttk.Treeview`) **aller** Karten/QSOs (nicht nur der
    gefilterten): Spalten `Drucken`, `Call`, `#QSOs`, `Via`, `Route/Manager`,
-   `Remarks`, `Datum`, `UTC`. Solange der Lookup läuft, zeigt die `Via`-Zelle „…".
-   Zeilen sind über die Spalte „Drucken" ab-/anwählbar (auch E-Zeilen manuell
-   aktivierbar). **`Via`, `Route/Manager` und `Remarks` sind per Doppelklick
-   editierbar** (`Via` als Auswahl B/D/M/E, die anderen als Textfeld; `Remarks`
-   max. 80 Zeichen) — so lassen sich Lookup-Fehlklassifizierungen von Hand
-   korrigieren und Remarks je Karte setzen. Eine Via-Änderung zieht die
-   Drucken-Markierung der Zeile nach. Eine **Remarks-Änderung** normalisiert im
+   `Remarks`, `Datum`, `UTC`. Die `Via`-Spalte zeigt den Zustellweg
+   **ausgeschrieben** (`Büro`/`Direkt`/`eQSL`/`LOTW`); solange der Lookup läuft,
+   steht dort „…". Auch bei **nicht** gedruckten Karten wird der (natürliche) Weg
+   angezeigt, nie ein „—" — ob gedruckt wird, steht in der Spalte „Drucken".
+   Zeilen sind über die Spalte „Drucken" ab-/anwählbar (auch Wege unter der
+   Trennlinie manuell druckbar). **`Via`, `Route/Manager` und `Remarks` sind
+   editierbar** (Doppelklick oder Klick auf das Hover-Icon; `Via` als Dropdown mit
+   den ausgeschriebenen Wegen, die anderen als Textfeld; `Remarks` max. 80
+   Zeichen) — so lassen sich Lookup-Fehlklassifizierungen von Hand korrigieren und
+   Remarks je Karte setzen. **Bedien-Hinweise:** In den bearbeitbaren Spalten
+   (inkl. `Drucken`) erscheint ein Stift-Icon im Spaltenkopf und beim Hovern
+   rechtsbündig in der Zelle (vertikal mittig); die `Drucken`-Zelle zeigt beim
+   Hovern stattdessen ein Umschalt-Icon (Klick toggelt Ja/Nein). Es ist immer nur
+   **ein** Editor gleichzeitig offen; er schließt (übernimmt wie „Fokus verloren")
+   beim Scrollen, damit er nicht an alter Position hängen bleibt. Icons liegen als
+   SVG in `qslcards/assets/icons/` (Tk 9 rendert SVG nativ). Eine Via-Änderung
+   zieht die Drucken-Markierung der Zeile nach. Eine **Remarks-Änderung**
+   normalisiert im
    Modus „pro Station" die Karten der Station: Karten mit Remarks bleiben
    eigenständig (max. 3 Zeilen), aufeinanderfolgende Karten **ohne** Remarks
    führen sich wieder zusammen (max. 6 Zeilen) — so ist ein Remarks je Karte

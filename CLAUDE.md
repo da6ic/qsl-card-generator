@@ -254,7 +254,8 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
 - [x] Absender-Config editierbar, wird gespeichert/geladen.
 - [ ] Via-Filter (B/D/M) und Modus (pro QSO / pro Station) wählbar; Filter setzt
       nur die Drucken-Markierung, Via kommt aus dem Lookup.
-- [ ] Vorschau-Tabelle zeigt **alle** QSOs mit Via/Route; Lookup-Status sichtbar.
+- [x] Vorschau-Tabelle zeigt **alle** QSOs mit Via (ausgeschrieben) / Route;
+      Lookup-Status sichtbar; bearbeitbare Zellen mit Stift-/Umschalt-Hinweis.
 - [x] „PDF erzeugen" liefert eine PDF mit 2 A6-Seiten pro Karte.
 - [ ] Rückseite entspricht `docs/CARD_LAYOUT.md` (visuell iteriert).
 - [ ] Auto-Lookup beim Laden bestimmt Via (M>B>D>E) + Manager + Adresse für alle

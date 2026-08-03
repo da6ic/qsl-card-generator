@@ -95,11 +95,12 @@ def test_auto_lookup_fills_via_and_manager(app, tmp_path):
     assert app._lookup_running is False
     rows = _row_map(app)
     # Standard-Priorität aktiv: Büro, Direkt. Manager zählt als Büro-Weg und
-    # setzt den Manager-Call ins Via-Feld (Route-Spalte).
-    assert rows["DL1AA"][3] == "B" and rows["DL1AA"][4] == "DK0XYZ"
-    assert rows["DL2BB"][3] == "B"
-    # Reine LoTW-Station: kein aktiver Weg -> "—", nicht gedruckt.
-    assert rows["DL3CC"][3] == "—"
+    # setzt den Manager-Call ins Via-Feld (Route-Spalte). Via wird ausgeschrieben.
+    assert rows["DL1AA"][3] == "Büro" and rows["DL1AA"][4] == "DK0XYZ"
+    assert rows["DL2BB"][3] == "Büro"
+    # Reine LoTW-Station: kein aktiver Weg -> nicht gedruckt, aber die Via-Spalte
+    # zeigt trotzdem den natürlichen Weg (LOTW), nicht „—".
+    assert rows["DL3CC"][3] == "LOTW"
     assert rows["DL3CC"][0] == "Nein"
     assert {c.recipient_call for c in app.preview.included_cards()} == {"DL1AA", "DL2BB"}
     # „PDF erzeugen" nach dem Lookup wieder aktiv.
@@ -107,10 +108,10 @@ def test_auto_lookup_fills_via_and_manager(app, tmp_path):
 
 
 def test_without_credentials_all_default_via(app, tmp_path):
-    # Keine Zugangsdaten -> kein Netzcall, alle Via = default_via ("B").
+    # Keine Zugangsdaten -> kein Netzcall, alle Via = default_via ("B" -> „Büro").
     _load(app, tmp_path)
     rows = _row_map(app)
-    assert all(rows[c][3] == "B" for c in ("DL1AA", "DL2BB", "DL3CC"))
+    assert all(rows[c][3] == "Büro" for c in ("DL1AA", "DL2BB", "DL3CC"))
     assert str(app.output_section.generate_btn["state"]) == "normal"
 
 
@@ -145,7 +146,7 @@ def test_edit_via_updates_card_and_print_flag(app, tmp_path):
     card = next(c for c, _ in app.preview._rows.values() if c.recipient_call == "DL3CC")
     assert card.via_override == "B"
     row = app.preview.tree.item(iid, "values")
-    assert row[3] == "B"  # Via-Spalte
+    assert row[3] == "Büro"  # Via-Spalte (ausgeschrieben)
     assert row[0] == "Ja"  # Drucken nachgezogen
     assert "DL3CC" in {c.recipient_call for c in app.preview.included_cards()}
 
@@ -164,7 +165,7 @@ def test_edit_route_changes_manager_text_only(app, tmp_path):
     assert card.via_text == "via bureau"
     row = app.preview.tree.item(iid, "values")
     assert row[4] == "via bureau"  # Route-Spalte
-    assert row[3] == "B"  # Via unverändert (Manager zählt als Büro)
+    assert row[3] == "Büro"  # Via unverändert (Manager zählt als Büro)
 
 
 def test_edit_via_rejects_invalid_code(app, tmp_path):
