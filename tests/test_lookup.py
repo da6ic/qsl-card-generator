@@ -15,10 +15,13 @@ import requests
 
 from qslcards.config import LookupConfig
 from qslcards.lookup import (
+    accepted_routes,
+    active_via_priority,
     build_lookup,
-    derive_via,
     has_lookup_credentials,
     lookup_calls,
+    normalize_via_priority,
+    resolve_route,
 )
 from qslcards.lookup.base import ChainedLookup, LookupResult
 from qslcards.lookup.cache import LookupCache
@@ -495,51 +498,82 @@ def _seeded_cache(tmp_path: Path, entries: dict[str, LookupResult]) -> Path:
     return path
 
 
-# -- derive_via -----------------------------------------------------------
+# -- accepted_routes ------------------------------------------------------
 
 
-def test_derive_via_manager_wins_over_bureau():
-    # Manager hat Vorrang, auch wenn Büro akzeptiert wird.
-    r = LookupResult(call="X", manager="OH2BH", accepts_bureau="Y", source="hamqth")
-    assert derive_via(r, "B") == "M"
+def test_accepted_routes_manager_counts_as_bureau():
+    # Manager zählt als Büro-Weg (kein eigener Code).
+    r = LookupResult(call="X", manager="OH2BH", source="hamqth")
+    assert accepted_routes(r, "B") == ("B",)
 
 
-def test_derive_via_bureau():
+def test_accepted_routes_bureau_and_direct():
     r = LookupResult(call="X", accepts_bureau="Y", accepts_direct="Y", source="hamqth")
-    assert derive_via(r, "B") == "B"
+    assert accepted_routes(r, "B") == ("B", "D")
 
 
-def test_derive_via_direct_when_no_bureau():
+def test_accepted_routes_direct_only():
     r = LookupResult(call="X", accepts_bureau="N", accepts_direct="Y", source="hamqth")
-    assert derive_via(r, "B") == "D"
+    assert accepted_routes(r, "B") == ("D",)
 
 
-def test_derive_via_electronic_only_when_no_paper():
-    # LoTW/eQSL schließt nur aus, wenn KEIN Papierweg vorhanden ist.
-    r = LookupResult(call="X", accepts_bureau="N", accepts_direct="N", lotw="Y", source="hamqth")
-    assert derive_via(r, "B") == "E"
+def test_accepted_routes_electronic_split_into_q_and_l():
+    r = LookupResult(call="X", accepts_bureau="N", eqsl="Y", lotw="Y", source="hamqth")
+    assert accepted_routes(r, "B") == ("Q", "L")
 
 
-def test_derive_via_electronic_does_not_override_paper():
-    # Station mit Büro=Y UND LoTW=Y → trotzdem B (bekommt eine Karte).
-    r = LookupResult(call="X", accepts_bureau="Y", lotw="Y", eqsl="Y", source="hamqth")
-    assert derive_via(r, "B") == "B"
+def test_accepted_routes_full_set_canonical_order():
+    r = LookupResult(
+        call="X", manager="OH2BH", accepts_direct="Y", eqsl="Y", lotw="Y", source="hamqth"
+    )
+    assert accepted_routes(r, "B") == ("B", "D", "Q", "L")
 
 
-def test_derive_via_unknown_falls_back_to_default():
+def test_accepted_routes_unknown_falls_back_to_default():
     r = LookupResult(call="X", accepts_bureau="?", accepts_direct="?", source="hamqth")
-    assert derive_via(r, "B") == "B"
-    assert derive_via(r, "D") == "D"
+    assert accepted_routes(r, "B") == ("B",)
+    assert accepted_routes(r, "D") == ("D",)
 
 
-def test_derive_via_none_result_uses_default():
-    assert derive_via(None, "B") == "B"
-    assert derive_via(None, "D") == "D"
+def test_accepted_routes_none_result_uses_default():
+    assert accepted_routes(None, "B") == ("B",)
+    assert accepted_routes(None, "D") == ("D",)
 
 
-def test_derive_via_invalid_default_clamped_to_bureau():
-    assert derive_via(None, "X") == "B"
-    assert derive_via(None, "") == "B"
+def test_accepted_routes_invalid_default_clamped_to_bureau():
+    assert accepted_routes(None, "X") == ("B",)
+    assert accepted_routes(None, "") == ("B",)
+
+
+# -- resolve_route --------------------------------------------------------
+
+
+def test_resolve_route_follows_priority_order():
+    # Station akzeptiert Büro + eQSL; aktive Reihenfolge entscheidet.
+    assert resolve_route(("B", "Q"), ["Q", "B"]) == "Q"
+    assert resolve_route(("B", "Q"), ["B", "D", "Q"]) == "B"
+
+
+def test_resolve_route_none_when_no_active_route_matches():
+    # Nur LOTW akzeptiert, aber LOTW ist nicht aktiv -> nicht drucken.
+    assert resolve_route(("L",), ["B", "D"]) is None
+
+
+# -- normalize_via_priority / active_via_priority -------------------------
+
+
+def test_normalize_via_priority_fills_and_dedupes():
+    # Unbekanntes/Doppeltes raus, fehlende Codes kanonisch angehängt.
+    assert normalize_via_priority(["Q", "Q", "X", "B"]) == ["Q", "B", "D", "L"]
+    assert normalize_via_priority(None) == ["B", "D", "Q", "L"]
+
+
+def test_active_via_priority_slices_at_cut():
+    assert active_via_priority(["B", "D", "Q", "L"], 2) == ["B", "D"]
+    assert active_via_priority(["Q", "L", "B", "D"], 1) == ["Q"]
+    assert active_via_priority(["B", "D", "Q", "L"], 0) == []
+    # Cut über die Länge hinaus wird geklemmt.
+    assert active_via_priority(["B", "D", "Q", "L"], 99) == ["B", "D", "Q", "L"]
 
 
 # -- lookup_calls ---------------------------------------------------------

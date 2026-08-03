@@ -19,9 +19,9 @@ from PIL import Image, ImageTk
 
 from qslcards import config as cfg
 from qslcards.adif.parser import parse_file
-from qslcards.cards.builder import build_cards
+from qslcards.cards.builder import build_cards, effective_via
 from qslcards.config import AppConfig, GenerationConfig, LookupConfig, SenderConfig
-from qslcards.lookup import has_lookup_credentials, lookup_calls
+from qslcards.lookup import active_via_priority, has_lookup_credentials, lookup_calls
 from qslcards.pdf.generator import generate
 
 from .preview import PreviewTable
@@ -198,10 +198,11 @@ class App(tk.Tk):
         # Enter in einem Eingabefeld gibt den Fokus frei -> kein Highlight/Auswahl.
         self.bind_class("TEntry", "<Return>", self._defocus_entry)
 
-        # Der Via-Filter entfernt keine Zeilen mehr, sondern setzt nur die
-        # Drucken-Markierung (kein Rebuild nötig).
-        for cb in self.filter_section.checkbuttons:
-            cb.config(command=self._apply_filter)
+        # Die Prioritätsliste entfernt keine Zeilen, sondern setzt nur die
+        # Drucken-Markierung neu (kein Rebuild nötig). Die Listbox hat keine
+        # tk.Variable -> Auto-Save wird hier manuell angestoßen.
+        self.filter_section.btn_up.config(command=lambda: self._on_priority_move("up"))
+        self.filter_section.btn_down.config(command=lambda: self._on_priority_move("down"))
         # Modus/Markierungen ändern die Karten selbst -> Rebuild (mit Lookups).
         self.mode_section.radio_qso.config(command=self._rebuild_cards)
         self.mode_section.radio_station.config(command=self._rebuild_cards)
@@ -242,8 +243,9 @@ class App(tk.Tk):
             self.lookup_section.qrz_pass.set(config.lookup.qrz_pass)
             self.lookup_section.address_export.set(config.lookup.address_export)
 
-            for code, var in self.filter_section.via_vars.items():
-                var.set(code in config.generation.via_filter)
+            self.filter_section.set_priority(
+                config.generation.via_priority, config.generation.via_cut
+            )
             self.mode_section.card_mode.set(config.generation.card_mode)
             self.sender_section.qsl_mark.set(
                 QSL_CODE_TO_DISPLAY.get(config.generation.qsl_mark, "Leer lassen")
@@ -271,10 +273,11 @@ class App(tk.Tk):
             program_id=self.base_config.lookup.program_id,
             address_export=self.lookup_section.address_export.get(),
         )
-        via_filter = [c for c, v in self.filter_section.via_vars.items() if v.get()]
+        via_priority, via_cut = self.filter_section.get_priority()
         generation = GenerationConfig(
             card_mode=self.mode_section.card_mode.get(),
-            via_filter=via_filter,
+            via_priority=via_priority,
+            via_cut=via_cut,
             default_via=self.base_config.generation.default_via,
             page_orientation=self.base_config.generation.page_orientation,
             static_footer=self.base_config.generation.static_footer,
@@ -314,11 +317,12 @@ class App(tk.Tk):
             self.lookup_section.qrz_user,
             self.lookup_section.qrz_pass,
             self.lookup_section.address_export,
-            *self.filter_section.via_vars.values(),
             self.mode_section.card_mode,
         ]
         for var in watched:
             var.trace_add("write", self._on_var_change)
+        # Die Prioritätsliste (Abschnitt 4) hat keine tk.Variable; ihr Auto-Save
+        # läuft über _on_priority_move (an die ▲/▼-Buttons gebunden).
 
     def _on_var_change(self, *_args) -> None:
         if self._suppress_save:
@@ -406,12 +410,14 @@ class App(tk.Tk):
         self.image_section.thumb_label.config(image=self._thumb, text="")
 
     # ---------------------------------------------------------- Karten
-    def _via_filter_set(self) -> set[str]:
-        return {code for code, var in self.filter_section.via_vars.items() if var.get()}
+    def _active_via_priority(self) -> list[str]:
+        """Die aktiven Wege (über der Trennlinie) in Prioritätsreihenfolge."""
+        priority, cut = self.filter_section.get_priority()
+        return active_via_priority(priority, cut)
 
     def _included_default(self, card) -> bool:
-        """Drucken-Voreinstellung: nur Karten mit ausgewählter Via (E nie im Filter)."""
-        return card.via_code in self._via_filter_set()
+        """Drucken-Voreinstellung: Karte druckbar, wenn ein aktiver Weg passt."""
+        return effective_via(card, self._active_via_priority()) is not None
 
     def _rebuild_cards(self) -> None:
         if not self.qsos:
@@ -423,11 +429,25 @@ class App(tk.Tk):
             included=self._included_default,
             pending=self._lookup_running,
             groupable=self.mode_section.card_mode.get() == "per_station",
+            active_priority=self._active_via_priority(),
         )
 
     def _apply_filter(self) -> None:
-        """Via-Filter geändert: nur die Drucken-Markierung neu setzen (kein Rebuild)."""
-        self.preview.apply_via_filter(self._via_filter_set())
+        """Priorität geändert: nur die Drucken-Markierung neu setzen (kein Rebuild)."""
+        self.preview.apply_via_filter(self._active_via_priority())
+
+    def _on_priority_move(self, direction: str) -> None:
+        """▲/▼ in der Prioritätsliste: verschieben, dann Auto-Save + Filter neu.
+
+        Die Listbox hat keine tk.Variable, daher wird der Auto-Save hier manuell
+        angestoßen (wie bei den beobachteten Variablen)."""
+        moved = (
+            self.filter_section.move_up() if direction == "up" else self.filter_section.move_down()
+        )
+        if not moved:
+            return
+        self._apply_filter()
+        self._on_var_change()
 
     def _on_remarks_commit(self, _event=None) -> None:
         """Globaler Remarks-Text bestätigt (Fokusverlust/Enter): Karten neu bauen,
@@ -441,10 +461,11 @@ class App(tk.Tk):
 
     def _on_cell_edited(self, iid: str, card, column: str) -> None:
         """Nach einer Via-Bearbeitung die Drucken-Markierung der Zeile nachziehen
-        (neue Via im Filter -> drucken, sonst nicht). Route-Edits ändern nur den
+        (manuell erzwungener Weg -> drucken). Route-Edits ändern nur den
         Kartentext und lassen die Markierung unberührt."""
         if column == "via":
-            self.preview.set_row_included(iid, card.via_code in self._via_filter_set())
+            included = effective_via(card, self._active_via_priority()) is not None
+            self.preview.set_row_included(iid, included)
 
     # ------------------------------------------------------- Lookup (async)
     def _start_lookups(self, calls: list[str], *, force: bool = False) -> None:

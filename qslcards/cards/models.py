@@ -25,13 +25,16 @@ class CardRow:
 @dataclass
 class Card:
     recipient_call: str
-    via_text: str  # Feld "Via:" (aus qsl_via oder leer)
-    via_code: str  # B/D/E/M (für Export/Sortierung)
+    via_text: str  # Feld "Via:" (Manager-Callsign aus dem Lookup, oder leer)
+    via_routes: tuple[str, ...]  # akzeptierte Zustellwege der Station (B/D/Q/L)
     rows: list[CardRow]  # 1..N (per_station kann mehrere haben)
     qsl_mark: str = "none"  # global aus config: "pse" | "tnx" | "none"
     portable_mark: str = "none"  # global aus config: "none" | "p" | "m" | "t" | "r"
     confirm_mark: str = "none"  # global aus config: "qso" | "swl" | "none"
     remarks: str = ""  # REMARKS-Text der Karte; leer -> kein Kasten (dynamisch).
     #   Default = globaler Config-Wert; in der Vorschau je Karte überschreibbar.
+    # Manueller Via-Override aus der Vorschau: erzwingt einen Weg (B/D/Q/L) und
+    # überschreibt die automatische Auflösung aus via_routes + Prioritätsliste.
+    via_override: str | None = None
     # Empfängeradresse nur bei Bedarf gefüllt (Export), NICHT auf der Karte:
     recipient: LookupResult | None = None

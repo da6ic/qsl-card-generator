@@ -7,13 +7,14 @@
   - `has_lookup_credentials(config)` — sind HamQTH- oder QRZ-Zugangsdaten gesetzt?
   - `lookup_calls(calls, config, ...)` — schlägt alle (eindeutigen) Rufzeichen
     nach und liefert eine Map `CALL -> LookupResult | None`.
-  - `derive_via(result, default_via)` — Versandart aus dem Lookup (M>B>D>E).
+  - `accepted_routes(result, default_via)` — Menge der Zustellwege einer Station.
+  - `resolve_route(accepted, active_priority)` — höchstpriorisierter aktiver Weg.
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -37,13 +38,29 @@ __all__ = [
     "build_lookup",
     "has_lookup_credentials",
     "lookup_calls",
-    "derive_via",
+    "accepted_routes",
+    "resolve_route",
+    "normalize_via_priority",
+    "active_via_priority",
+    "VIA_CODES",
+    "VIA_LABELS",
 ]
 
 DEFAULT_CACHE_PATH = "lookup_cache.json"
 
-# Gültige Versandart-Codes (E = Elektronisch = Ausschluss, kein Druckweg).
-VIA_CODES = ("B", "D", "M", "E")
+# Zustellweg-Codes in kanonischer Reihenfolge: B=Büro (inkl. Manager),
+# D=Direkt, Q=eQSL, L=LOTW. Der Nutzer priorisiert diese Wege in der GUI und
+# zieht eine Trennlinie: Wege über der Linie werden gedruckt (in Reihenfolge),
+# Wege darunter nicht.
+VIA_CODES = ("B", "D", "Q", "L")
+
+# Anzeigelabels für die GUI-Prioritätsliste.
+VIA_LABELS: dict[str, str] = {
+    "B": "Büro",
+    "D": "Direkt",
+    "Q": "eQSL",
+    "L": "LOTW",
+}
 
 
 def has_lookup_credentials(config: LookupConfig) -> bool:
@@ -78,33 +95,75 @@ def build_lookup(
     return ChainedLookup(providers, cache=cache)
 
 
-def derive_via(result: LookupResult | None, default_via: str = "B") -> str:
-    """Bestimmt die Versandart aus einem Lookup-Ergebnis (§6.2).
+def accepted_routes(result: LookupResult | None, default_via: str = "B") -> tuple[str, ...]:
+    """Menge der Zustellwege, die eine Station laut Lookup akzeptiert (§6.2).
 
-    Feste Priorität **M > B > D > E** (Ham-Standard: Manager hat Vorrang;
-    Elektronisch schließt nur aus, wenn kein Papierweg vorhanden ist):
-      1. Manager vorhanden            → "M"
-      2. Büro akzeptiert (`qsl=Y`)    → "B"
-      3. Direkt akzeptiert (`qsldirect=Y`) → "D"
-      4. LoTW/eQSL (`lotw`/`eqsl` = Y) → "E" (angezeigt, aber nicht gedruckt)
-      5. sonst (nichts/„?"/kein Treffer) → `default_via`
+    Kanonisch geordnet (B, D, Q, L):
+      - `B` (Büro) wenn `qsl == "Y"` **oder** ein Manager hinterlegt ist
+        (Manager zählt als Büro-Weg; sein Callsign steht dann im Feld „Via:").
+      - `D` (Direkt) wenn `qsldirect == "Y"`.
+      - `Q` (eQSL) wenn `eqsl == "Y"`.
+      - `L` (LOTW) wenn `lotw == "Y"`.
 
-    `E` ist **kein** Druckweg, sondern eine Ausschluss-Kategorie.
+    Ist die Menge leer (kein Treffer, nur „?"/„N", oder keine Credentials), gilt
+    die Station als unbekannt und wird auf `default_via` zurückgeführt (Default
+    „B"), damit sie druckbar bleibt.
     """
     default = (default_via or "B").upper()
     if default not in VIA_CODES:
         default = "B"
-    if result is None:
-        return default
-    if result.manager:
-        return "M"
-    if result.accepts_bureau == "Y":
-        return "B"
-    if result.accepts_direct == "Y":
-        return "D"
-    if result.lotw == "Y" or result.eqsl == "Y":
-        return "E"
-    return default
+
+    routes: list[str] = []
+    if result is not None:
+        if result.accepts_bureau == "Y" or result.manager:
+            routes.append("B")
+        if result.accepts_direct == "Y":
+            routes.append("D")
+        if result.eqsl == "Y":
+            routes.append("Q")
+        if result.lotw == "Y":
+            routes.append("L")
+
+    if not routes:
+        return (default,)
+    return tuple(routes)
+
+
+def resolve_route(accepted: Sequence[str], active_priority: Sequence[str]) -> str | None:
+    """Wählt den zu druckenden Weg: erster Code aus `active_priority` (Reihenfolge
+    = Priorität, nur Wege über der Trennlinie), der in `accepted` liegt.
+
+    Gibt es keinen solchen Weg, wird die Karte **nicht** gedruckt (`None`).
+    """
+    accepted_set = set(accepted)
+    for code in active_priority:
+        if code in accepted_set:
+            return code
+    return None
+
+
+def normalize_via_priority(priority: Sequence[str] | None) -> list[str]:
+    """Bringt eine (evtl. unvollständige/fehlerhafte) Prioritätsliste in Form:
+    genau die gültigen Codes (B, D, Q, L), Reihenfolge aus `priority`, Duplikate
+    und Unbekanntes entfernt, fehlende Codes in kanonischer Reihenfolge angehängt.
+    """
+    order: list[str] = []
+    for code in priority or ():
+        c = str(code).strip().upper()
+        if c in VIA_CODES and c not in order:
+            order.append(c)
+    for code in VIA_CODES:
+        if code not in order:
+            order.append(code)
+    return order
+
+
+def active_via_priority(priority: Sequence[str] | None, cut: int) -> list[str]:
+    """Die aktiven Wege (über der Trennlinie) in Prioritätsreihenfolge:
+    die ersten `cut` Einträge der normalisierten Liste."""
+    order = normalize_via_priority(priority)
+    n = max(0, min(int(cut), len(order)))
+    return order[:n]
 
 
 def lookup_calls(
@@ -122,7 +181,7 @@ def lookup_calls(
     (z. B. um nach einem Abbruch fehlende Stationen erneut zu holen).
 
     Netz-/Auth-Fehler sind **nie** fatal: sie werden geloggt, das Ergebnis ist
-    dann `None` (→ `derive_via` fällt auf `default_via`). `progress_cb(done,
+    dann `None` (→ `accepted_routes` fällt auf `default_via`). `progress_cb(done,
     total)` wird nach jedem abgefragten Rufzeichen aufgerufen.
     """
     unique: list[str] = []

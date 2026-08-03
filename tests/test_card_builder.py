@@ -10,6 +10,7 @@ from __future__ import annotations
 from qslcards.adif.models import QSO
 from qslcards.cards.builder import (
     build_cards,
+    effective_via,
     normalize_station_cards,
     regroup_card_by_remarks,
 )
@@ -38,49 +39,81 @@ def test_all_qsos_become_cards_without_lookups():
     qsos = [make_qso("DL1AA"), make_qso("DL2BB"), make_qso("DL3CC")]
     cards = build_cards(qsos, config())  # keine Lookups
     assert {c.recipient_call for c in cards} == {"DL1AA", "DL2BB", "DL3CC"}
-    # ohne Lookup-Info: default_via, leeres Via-Feld
-    assert all(c.via_code == "B" for c in cards)
+    # ohne Lookup-Info: default_via als einziger Weg, leeres Via-Feld
+    assert all(c.via_routes == ("B",) for c in cards)
     assert all(c.via_text == "" for c in cards)
 
 
 def test_default_via_configurable():
     qsos = [make_qso("DL1AA")]
     cards = build_cards(qsos, config(default_via="D"))
-    assert cards[0].via_code == "D"
+    assert cards[0].via_routes == ("D",)
 
 
-# --- Via/Manager/Adresse aus dem Lookup -----------------------------------
+# --- Wege/Manager/Adresse aus dem Lookup ----------------------------------
 
 
-def test_via_and_manager_from_lookup():
+def test_routes_and_manager_from_lookup():
     qsos = [make_qso("DL1AA")]
     lookups = {"DL1AA": res("DL1AA", manager="DK0XYZ", accepts_bureau="Y")}
     card = build_cards(qsos, config(), lookups)[0]
-    assert card.via_code == "M"  # Manager hat Vorrang
+    # Manager zählt als Büro-Weg; das Via-Feld bekommt den Manager-Call.
+    assert card.via_routes == ("B",)
     assert card.via_text == "DK0XYZ"
     assert card.recipient is lookups["DL1AA"]
 
 
-def test_via_bureau_and_direct_from_flags():
+def test_routes_bureau_and_direct_from_flags():
     qsos = [make_qso("DL1AA"), make_qso("DL2BB")]
     lookups = {
         "DL1AA": res("DL1AA", accepts_bureau="Y"),
         "DL2BB": res("DL2BB", accepts_bureau="N", accepts_direct="Y"),
     }
-    by_call = {c.recipient_call: c.via_code for c in build_cards(qsos, config(), lookups)}
-    assert by_call == {"DL1AA": "B", "DL2BB": "D"}
+    by_call = {c.recipient_call: c.via_routes for c in build_cards(qsos, config(), lookups)}
+    assert by_call == {"DL1AA": ("B",), "DL2BB": ("D",)}
 
 
-def test_electronic_station_gets_via_e():
+def test_electronic_station_gets_q_and_l_routes():
     qsos = [make_qso("DL1AA")]
-    lookups = {"DL1AA": res("DL1AA", accepts_bureau="N", accepts_direct="N", lotw="Y")}
-    assert build_cards(qsos, config(), lookups)[0].via_code == "E"
+    lookups = {"DL1AA": res("DL1AA", accepts_bureau="N", accepts_direct="N", eqsl="Y", lotw="Y")}
+    card = build_cards(qsos, config(), lookups)[0]
+    assert card.via_routes == ("Q", "L")
 
 
 def test_missing_lookup_entry_uses_default_via():
     qsos = [make_qso("DL1AA")]
     lookups = {}  # Call nicht enthalten
-    assert build_cards(qsos, config(default_via="B"), lookups)[0].via_code == "B"
+    assert build_cards(qsos, config(default_via="B"), lookups)[0].via_routes == ("B",)
+
+
+# --- effective_via: Auflösung aus Prioritätsliste --------------------------
+
+
+def test_effective_via_picks_highest_active_route():
+    qsos = [make_qso("DL1AA")]
+    lookups = {"DL1AA": res("DL1AA", manager="DK0XYZ", eqsl="Y", lotw="Y")}
+    card = build_cards(qsos, config(), lookups)[0]  # Wege: ("B", "Q", "L")
+    # Aktiv absteigend Büro, Direkt -> Manager zählt als Büro -> gedruckt per B.
+    assert effective_via(card, ["B", "D"]) == "B"
+    # Nur eQSL aktiv -> Q gewinnt.
+    assert effective_via(card, ["Q", "L"]) == "Q"
+
+
+def test_effective_via_none_when_no_active_route_matches():
+    qsos = [make_qso("DL1AA")]
+    lookups = {"DL1AA": res("DL1AA", accepts_bureau="N", accepts_direct="N", lotw="Y")}
+    card = build_cards(qsos, config(), lookups)[0]  # Wege: ("L",)
+    assert effective_via(card, ["B", "D"]) is None  # nicht gedruckt
+
+
+def test_effective_via_override_forces_route_but_respects_cut():
+    qsos = [make_qso("DL1AA")]
+    card = build_cards(qsos, config(), {})[0]  # Wege: ("B",)
+    card.via_override = "L"
+    # Override erzwingt den Weg, aber LOTW liegt unter der Linie -> nicht gedruckt.
+    assert effective_via(card, ["B", "D"]) is None
+    # LOTW aktiv -> der erzwungene Weg wird gedruckt.
+    assert effective_via(card, ["L", "B"]) == "L"
 
 
 # --- Datum-Split / UTC / freq --------------------------------------------
@@ -181,7 +214,7 @@ def test_no_remarks_leaves_card_remarks_empty():
 
 def _card(n_rows: int, remarks: str = "") -> Card:
     rows = [CardRow("19", "07", "26", "14:38", "14.230", "SSB", "59") for _ in range(n_rows)]
-    return Card(recipient_call="DL1AA", via_text="", via_code="B", rows=rows, remarks=remarks)
+    return Card(recipient_call="DL1AA", via_text="", via_routes=("B",), rows=rows, remarks=remarks)
 
 
 def test_regroup_splits_overflow_with_remarks():

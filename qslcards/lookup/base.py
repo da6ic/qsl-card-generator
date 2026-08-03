@@ -27,7 +27,7 @@ class LookupResult:
     city: str | None = None
     country: str | None = None
     grid: str | None = None
-    # QSL-Routing (bestimmt die Versandart, siehe derive_via):
+    # QSL-Routing (bestimmt die Zustellwege, siehe accepted_routes):
     manager: str | None = None  # qsl_via (HamQTH) / qslmgr (QRZ)
     accepts_bureau: str | None = None  # HamQTH qsl        ("Y"/"N"/"?")
     accepts_direct: str | None = None  # HamQTH qsldirect  ("Y"/"N"/"?")

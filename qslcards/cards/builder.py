@@ -1,20 +1,22 @@
 """Karten-Erzeugung: QSOs umformen und gruppieren (siehe SPECIFICATION.md §5.2).
 
-**Kein Via-Filter**: es entstehen Karten für *alle* QSOs. Die Versandart (Via),
-der QSL-Manager und die Adresse kommen aus dem Lookup (Map `CALL -> LookupResult`,
-optional); ohne Treffer gilt `default_via`. Welche Karten am Ende gedruckt werden,
-entscheidet die GUI anhand des Via-Filters — nicht dieses Modul.
+**Kein Via-Filter**: es entstehen Karten für *alle* QSOs. Die akzeptierten
+Zustellwege, der QSL-Manager und die Adresse kommen aus dem Lookup (Map
+`CALL -> LookupResult`, optional); ohne Treffer gilt `default_via`. Welcher Weg
+tatsächlich gedruckt wird — und ob überhaupt — entscheidet die Prioritätsliste
+der GUI (`effective_via`), nicht dieses Modul.
 """
 
 from __future__ import annotations
 
 from collections import OrderedDict
+from collections.abc import Sequence
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from qslcards.adif.models import QSO
 from qslcards.config import AppConfig
-from qslcards.lookup import derive_via
+from qslcards.lookup import accepted_routes, resolve_route
 from qslcards.pdf.geometry import MAX_ROWS_PLAIN, MAX_ROWS_WITH_REMARKS
 
 from .models import Card, CardRow
@@ -95,17 +97,31 @@ def _make_row(qso: QSO) -> CardRow:
 
 def _resolve_via(
     call: str, lookups: Lookups | None, default_via: str
-) -> tuple[str, str, LookupResult | None]:
-    """Ermittelt (via_code, via_text, recipient) für ein Rufzeichen aus dem Lookup.
+) -> tuple[tuple[str, ...], str, LookupResult | None]:
+    """Ermittelt (via_routes, via_text, recipient) für ein Rufzeichen aus dem Lookup.
 
-    - `via_code` via `derive_via` (Priorität M>B>D>E, Fallback `default_via`).
+    - `via_routes` = akzeptierte Zustellwege (B/D/Q/L) via `accepted_routes`;
+      ohne verwertbaren Treffer `(default_via,)`.
     - `via_text` = QSL-Manager (oder leer) → Feld „Via:" auf der Karte.
     - `recipient` = das volle Lookup-Ergebnis (Adresse) für den Export, oder None.
     """
     result = lookups.get((call or "").strip().upper()) if lookups else None
-    via_code = derive_via(result, default_via)
+    via_routes = accepted_routes(result, default_via)
     via_text = (result.manager or "").strip() if result and result.manager else ""
-    return via_code, via_text, result
+    return via_routes, via_text, result
+
+
+def effective_via(card: Card, active_priority: Sequence[str]) -> str | None:
+    """Der tatsächlich zu druckende Weg einer Karte (oder `None` = nicht drucken).
+
+    Ein manueller Override (`card.via_override`) erzwingt den *Weg*, respektiert
+    aber weiterhin die Trennlinie: liegt der Weg unter der Linie (nicht in
+    `active_priority`), wird die Karte **nicht** gedruckt. Ohne Override wird der
+    höchstpriorisierte aktive Weg aus `card.via_routes` gewählt (`resolve_route`).
+    Einzige Quelle der Wahrheit für Vorschau **und** Export.
+    """
+    via = card.via_override or resolve_route(card.via_routes, active_priority)
+    return via if via in active_priority else None
 
 
 def build_cards(qsos: list[QSO], config: AppConfig, lookups: Lookups | None = None) -> list[Card]:
@@ -202,12 +218,12 @@ def normalize_station_cards(cards: list[Card]) -> list[Card]:
 def _group_per_qso(qsos: list[QSO], lookups: Lookups | None, default_via: str) -> list[Card]:
     cards: list[Card] = []
     for qso in qsos:
-        via_code, via_text, recipient = _resolve_via(qso.call, lookups, default_via)
+        via_routes, via_text, recipient = _resolve_via(qso.call, lookups, default_via)
         cards.append(
             Card(
                 recipient_call=qso.call,
                 via_text=via_text,
-                via_code=via_code,
+                via_routes=via_routes,
                 rows=[_make_row(qso)],
                 recipient=recipient,
             )
@@ -218,31 +234,32 @@ def _group_per_qso(qsos: list[QSO], lookups: Lookups | None, default_via: str) -
 def _group_per_station(
     qsos: list[QSO], lookups: Lookups | None, default_via: str, max_rows: int
 ) -> list[Card]:
-    # Gruppieren nach (Call, Via). Da die Via je Rufzeichen aus dem Lookup kommt,
-    # ist sie für denselben Call konstant; der Schlüssel bleibt zur Sicherheit
-    # (Call, Via). OrderedDict wahrt die Ersteinfüge-Reihenfolge.
-    groups: OrderedDict[tuple[str, str], dict] = OrderedDict()
+    # Gruppieren nach Rufzeichen (die akzeptierten Wege sind je Call konstant, da
+    # sie aus dem Lookup kommen). OrderedDict wahrt die Ersteinfüge-Reihenfolge.
+    groups: OrderedDict[str, dict] = OrderedDict()
     for qso in qsos:
-        via_code, via_text, recipient = _resolve_via(qso.call, lookups, default_via)
-        key = (qso.call, via_code)
-        entry = groups.setdefault(key, {"qsos": [], "via_text": via_text, "recipient": recipient})
+        via_routes, via_text, recipient = _resolve_via(qso.call, lookups, default_via)
+        entry = groups.setdefault(
+            qso.call,
+            {"qsos": [], "via_routes": via_routes, "via_text": via_text, "recipient": recipient},
+        )
         entry["qsos"].append(qso)
 
     cards: list[Card] = []
-    for (call, via_code), entry in groups.items():
+    for call, entry in groups.items():
         group: list[QSO] = entry["qsos"]
         # innerhalb der Station nach Datum/Zeit sortieren
         group.sort(key=lambda q: (q.qso_date, q.time_on))
         rows = [_make_row(q) for q in group]
-        # Überlauf über max_rows: Folge-Karten mit demselben Call/Via anlegen. Bis
-        # zu max_rows QSOs landen als Zeilen auf einer Karte (dynamische Tabelle);
+        # Überlauf über max_rows: Folge-Karten mit demselben Call anlegen. Bis zu
+        # max_rows QSOs landen als Zeilen auf einer Karte (dynamische Tabelle);
         # max_rows hängt davon ab, ob Remarks gedruckt werden (siehe build_cards).
         for start in range(0, len(rows), max_rows):
             cards.append(
                 Card(
                     recipient_call=call,
                     via_text=entry["via_text"],
-                    via_code=via_code,
+                    via_routes=entry["via_routes"],
                     rows=rows[start : start + max_rows],
                     recipient=entry["recipient"],
                 )
@@ -258,5 +275,5 @@ def _card_sort_key(card: Card) -> tuple[str, str, str, str, str, str]:
         first.date_m,
         first.date_d,
         first.utc,
-        card.via_code,
+        "".join(card.via_routes),
     )

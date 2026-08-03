@@ -14,7 +14,8 @@ from typing import TYPE_CHECKING
 
 from reportlab.pdfgen import canvas
 
-from qslcards.cards.builder import regroup_card_by_remarks
+from qslcards.cards.builder import effective_via, regroup_card_by_remarks
+from qslcards.lookup import active_via_priority
 
 from .geometry import PAGE_H, PAGE_W
 from .layout_back import draw_back
@@ -57,10 +58,14 @@ def generate(
     # Optionaler Adress-/Label-Export (nur wenn aktiviert). Fehler dabei dürfen
     # die bereits erzeugte PDF nicht entwerten -> defensiv, aber schlicht.
     if config.lookup.address_export:
-        _export_addresses(cards, output_path)
+        gen = config.generation
+        active = active_via_priority(gen.via_priority, gen.via_cut)
+        _export_addresses(cards, output_path, active)
 
 
-def _export_addresses(cards: list[Card], output_path: str | Path) -> Path:
+def _export_addresses(
+    cards: list[Card], output_path: str | Path, active_priority: list[str]
+) -> Path:
     """Schreibt eine simple CSV mit Empfängeradressen **aller** Stationen, die
     per Lookup eine Adresse haben (dedupliziert pro Rufzeichen).
 
@@ -89,5 +94,6 @@ def _export_addresses(cards: list[Card], output_path: str | Path) -> Path:
             if not any(fields):  # keine Adressdaten -> nicht exportieren
                 continue
             seen.add(call)
-            writer.writerow([call, *fields, card.via_code])
+            via = effective_via(card, active_priority) or ""
+            writer.writerow([call, *fields, via])
     return export_path

@@ -9,6 +9,8 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import ttk
 
+from qslcards.lookup import VIA_LABELS, normalize_via_priority
+
 # Absender-Grunddaten (Adresse + Stationsblock), oben in Abschnitt 3.
 STATION_FIELDS: list[tuple[str, str]] = [
     ("callsign", "Rufzeichen"),
@@ -36,12 +38,10 @@ RADIO_FIELDS: list[tuple[str, str]] = [
 # laufen über self.vars, das beide Gruppen enthält).
 SENDER_FIELDS: list[tuple[str, str]] = STATION_FIELDS + RADIO_FIELDS
 
-# Druck-Kategorien im Filter (E = Elektronisch ist kein Druckweg -> nicht hier).
-VIA_CODES: list[tuple[str, str]] = [
-    ("B", "B Büro"),
-    ("D", "D Direkt"),
-    ("M", "M Manager"),
-]
+# Sentinel-Token für die Trennlinie in der Prioritätsliste (Abschnitt 4).
+# Alles oberhalb wird gedruckt (in Reihenfolge = Priorität), alles darunter nicht.
+VIA_DIVIDER = "\x00divider"
+VIA_DIVIDER_LABEL = "──── nicht drucken ────"
 
 QSL_MARK_CHOICES = ["Leer lassen", "PSE QSL", "TNX QSL"]
 PORTABLE_CHOICES = ["Keins", "/p", "/m", "/t", "/r"]
@@ -186,26 +186,83 @@ class SenderSection:
 
 
 class FilterSection:
-    """4. Via-Filter (markiert nur, welche Karten gedruckt werden)."""
+    """4. Zustellwege: priorisierbare Liste mit Trennlinie.
+
+    Eine Listbox zeigt die Wege (Büro, Direkt, eQSL, LOTW) in Prioritätsreihenfolge
+    plus eine verschiebbare Trennlinie. Wege oberhalb der Linie werden gedruckt
+    (der jeweils höchste akzeptierte Weg je Empfänger), Wege darunter nicht. Die
+    Buttons ▲/▼ verschieben den ausgewählten Eintrag (Trennlinie eingeschlossen).
+    """
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="4. Via-Filter (Drucken)")
-        self.via_vars: dict[str, tk.BooleanVar] = {}
+        self.frame = ttk.LabelFrame(parent, text="4. Zustellwege (Priorität)")
 
-        # command wird in app.py gesetzt (Drucken-Markierung neu setzen).
-        self.checkbuttons: list[ttk.Checkbutton] = []
-        for i, (code, label) in enumerate(VIA_CODES):
-            var = tk.BooleanVar(value=True)
-            self.via_vars[code] = var
-            cb = ttk.Checkbutton(self.frame, text=label, variable=var)
-            cb.grid(row=0, column=i, padx=4, pady=4, sticky="w")
-            self.checkbuttons.append(cb)
+        # Modell: Folge von Tokens (Weg-Codes + Trennlinie); die Listbox ist nur
+        # die Ansicht. Start: alle Wege, Trennlinie nach den ersten zwei.
+        self._tokens: list[str] = normalize_via_priority(None)
+        self._tokens.insert(2, VIA_DIVIDER)
 
-        ttk.Label(
-            self.frame,
-            text="Via kommt aus dem Lookup. E (elektronisch) wird nicht gedruckt.",
-            foreground="gray",
-        ).grid(row=1, column=0, columnspan=3, padx=4, pady=(0, 4), sticky="w")
+        self.listbox = tk.Listbox(
+            self.frame, height=5, width=24, exportselection=False, activestyle="none"
+        )
+        self.listbox.grid(row=0, column=0, rowspan=2, padx=4, pady=4, sticky="nsew")
+
+        # command wird in app.py gesetzt (verschieben + speichern + Filter neu).
+        self.btn_up = ttk.Button(self.frame, text="▲", width=3)
+        self.btn_down = ttk.Button(self.frame, text="▼", width=3)
+        self.btn_up.grid(row=0, column=1, padx=(0, 4), pady=(4, 1), sticky="s")
+        self.btn_down.grid(row=1, column=1, padx=(0, 4), pady=(1, 4), sticky="n")
+
+        self.frame.columnconfigure(0, weight=1)
+        self._render(select=0)
+
+    # -- Ansicht ----------------------------------------------------------
+    def _render(self, select: int | None = None) -> None:
+        """Zeichnet die Listbox aus dem Token-Modell; optional Zeile auswählen."""
+        self.listbox.delete(0, tk.END)
+        for token in self._tokens:
+            label = VIA_DIVIDER_LABEL if token == VIA_DIVIDER else VIA_LABELS.get(token, token)
+            self.listbox.insert(tk.END, label)
+        if select is not None and 0 <= select < len(self._tokens):
+            self.listbox.selection_clear(0, tk.END)
+            self.listbox.selection_set(select)
+            self.listbox.activate(select)
+
+    def _selected_index(self) -> int | None:
+        sel = self.listbox.curselection()
+        return int(sel[0]) if sel else None
+
+    # -- Verschieben (von app.py über die Buttons ausgelöst) --------------
+    def move_up(self) -> bool:
+        return self._move(-1)
+
+    def move_down(self) -> bool:
+        return self._move(1)
+
+    def _move(self, delta: int) -> bool:
+        i = self._selected_index()
+        if i is None:
+            return False
+        j = i + delta
+        if not (0 <= j < len(self._tokens)):
+            return False
+        self._tokens[i], self._tokens[j] = self._tokens[j], self._tokens[i]
+        self._render(select=j)
+        return True
+
+    # -- Zustand (für app.py: gather/apply) -------------------------------
+    def get_priority(self) -> tuple[list[str], int]:
+        """Liefert (Wege in Prioritätsreihenfolge, Trennlinien-Index = via_cut)."""
+        codes = [t for t in self._tokens if t != VIA_DIVIDER]
+        cut = self._tokens.index(VIA_DIVIDER) if VIA_DIVIDER in self._tokens else len(codes)
+        return codes, cut
+
+    def set_priority(self, priority: list[str] | None, cut: int) -> None:
+        """Setzt Reihenfolge + Trennlinie (z.B. beim Laden der Config)."""
+        codes = normalize_via_priority(priority)
+        n = max(0, min(int(cut), len(codes)))
+        self._tokens = [*codes[:n], VIA_DIVIDER, *codes[n:]]
+        self._render(select=None)
 
 
 class ModeSection:

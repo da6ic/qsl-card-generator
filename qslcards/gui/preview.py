@@ -13,7 +13,7 @@ from collections.abc import Callable
 from tkinter import ttk
 from typing import TYPE_CHECKING
 
-from qslcards.cards.builder import normalize_station_cards
+from qslcards.cards.builder import effective_via, normalize_station_cards
 
 from .sections import REMARKS_MAX_LEN, limit_entry_length
 
@@ -33,7 +33,8 @@ _HEADINGS = {
 }
 _PENDING = "…"  # Platzhalter, solange der Lookup für die Zeile noch läuft
 _EDITABLE = ("via", "route", "remarks")  # per Doppelklick editierbare Spalten
-_VIA_CHOICES = ("B", "D", "M", "E")  # Auswahl für die Via-Zelle
+_VIA_CHOICES = ("B", "D", "Q", "L")  # Auswahl für die Via-Zelle (erzwungener Weg)
+_VIA_NONE = "—"  # Anzeige, wenn kein aktiver Weg passt (Karte wird nicht gedruckt)
 
 
 class PreviewTable:
@@ -70,6 +71,10 @@ class PreviewTable:
 
         # iid -> (Card, included?)
         self._rows: dict[str, tuple[Card, bool]] = {}
+        # Aktive Wege (über der Trennlinie) in Prioritätsreihenfolge; bestimmt den
+        # angezeigten „Via"-Weg und die Drucken-Markierung. Von set_cards/
+        # apply_via_filter gesetzt (aus der Prioritätsliste in Abschnitt 4).
+        self._active_priority: list[str] = []
         self._pending = False  # während des Lookups keine Bearbeitung
         # Ob Karten derselben Station zusammengehören (Modus „pro Station"): dann
         # führt eine Remarks-Änderung die Station neu zusammen/teilt sie neu auf.
@@ -98,6 +103,7 @@ class PreviewTable:
         included: Callable[[Card], bool] | None = None,
         pending: bool = False,
         groupable: bool = False,
+        active_priority: list[str] | None = None,
     ) -> None:
         """Füllt die Tabelle neu.
 
@@ -105,9 +111,12 @@ class PreviewTable:
         drucken). `pending=True` zeigt „…" für Via/Route (Lookup läuft noch).
         `groupable=True` (Modus „pro Station") lässt eine Remarks-Änderung die
         ganze Station neu gruppieren (zusammenführen bzw. aufteilen).
+        `active_priority` sind die aktiven Wege (für die „Via"-Anzeige).
         """
         self._pending = pending
         self._groupable = groupable
+        if active_priority is not None:
+            self._active_priority = active_priority
         self.tree.delete(*self.tree.get_children())
         self._rows.clear()
         for card in cards:
@@ -122,7 +131,7 @@ class PreviewTable:
             r = card.rows[0]
             date = f"{r.date_d}.{r.date_m}.{r.date_y}"
             utc = r.utc
-        via = _PENDING if self._pending else card.via_code
+        via = _PENDING if self._pending else self._via_display(card)
         route = _PENDING if self._pending else card.via_text
         return (
             "Ja" if inc else "Nein",
@@ -140,13 +149,21 @@ class PreviewTable:
         self._rows[iid] = (card, inc)
         return iid
 
-    def apply_via_filter(self, via_codes: set[str]) -> None:
-        """Setzt die Drucken-Markierung je Zeile neu: `via_code ∈ via_codes`."""
+    def _via_display(self, card: Card) -> str:
+        """Anzeigetext der „Via"-Spalte: der effektive Weg, oder „—", wenn kein
+        aktiver Weg passt (Karte wird dann nicht gedruckt)."""
+        return effective_via(card, self._active_priority) or _VIA_NONE
+
+    def apply_via_filter(self, active_priority: list[str]) -> None:
+        """Setzt Anzeige + Drucken-Markierung je Zeile neu anhand der aktiven
+        Prioritätsliste (Weg über der Trennlinie)."""
+        self._active_priority = active_priority
         for iid, (card, _inc) in self._rows.items():
-            inc = card.via_code in via_codes
+            inc = effective_via(card, active_priority) is not None
             self._rows[iid] = (card, inc)
             values = list(self.tree.item(iid, "values"))
             values[0] = "Ja" if inc else "Nein"
+            values[_COLUMNS.index("via")] = self._via_display(card)
             self.tree.item(iid, values=values)
 
     def set_row_included(self, iid: str, included: bool) -> None:
@@ -190,7 +207,7 @@ class PreviewTable:
             editor: ttk.Entry | ttk.Combobox = ttk.Combobox(
                 self.tree, values=list(_VIA_CHOICES), state="readonly"
             )
-            editor.set(card.via_code)
+            editor.set(card.via_override or effective_via(card, self._active_priority) or "")
         else:  # "route" oder "remarks": freies Textfeld
             editor = ttk.Entry(self.tree)
             editor.insert(0, card.via_text if col_name == "route" else card.remarks)
@@ -236,8 +253,8 @@ class PreviewTable:
             value = value.upper()
             if value not in _VIA_CHOICES:
                 return
-            card.via_code = value
-            display = card.via_code
+            card.via_override = value  # erzwingt diesen Weg für diese Karte
+            display = value
         elif col_name == "remarks":  # REMARKS-Text nur dieser Karte
             card.remarks = value
             display = card.remarks
@@ -285,8 +302,10 @@ class PreviewTable:
             self._insert_card(part, inc, index + offset)
 
     @staticmethod
-    def _station_key(card: Card) -> tuple[str, str]:
-        return (card.recipient_call, card.via_code)
+    def _station_key(card: Card) -> str:
+        # Gruppierung „pro Station" erfolgt je Rufzeichen (die akzeptierten Wege
+        # sind je Call konstant, da sie aus dem Lookup stammen).
+        return card.recipient_call
 
     def _on_click(self, event: tk.Event) -> None:
         # Nur Klicks in die Spalte "Drucken" (Spalte #1) schalten die Zeile um.

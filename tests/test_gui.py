@@ -94,11 +94,12 @@ def test_auto_lookup_fills_via_and_manager(app, tmp_path):
 
     assert app._lookup_running is False
     rows = _row_map(app)
-    # Via aus Lookup: Manager > Büro > … ; E für reine LoTW-Station.
-    assert rows["DL1AA"][3] == "M" and rows["DL1AA"][4] == "DK0XYZ"
+    # Standard-Priorität aktiv: Büro, Direkt. Manager zählt als Büro-Weg und
+    # setzt den Manager-Call ins Via-Feld (Route-Spalte).
+    assert rows["DL1AA"][3] == "B" and rows["DL1AA"][4] == "DK0XYZ"
     assert rows["DL2BB"][3] == "B"
-    assert rows["DL3CC"][3] == "E"
-    # E-Station standardmäßig nicht gedruckt.
+    # Reine LoTW-Station: kein aktiver Weg -> "—", nicht gedruckt.
+    assert rows["DL3CC"][3] == "—"
     assert rows["DL3CC"][0] == "Nein"
     assert {c.recipient_call for c in app.preview.included_cards()} == {"DL1AA", "DL2BB"}
     # „PDF erzeugen" nach dem Lookup wieder aktiv.
@@ -113,19 +114,21 @@ def test_without_credentials_all_default_via(app, tmp_path):
     assert str(app.output_section.generate_btn["state"]) == "normal"
 
 
-def test_via_filter_toggles_print_without_removing_rows(app, tmp_path):
+def test_priority_change_toggles_print_without_removing_rows(app, tmp_path):
     app.lookup_section.hamqth_user.set("u")
     app.lookup_section.hamqth_pass.set("p")
     _load(app, tmp_path)
 
-    # Büro abwählen -> DL2BB nicht mehr drucken, Zeile bleibt aber sichtbar.
-    app.filter_section.via_vars["B"].set(False)
+    # Nur LOTW über der Trennlinie -> die reine LoTW-Station (DL3CC) wird jetzt
+    # gedruckt, die Büro-Stationen nicht. Alle Zeilen bleiben sichtbar.
+    app.filter_section.set_priority(["L", "B", "D", "Q"], 1)
     app._apply_filter()
     rows = _row_map(app)
     assert set(rows) == {"DL1AA", "DL2BB", "DL3CC"}  # alle Zeilen noch da
+    assert rows["DL3CC"][0] == "Ja"
     assert rows["DL2BB"][0] == "Nein"
-    assert "DL2BB" not in {c.recipient_call for c in app.preview.included_cards()}
-    assert "DL1AA" in {c.recipient_call for c in app.preview.included_cards()}
+    included = {c.recipient_call for c in app.preview.included_cards()}
+    assert included == {"DL3CC"}
 
 
 def test_edit_via_updates_card_and_print_flag(app, tmp_path):
@@ -133,14 +136,14 @@ def test_edit_via_updates_card_and_print_flag(app, tmp_path):
     app.lookup_section.hamqth_pass.set("p")
     _load(app, tmp_path)
 
-    # DL3CC ist E und daher nicht gedruckt. Via-Zelle auf B ändern (wie ein
-    # Editor-Commit) -> Karte + Anzeige aktualisiert, und da B im Filter ist,
-    # wird die Zeile jetzt gedruckt.
+    # DL3CC (nur LoTW) wird nicht gedruckt. Via-Zelle auf B ändern (wie ein
+    # Editor-Commit) erzwingt den Weg -> Karte + Anzeige aktualisiert, Zeile wird
+    # jetzt gedruckt.
     iid = _iid_for(app, "DL3CC")
     app.preview._commit_edit(iid, "via", "B")
 
     card = next(c for c, _ in app.preview._rows.values() if c.recipient_call == "DL3CC")
-    assert card.via_code == "B"
+    assert card.via_override == "B"
     row = app.preview.tree.item(iid, "values")
     assert row[3] == "B"  # Via-Spalte
     assert row[0] == "Ja"  # Drucken nachgezogen
@@ -161,7 +164,7 @@ def test_edit_route_changes_manager_text_only(app, tmp_path):
     assert card.via_text == "via bureau"
     row = app.preview.tree.item(iid, "values")
     assert row[4] == "via bureau"  # Route-Spalte
-    assert row[3] == "M"  # Via unverändert
+    assert row[3] == "B"  # Via unverändert (Manager zählt als Büro)
 
 
 def test_edit_via_rejects_invalid_code(app, tmp_path):
@@ -169,7 +172,8 @@ def test_edit_via_rejects_invalid_code(app, tmp_path):
     iid = _iid_for(app, "DL1AA")
     app.preview._commit_edit(iid, "via", "Z")  # ungültig -> ignoriert
     card = next(c for c, _ in app.preview._rows.values() if c.recipient_call == "DL1AA")
-    assert card.via_code == "B"
+    assert card.via_override is None  # ungültiger Code setzt keinen Override
+    assert card.via_routes == ("B",)
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -47,7 +47,12 @@ class LookupConfig:
 @dataclass
 class GenerationConfig:
     card_mode: str = "per_qso"  # "per_qso" | "per_station"
-    via_filter: list[str] = field(default_factory=lambda: ["B", "D", "M"])
+    # Zustellwege in Prioritätsreihenfolge (oben = höchste Priorität):
+    # B=Büro (inkl. Manager), D=Direkt, Q=eQSL, L=LOTW. `via_cut` ist die
+    # Trennlinie: die ersten `via_cut` Wege sind aktiv (werden gedruckt), der
+    # Rest steht unter der Linie und wird nicht gedruckt.
+    via_priority: list[str] = field(default_factory=lambda: ["B", "D", "Q", "L"])
+    via_cut: int = 2  # Default: Büro + Direkt aktiv, eQSL/LOTW unter der Linie
     default_via: str = "B"  # Fallback, wenn der Lookup nichts/"?" liefert
     #   -> nur hier in der Config, kein GUI-Widget. Via kommt sonst aus dem Lookup.
     page_orientation: str = "landscape"  # A6, siehe CARD_LAYOUT.md

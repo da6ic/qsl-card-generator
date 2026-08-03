@@ -35,13 +35,16 @@ lookup:
 
 generation:
   card_mode: "per_qso"         # "per_qso" oder "per_station"
-  via_filter: ["B", "D", "M"]  # welche Versandarten gedruckt werden: B=Büro,
-                               #   D=Direkt, M=Manager. E (Elektronisch) ist KEIN
-                               #   Druckweg -> nie im Filter; reine LoTW/eQSL-
-                               #   Stationen werden angezeigt, aber nicht gedruckt.
-  default_via: "B"             # Fallback, wenn der Lookup nichts/"?" liefert
-                               #   (nur hier in der Config, kein GUI-Feld).
-                               #   Via-Priorität sonst: Manager > Büro > Direkt > E.
+  via_priority: ["B", "D", "Q", "L"]  # Zustellwege in Prioritätsreihenfolge
+                               #   (oben = höchste): B=Büro (inkl. Manager),
+                               #   D=Direkt, Q=eQSL, L=LOTW. Je Empfänger wird der
+                               #   höchstpriorisierte akzeptierte Weg gedruckt.
+  via_cut: 2                   # Trennlinie: die ersten `via_cut` Wege sind aktiv
+                               #   (werden gedruckt), der Rest darunter nicht.
+                               #   Default 2 -> Büro+Direkt aktiv, eQSL/LOTW nicht.
+  default_via: "B"             # Fallback für unbekannte Stationen (Lookup leer/
+                               #   "?" oder keine Credentials); nur hier, kein
+                               #   GUI-Feld. Solche Stationen gelten als Büro.
   page_orientation: "landscape"  # A6 quer (Referenz). Alternativ "portrait"
   static_footer: "TNX FR NICE CONTACT, 73"
   remarks: ""                  # globaler REMARKS-Text für ALLE Karten. Leer =
