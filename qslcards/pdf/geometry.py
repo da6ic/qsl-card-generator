@@ -81,6 +81,9 @@ SIZE_CALL_BOX = 16  # Empfänger-Rufzeichen in der Box (größer)
 SIZE_VIA = 11
 SIZE_STATION = 9  # Locator/DOK/CQ-Zone/ITU-Block (neben der Adresse)
 SIZE_CHECK = 8  # Bestätigungs-Checkboxen
+# PSE/TNX-QSL- und Confirming-Markierung: bewusst markanter (fett + größer),
+# damit die gewählte Aussage sofort ins Auge fällt.
+SIZE_MARK = 11
 SIZE_TABLE_HEAD = 6.5
 SIZE_TABLE_CELL = 8
 SIZE_REMARKS = 9  # Remarks-Text (dynamisch, nur wenn gesetzt)
@@ -170,8 +173,11 @@ RADIO_LABEL_PWR = "PWR"  # Sendeleistung (Watt)
 RADIO_TABLE_X0 = SENDER_X  # x=6, linke Kante (bündig unter dem Absenderblock)
 RADIO_TABLE_X1 = mm(85)  # rechte Kante: Lücke vor der Via-Box (x=88) lassen
 RADIO_TABLE_YT_TOP = mm(38.5)  # obere Kante, knapp unter der ITU-Zeile (34.5)
+# Unterkante **bündig mit der Via-Box** (deren Unterkante liegt bei
+# VIA_BOX_YT + VIA_BOX_H = 47). Die Beschriftungszeile ist fix hoch, die
+# Wertezeile füllt den Rest bis zur Unterkante (siehe layout_back._draw_radio).
+RADIO_TABLE_YT_BOTTOM = VIA_BOX_YT + VIA_BOX_H
 RADIO_HEAD_H = mm(3.4)  # Höhe der Beschriftungszeile (RIG/ANT/PWR)
-RADIO_VALUE_H = mm(3.9)  # Höhe der Wertezeile (Unterkante bei ~45.8)
 
 # --------------------------------------------------------------------------- #
 # PSE/TNX QSL-Markierung (früher als Bestätigungs-Checkboxen an dieser
@@ -181,8 +187,8 @@ RADIO_VALUE_H = mm(3.9)  # Höhe der Wertezeile (Unterkante bei ~45.8)
 QSL_MARK_X = mm(6)
 QSL_MARK_YT = mm(44)
 # Wenn der Funk-Block gezeichnet wird, rutscht die QSL-Markierung unter die
-# Funk-Tabelle (deren Unterkante bei ~45.8 liegt), mit etwas Abstand.
-QSL_MARK_YT_RADIO = mm(47)
+# Funk-Tabelle (deren Unterkante nun bündig zur Via-Box bei yt=47 liegt).
+QSL_MARK_YT_RADIO = mm(47.7)
 
 # --------------------------------------------------------------------------- #
 # QSO-Tabelle (§3)

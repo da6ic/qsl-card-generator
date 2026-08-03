@@ -152,7 +152,8 @@ def _draw_radio(c: Canvas, entries: list[tuple[str, str]]) -> None:
     col_w = total_w / n
     top = g.RADIO_TABLE_YT_TOP
     head_bottom = top + g.RADIO_HEAD_H
-    bottom = head_bottom + g.RADIO_VALUE_H
+    bottom = g.RADIO_TABLE_YT_BOTTOM  # bündig mit der Via-Box-Unterkante
+    value_h = bottom - head_bottom  # Wertezeile füllt den Rest bis zur Unterkante
 
     c.setLineWidth(g.LINE_WIDTH)
     # Senkrechte Spaltentrenner (inkl. Außenkanten) über die volle Höhe.
@@ -166,7 +167,7 @@ def _draw_radio(c: Canvas, entries: list[tuple[str, str]]) -> None:
     for i, (label, value) in enumerate(entries):
         cx = x0 + (i + 0.5) * col_w
         _text_in_band(c, cx, top, g.RADIO_HEAD_H, label, g.FONT_BOLD, g.SIZE_RADIO_HEAD)
-        _text_in_band(c, cx, head_bottom, g.RADIO_VALUE_H, value, g.FONT_REGULAR, g.SIZE_RADIO)
+        _text_in_band(c, cx, head_bottom, value_h, value, g.FONT_REGULAR, g.SIZE_RADIO)
 
 
 def _draw_frame(c: Canvas) -> None:
@@ -237,8 +238,8 @@ def _draw_recipient(c: Canvas, card: Card) -> None:
             g.CONFIRM_MARK_X,
             g.CONFIRM_MARK_YT,
             "Confirming QSO",
-            g.FONT_REGULAR,
-            g.SIZE_CHECK,
+            g.FONT_BOLD,
+            g.SIZE_MARK,
             align="center",
         )
     elif card.confirm_mark == "swl":
@@ -247,8 +248,8 @@ def _draw_recipient(c: Canvas, card: Card) -> None:
             g.CONFIRM_MARK_X,
             g.CONFIRM_MARK_YT,
             "Confirming SWL-Report",
-            g.FONT_REGULAR,
-            g.SIZE_CHECK,
+            g.FONT_BOLD,
+            g.SIZE_MARK,
             align="center",
         )
 
@@ -272,9 +273,9 @@ def _draw_confirm(c: Canvas, card: Card, yt: float) -> None:
     # ausgewählte Option steht hier, kein Kästchen. `yt` rutscht nach unten,
     # wenn der Funk-Block gezeichnet wird.
     if card.qsl_mark == "pse":
-        text(c, g.QSL_MARK_X, yt, "PSE QSL", g.FONT_REGULAR, g.SIZE_CHECK)
+        text(c, g.QSL_MARK_X, yt, "PSE QSL", g.FONT_BOLD, g.SIZE_MARK)
     elif card.qsl_mark == "tnx":
-        text(c, g.QSL_MARK_X, yt, "TNX QSL", g.FONT_REGULAR, g.SIZE_CHECK)
+        text(c, g.QSL_MARK_X, yt, "TNX QSL", g.FONT_BOLD, g.SIZE_MARK)
 
 
 def _column_edges() -> list[float]:
