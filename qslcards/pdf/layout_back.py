@@ -108,11 +108,16 @@ def _vline(c: Canvas, x: float, yt0: float, yt1: float) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def _radio_values(config: AppConfig) -> list[str]:
-    """Gefüllte Funk-Werte (Empfänger/Antenne/Leistung) in fester Reihenfolge;
-    leere Felder werden übersprungen (dynamisch, nur der Wert – kein Label)."""
+def _radio_entries(config: AppConfig) -> list[tuple[str, str]]:
+    """Gefüllte Funk-Felder als (Beschriftung, Wert)-Paare in fester Reihenfolge
+    (RIG/ANT/PWR); leere Felder werden übersprungen (dynamisch)."""
     s = config.sender
-    return [v.strip() for v in (s.receiver, s.antenna, s.power) if v and v.strip()]
+    pairs = (
+        (g.RADIO_LABEL_RIG, s.receiver),
+        (g.RADIO_LABEL_ANT, s.antenna),
+        (g.RADIO_LABEL_PWR, s.power),
+    )
+    return [(label, v.strip()) for label, v in pairs if v and v.strip()]
 
 
 def draw_back(c: Canvas, card: Card, config: AppConfig) -> None:
@@ -120,7 +125,7 @@ def draw_back(c: Canvas, card: Card, config: AppConfig) -> None:
     c.setLineWidth(g.LINE_WIDTH)
     # Sind Funk-Werte gesetzt, wird der Funk-Block unter dem Stationsblock
     # gezeichnet; QSL-Markierung und Tabelle rücken dann nach unten.
-    radio = _radio_values(config)
+    radio = _radio_entries(config)
     qsl_yt = g.QSL_MARK_YT_RADIO if radio else g.QSL_MARK_YT
     table_top = g.TABLE_YT_TOP_RADIO if radio else g.TABLE_YT_TOP
 
@@ -134,22 +139,34 @@ def draw_back(c: Canvas, card: Card, config: AppConfig) -> None:
     _draw_footer(c, card, config)
 
 
-def _draw_radio(c: Canvas, values: list[str]) -> None:
-    """Funk-Werte (nur Werte, ohne Label) in EINER horizontalen Zeile, links-
-    bündig, direkt unter dem Stationsblock (Unterkante bei RADIO_BLOCK_BOTTOM_YT)."""
-    if not values:
+def _draw_radio(c: Canvas, entries: list[tuple[str, str]]) -> None:
+    """Funk-Block als kleine beschriftete Tabelle (Kopfzeile RIG/ANT/PWR, Werte
+    darunter). Nur befüllte Felder bekommen eine Spalte; die vorhandenen Spalten
+    teilen sich die volle Breite (RADIO_TABLE_X0..X1) gleichmäßig auf. Sitzt
+    linksbündig direkt unter dem Stationsblock, links der Via-Box."""
+    if not entries:
         return
-    band_top = g.RADIO_BLOCK_BOTTOM_YT - g.RADIO_ROW_H
-    _text_in_band(
-        c,
-        g.RADIO_BLOCK_X,
-        band_top,
-        g.RADIO_ROW_H,
-        g.RADIO_SEP.join(values),
-        g.FONT_REGULAR,
-        g.SIZE_RADIO,
-        align="left",
-    )
+    n = len(entries)
+    x0 = g.RADIO_TABLE_X0
+    total_w = g.RADIO_TABLE_X1 - g.RADIO_TABLE_X0
+    col_w = total_w / n
+    top = g.RADIO_TABLE_YT_TOP
+    head_bottom = top + g.RADIO_HEAD_H
+    bottom = head_bottom + g.RADIO_VALUE_H
+
+    c.setLineWidth(g.LINE_WIDTH)
+    # Senkrechte Spaltentrenner (inkl. Außenkanten) über die volle Höhe.
+    for k in range(n + 1):
+        _vline(c, x0 + k * col_w, top, bottom)
+    # Waagerechte Linien: oben, Kopf/Wert-Trenner, unten.
+    _hline(c, x0, g.RADIO_TABLE_X1, top)
+    _hline(c, x0, g.RADIO_TABLE_X1, head_bottom)
+    _hline(c, x0, g.RADIO_TABLE_X1, bottom)
+
+    for i, (label, value) in enumerate(entries):
+        cx = x0 + (i + 0.5) * col_w
+        _text_in_band(c, cx, top, g.RADIO_HEAD_H, label, g.FONT_BOLD, g.SIZE_RADIO_HEAD)
+        _text_in_band(c, cx, head_bottom, g.RADIO_VALUE_H, value, g.FONT_REGULAR, g.SIZE_RADIO)
 
 
 def _draw_frame(c: Canvas) -> None:

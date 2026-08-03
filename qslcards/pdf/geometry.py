@@ -29,7 +29,7 @@ def mm(v: float) -> float:
 
 PAGE_W = mm(148)  # A6 quer: Breite
 PAGE_H = mm(105)  # A6 quer: Höhe
-MARGIN = mm(3)  # Außenrand des Rahmens (näher am Blattrand)
+MARGIN = mm(3)  # Außenrand des Rückseiten-Rahmens (nur Rückseite; Front clippt voll)
 
 LINE_WIDTH = 0.6  # Standard-Rahmenlinienstärke in pt
 
@@ -149,23 +149,29 @@ STATION_Z3_YT = ADDR_Z3_YT  # CQ-Zone (WAZ)
 STATION_Z4_YT = ADDR_Z4_YT  # ITU
 
 # --------------------------------------------------------------------------- #
-# Funk-Block (Empfänger/Antenne/Leistung): dynamisch, nur wenn gefüllt. Nur die
-# Werte werden gezeichnet (kein Label), in EINER horizontalen Zeile durch
-# RADIO_SEP getrennt. Die Zeile ist linksbündig und sitzt **direkt unter dem
-# Stationsblock** (im gleichen Zeilenraster wie Adresse/ITU) – bewusst NICHT
-# bündig mit der Via-Box, damit über der QSL-Markierung Luft bleibt. Ist
-# mindestens ein Feld gesetzt, rücken QSL-Markierung und Tabelle nach unten
-# (QSL_MARK_YT_RADIO / TABLE_YT_TOP_RADIO).
+# Funk-Block (Empfänger/Antenne/Leistung): dynamisch, nur wenn gefüllt. Wird als
+# **kleine beschriftete Tabelle** gezeichnet (3 Spalten mit Kopfzeile oben:
+# RIG / ANT / PWR, Werte in der Zeile darunter). Die Tabelle sitzt linksbündig
+# **direkt unter dem Stationsblock** (knapp unter der ITU-Zeile) und **schöpft die
+# freie Breite links der Via-Box aus** (x=6 … RADIO_TABLE_X1). Nur befüllte Felder
+# bekommen eine Spalte; die Spalten teilen sich die volle Breite gleichmäßig auf
+# (1, 2 oder 3 Spalten). Ist mindestens ein Feld gesetzt, rücken QSL-Markierung
+# und QSO-Tabelle nach unten (QSL_MARK_YT_RADIO / TABLE_YT_TOP_RADIO).
 # --------------------------------------------------------------------------- #
 
 SIZE_RADIO = 8  # Funk-Werte (kompakt)
-RADIO_BLOCK_X = SENDER_X  # x=6, linksbündig unter dem Absender-/Stationsblock
-RADIO_ROW_H = mm(3.5)  # Höhe des Zeilenbands der Funk-Zeile
-# Unterkante der Funk-Zeile: rund eine Zeile unter der ITU-Zeile (Stationsraster
-# ~5,5 mm), sodass die Zeile unter dem Stationsblock sitzt und darunter noch
-# Abstand zur QSL-Markierung bleibt (kein Anschluss an die Via-Box).
-RADIO_BLOCK_BOTTOM_YT = mm(43)
-RADIO_SEP = " · "  # Trenner zwischen den Werten in der horizontalen Zeile
+SIZE_RADIO_HEAD = 6  # Beschriftung (RIG/ANT/PWR), etwas kleiner als die Werte
+
+# Feste Spaltenbeschriftungen (Inhalt, nicht Layout): funkerübliche Kurzformen.
+RADIO_LABEL_RIG = "RIG"  # Transceiver / Empfänger
+RADIO_LABEL_ANT = "ANT"  # Antenne
+RADIO_LABEL_PWR = "PWR"  # Sendeleistung (Watt)
+
+RADIO_TABLE_X0 = SENDER_X  # x=6, linke Kante (bündig unter dem Absenderblock)
+RADIO_TABLE_X1 = mm(85)  # rechte Kante: Lücke vor der Via-Box (x=88) lassen
+RADIO_TABLE_YT_TOP = mm(38.5)  # obere Kante, knapp unter der ITU-Zeile (34.5)
+RADIO_HEAD_H = mm(3.4)  # Höhe der Beschriftungszeile (RIG/ANT/PWR)
+RADIO_VALUE_H = mm(3.9)  # Höhe der Wertezeile (Unterkante bei ~45.8)
 
 # --------------------------------------------------------------------------- #
 # PSE/TNX QSL-Markierung (früher als Bestätigungs-Checkboxen an dieser
@@ -175,7 +181,7 @@ RADIO_SEP = " · "  # Trenner zwischen den Werten in der horizontalen Zeile
 QSL_MARK_X = mm(6)
 QSL_MARK_YT = mm(44)
 # Wenn der Funk-Block gezeichnet wird, rutscht die QSL-Markierung unter die
-# Funk-Zeile (deren Unterkante bei RADIO_BLOCK_BOTTOM_YT liegt), mit etwas Abstand.
+# Funk-Tabelle (deren Unterkante bei ~45.8 liegt), mit etwas Abstand.
 QSL_MARK_YT_RADIO = mm(47)
 
 # --------------------------------------------------------------------------- #
