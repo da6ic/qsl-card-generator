@@ -117,10 +117,17 @@ class PreviewTable:
         self._header_icons: dict[str, ttk.Label] = {}
         if self._edit_icon is not None:
             for col in _HEADER_HINT:
-                self._header_icons[col] = ttk.Label(
-                    self.tree, image=self._edit_icon, borderwidth=0, padding=0
-                )
+                lbl = ttk.Label(self.tree, image=self._edit_icon, borderwidth=0, padding=0)
+                # Klick genau auf das Kopf-Icon (rechter Rand) soll ebenfalls
+                # sortieren, sonst ginge er ins Leere (Label schluckt den Klick).
+                lbl.bind("<Button-1>", lambda _e, c=col: self._on_sort(c))
+                self._header_icons[col] = lbl
         self.tree.bind("<Configure>", lambda _e: self._place_header_icons(), add="+")
+
+        # Sortierung: aktuell sortierte Spalte + Richtung ("asc"/"desc"/None).
+        # Klick auf einen Kopf rotiert asc -> desc -> keine; immer nur EINE Spalte.
+        self._sort_col: str | None = None
+        self._sort_dir: str | None = None
 
         # iid -> (Card, included?)
         self._rows: dict[str, tuple[Card, bool]] = {}
@@ -162,11 +169,79 @@ class PreviewTable:
         self.tree.bind("<MouseWheel>", self._on_wheel)
 
     def _apply_headings(self) -> None:
-        """Setzt nur die Spaltentitel (zentriert). Der Stift wird als Overlay
-        (`_place_header_icons`) gesetzt, weil ttk ein Header-Bild nicht vertikal
-        auf die Textmitte ausrichtet."""
+        """Setzt die Spaltentitel (zentriert) und den Sortier-Command je Kopf. Der
+        Stift wird als Overlay (`_place_header_icons`) gesetzt, weil ttk ein
+        Header-Bild nicht vertikal auf die Textmitte ausrichtet."""
         for col in _COLUMNS:
-            self.tree.heading(col, text=_HEADINGS[col], anchor="center")
+            self.tree.heading(
+                col,
+                text=_HEADINGS[col],
+                anchor="center",
+                command=lambda c=col: self._on_sort(c),
+            )
+
+    # -- Sortierung (Klick auf Spaltenkopf) --------------------------------
+
+    def _on_sort(self, col: str) -> None:
+        """Klick auf einen Spaltenkopf: rotiert die Sortierung dieser Spalte
+        (aufsteigend -> absteigend -> keine). Immer nur EINE Spalte aktiv."""
+        if self._sort_col == col:
+            self._sort_dir = {"asc": "desc", "desc": None}.get(self._sort_dir or "", "asc")
+        else:
+            self._sort_dir = "asc"
+        self._sort_col = col if self._sort_dir else None
+        self._apply_sort()
+
+    def _sort_key(self, iid: str):
+        """Sortierschlüssel einer Zeile für die aktive Spalte — aus den Card-Daten
+        (nicht aus den Anzeige-Strings), damit numerisch/chronologisch korrekt."""
+        card, inc = self._rows[iid]
+        col = self._sort_col
+        if col == "print":
+            return inc
+        if col == "call":
+            return card.recipient_call.casefold()
+        if col == "qsos":
+            return len(card.rows)
+        if col == "via":
+            return self._via_display(card).casefold()
+        if col == "route":
+            return card.via_text.casefold()
+        if col == "remarks":
+            return card.remarks.casefold()
+        if col == "date":
+            r = card.rows[0] if card.rows else None
+            return (int(r.date_y), int(r.date_m), int(r.date_d)) if r else (0, 0, 0)
+        if col == "utc":
+            return card.rows[0].utc if card.rows else ""
+        return ""
+
+    def _apply_sort(self) -> None:
+        """Ordnet die Baumzeilen gemäß aktueller Sortierung neu; ohne Sortierung
+        wird die Insertions-(= Builder-)Reihenfolge wiederhergestellt."""
+        if self._sort_dir is None:
+            order = [iid for iid in self._rows if self.tree.exists(iid)]
+        else:
+            order = sorted(
+                self.tree.get_children(), key=self._sort_key, reverse=self._sort_dir == "desc"
+            )
+        for index, iid in enumerate(order):
+            self.tree.move(iid, "", index)
+        self._update_sort_indicators()
+
+    def _reapply_sort(self) -> None:
+        """Sortierung nach einer strukturellen Änderung erneut anwenden (no-op,
+        wenn keine Spalte sortiert ist)."""
+        if self._sort_dir is not None:
+            self._apply_sort()
+
+    def _update_sort_indicators(self) -> None:
+        """Setzt die Kopftexte: an der aktiven Spalte ein Pfeil (▲/▼), sonst der
+        reine Titel."""
+        arrow = {"asc": " ▲", "desc": " ▼"}.get(self._sort_dir or "", "")
+        for col in _COLUMNS:
+            suffix = arrow if col == self._sort_col else ""
+            self.tree.heading(col, text=_HEADINGS[col] + suffix)
 
     def _first_visible_row(self) -> str | None:
         """Erste aktuell sichtbare Zeile (für Spalten-Geometrie), oder None."""
@@ -245,6 +320,7 @@ class PreviewTable:
         # Overlays im Kopf platzieren.
         self.tree.update_idletasks()
         self._place_header_icons()
+        self._reapply_sort()  # aktive Sortierung über den Rebuild hinweg erhalten
 
     def _card_values(self, card: Card, inc: bool) -> tuple:
         """Werte-Tupel einer Baumzeile in Spaltenreihenfolge (_COLUMNS)."""
@@ -311,7 +387,13 @@ class PreviewTable:
         self.tree.item(iid, values=values)
 
     def included_cards(self) -> list[Card]:
-        return [card for (card, inc) in self._rows.values() if inc]
+        # Baum-Reihenfolge (nicht Insertionsreihenfolge): die erzeugte PDF folgt so
+        # der aktuell angezeigten Sortierung.
+        return [
+            self._rows[iid][0]
+            for iid in self.tree.get_children()
+            if iid in self._rows and self._rows[iid][1]
+        ]
 
     # -- Inline-Bearbeitung (Via / Route-Manager) --------------------------
 
@@ -450,6 +532,9 @@ class PreviewTable:
         # genau einer Karte haben, und leert man alle, fallen sie wieder zusammen.
         if col_name == "remarks":
             self._regroup_station(iid)
+
+        # Sortierte Spalte konsistent halten, falls der Edit ihren Wert änderte.
+        self._reapply_sort()
 
     def _regroup_station(self, iid: str) -> None:
         if iid not in self._rows or not self._groupable:
