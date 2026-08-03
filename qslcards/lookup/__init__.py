@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -40,6 +41,7 @@ __all__ = [
     "lookup_calls",
     "accepted_routes",
     "resolve_route",
+    "extract_manager_callsign",
     "normalize_via_priority",
     "active_via_priority",
     "VIA_CODES",
@@ -95,12 +97,50 @@ def build_lookup(
     return ChainedLookup(providers, cache=cache)
 
 
+# Rufzeichen-Muster: Präfix (Buchstaben/Ziffern), mind. eine Ziffer, Suffix aus
+# Buchstaben, optional ein „/…"-Zusatz (Portabel-Kennung). Die Ziffernpflicht
+# filtert reine Routing-Wörter (BUREAU/DIRECT/EQSL/LOTW/OQRS/SASE) automatisch aus.
+_CALLSIGN_RE = re.compile(r"[A-Z0-9]{1,3}[0-9]+[A-Z]{1,4}(?:/[A-Z0-9]+)?")
+# Trennt Rufzeichen-Kandidaten voneinander (Whitespace + gängige Satzzeichen).
+# `/` bleibt bewusst erhalten, damit Portabel-Kennungen (z. B. "DK1XY/P") am
+# Rufzeichen hängen bleiben und vom Muster mit erfasst werden.
+_MANAGER_SPLIT_RE = re.compile(r"[\s,;]+")
+
+
+def extract_manager_callsign(text: str | None) -> str:
+    """Zieht aus dem freien qsl_via/qslmgr-Text genau EIN Manager-Rufzeichen.
+
+    Der Rückgabewert landet im Feld „Via:" auf der Karte, das ausschließlich ein
+    Rufzeichen enthalten darf. Gibt `""` zurück, wenn kein Rufzeichen erkennbar
+    ist (nur Routing-Wörter wie Bureau/Direct/eQSL/LoTW/OQRS, E-Mail, leer). Bei
+    mehreren Kandidaten wird das **erste** genommen.
+
+    Beispiele:
+      "QSL via DK1XY direct" → "DK1XY"; "M0OXO OQRS" → "M0OXO";
+      "dk1xy@example.com" → "DK1XY"; "Bureau"/"LoTW"/"" → "".
+    """
+    if not text:
+        return ""
+    for token in _MANAGER_SPLIT_RE.split(text.strip().upper()):
+        if not token:
+            continue
+        # E-Mail-Adressen: nur der Local-Part kann ein Rufzeichen sein; die
+        # Domain (z. B. "web2mail.com") würde sonst falsche Treffer liefern.
+        token = token.split("@", 1)[0]
+        match = _CALLSIGN_RE.search(token)
+        if match:
+            return match.group(0)
+    return ""
+
+
 def accepted_routes(result: LookupResult | None, default_via: str = "B") -> tuple[str, ...]:
     """Menge der Zustellwege, die eine Station laut Lookup akzeptiert (§6.2).
 
     Kanonisch geordnet (B, D, Q, L):
-      - `B` (Büro) wenn `qsl == "Y"` **oder** ein Manager hinterlegt ist
-        (Manager zählt als Büro-Weg; sein Callsign steht dann im Feld „Via:").
+      - `B` (Büro) wenn `qsl == "Y"` **oder** ein echtes Manager-Rufzeichen
+        hinterlegt ist (der Manager zählt als Büro-Weg; sein Callsign steht dann
+        im Feld „Via:"). Reiner Routing-Freitext ohne Rufzeichen (z. B. „LoTW")
+        zählt **nicht** als Büro.
       - `D` (Direkt) wenn `qsldirect == "Y"`.
       - `Q` (eQSL) wenn `eqsl == "Y"`.
       - `L` (LOTW) wenn `lotw == "Y"`.
@@ -115,7 +155,7 @@ def accepted_routes(result: LookupResult | None, default_via: str = "B") -> tupl
 
     routes: list[str] = []
     if result is not None:
-        if result.accepts_bureau == "Y" or result.manager:
+        if result.accepts_bureau == "Y" or extract_manager_callsign(result.manager):
             routes.append("B")
         if result.accepts_direct == "Y":
             routes.append("D")

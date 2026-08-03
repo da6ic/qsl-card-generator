@@ -63,6 +63,24 @@ def test_routes_and_manager_from_lookup():
     assert card.recipient is lookups["DL1AA"]
 
 
+def test_freetext_manager_is_filtered_from_via_field():
+    # Nur Routing-Freitext im Manager-Feld → Via-Feld bleibt leer und der
+    # Freitext erzwingt keinen Büro-Weg (nur der explizite LOTW-Weg zählt).
+    qsos = [make_qso("DL1AA")]
+    lookups = {"DL1AA": res("DL1AA", manager="LoTW", lotw="Y")}
+    card = build_cards(qsos, config(), lookups)[0]
+    assert card.via_text == ""
+    assert card.via_routes == ("L",)
+
+
+def test_manager_callsign_extracted_from_freetext():
+    qsos = [make_qso("DL1AA")]
+    lookups = {"DL1AA": res("DL1AA", manager="QSL via DK1XY direct")}
+    card = build_cards(qsos, config(), lookups)[0]
+    assert card.via_text == "DK1XY"
+    assert card.via_routes == ("B",)  # echtes Rufzeichen zählt als Büro-Weg
+
+
 def test_routes_bureau_and_direct_from_flags():
     qsos = [make_qso("DL1AA"), make_qso("DL2BB")]
     lookups = {

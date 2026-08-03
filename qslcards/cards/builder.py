@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from qslcards.adif.models import QSO
 from qslcards.config import AppConfig
-from qslcards.lookup import accepted_routes, resolve_route
+from qslcards.lookup import accepted_routes, extract_manager_callsign, resolve_route
 from qslcards.pdf.geometry import MAX_ROWS_PLAIN, MAX_ROWS_WITH_REMARKS
 
 from .models import Card, CardRow
@@ -102,12 +102,14 @@ def _resolve_via(
 
     - `via_routes` = akzeptierte Zustellwege (B/D/Q/L) via `accepted_routes`;
       ohne verwertbaren Treffer `(default_via,)`.
-    - `via_text` = QSL-Manager (oder leer) → Feld „Via:" auf der Karte.
+    - `via_text` = gesäubertes Manager-Rufzeichen (oder leer) → Feld „Via:" auf
+      der Karte; der rohe Manager-Freitext wird verworfen (siehe
+      `extract_manager_callsign`).
     - `recipient` = das volle Lookup-Ergebnis (Adresse) für den Export, oder None.
     """
     result = lookups.get((call or "").strip().upper()) if lookups else None
     via_routes = accepted_routes(result, default_via)
-    via_text = (result.manager or "").strip() if result and result.manager else ""
+    via_text = extract_manager_callsign(result.manager) if result else ""
     return via_routes, via_text, result
 
 

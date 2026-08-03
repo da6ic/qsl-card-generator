@@ -18,6 +18,7 @@ from qslcards.lookup import (
     accepted_routes,
     active_via_priority,
     build_lookup,
+    extract_manager_callsign,
     has_lookup_credentials,
     lookup_calls,
     normalize_via_priority,
@@ -543,6 +544,53 @@ def test_accepted_routes_none_result_uses_default():
 def test_accepted_routes_invalid_default_clamped_to_bureau():
     assert accepted_routes(None, "X") == ("B",)
     assert accepted_routes(None, "") == ("B",)
+
+
+# -- extract_manager_callsign ---------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("DK1XY", "DK1XY"),
+        ("dk1xy", "DK1XY"),  # klein → groß
+        ("  OH2BH  ", "OH2BH"),  # getrimmt
+        ("QSL via DK1XY direct", "DK1XY"),  # Rufzeichen aus Freitext
+        ("M0OXO OQRS", "M0OXO"),  # OQRS-Manager
+        ("DK1XY or DL2AB", "DK1XY"),  # mehrere → erstes
+        ("DL2AB, DK1XY", "DL2AB"),  # Komma-getrennt → erstes
+        ("dk1xy@example.com", "DK1XY"),  # E-Mail-Local-Part
+        ("2E0ABC", "2E0ABC"),  # Präfix mit führender Ziffer
+        ("DK1XY/P", "DK1XY/P"),  # Portabel-Kennung bleibt erhalten
+        # Reiner Routing-/Rausch-Text ohne Rufzeichen → leer
+        ("Bureau", ""),
+        ("Direct", ""),
+        ("DIRECT ONLY", ""),
+        ("eQSL", ""),
+        ("LoTW", ""),
+        ("SASE", ""),
+        ("OQRS", ""),
+        ("", ""),
+        (None, ""),
+    ],
+)
+def test_extract_manager_callsign(text, expected):
+    assert extract_manager_callsign(text) == expected
+
+
+# -- accepted_routes: Manager-Freitext ------------------------------------
+
+
+def test_accepted_routes_freetext_manager_is_not_bureau():
+    # „LoTW"-Freitext im Manager-Feld ist kein echtes Rufzeichen → kein Büro-Weg,
+    # nur der LOTW-Weg zählt.
+    r = LookupResult(call="X", manager="LoTW", lotw="Y", source="hamqth")
+    assert accepted_routes(r, "B") == ("L",)
+
+
+def test_accepted_routes_real_manager_callsign_is_bureau():
+    r = LookupResult(call="X", manager="DK0XYZ", source="hamqth")
+    assert accepted_routes(r, "B") == ("B",)
 
 
 # -- resolve_route --------------------------------------------------------
