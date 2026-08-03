@@ -62,6 +62,56 @@ def limit_entry_length(entry: ttk.Entry, max_len: int) -> None:
     entry.config(validate="key", validatecommand=vcmd)
 
 
+def ask_overwrite_manual_remarks(parent: tk.Misc) -> bool:
+    """Modaler Dialog beim Ändern/Löschen der globalen Bemerkung, wenn Karten
+    manuell geänderte Bemerkungen haben.
+
+    Rückgabe: True = überschreiben, False = behalten. Schließen über das
+    Fensterkreuz oder Escape zählt als *behalten* (sicherer Default).
+    """
+    root = parent.winfo_toplevel()
+    dialog = tk.Toplevel(parent)
+    dialog.title("Bemerkungen überschreiben?")
+    dialog.transient(root)
+    dialog.resizable(False, False)
+    result = {"overwrite": False}
+
+    ttk.Label(
+        dialog,
+        text=(
+            "Es gibt Karten mit manuell geänderten Bemerkungen.\n\n"
+            "Sollen diese mit der neuen globalen Bemerkung überschrieben werden?"
+        ),
+        justify="left",
+        padding=12,
+    ).grid(row=0, column=0, sticky="w")
+
+    def choose(overwrite: bool) -> None:
+        result["overwrite"] = overwrite
+        dialog.destroy()
+
+    btns = ttk.Frame(dialog, padding=(12, 0, 12, 12))
+    btns.grid(row=1, column=0, sticky="e")
+    ttk.Button(btns, text="Überschreiben", command=lambda: choose(True)).pack(
+        side="left", padx=(0, 6)
+    )
+    ttk.Button(btns, text="Nicht überschreiben", command=lambda: choose(False)).pack(side="left")
+
+    dialog.protocol("WM_DELETE_WINDOW", lambda: choose(False))
+    dialog.bind("<Escape>", lambda _e: choose(False))
+
+    # Über dem Hauptfenster zentrieren.
+    dialog.update_idletasks()
+    px, py = root.winfo_rootx(), root.winfo_rooty()
+    pw, ph = root.winfo_width(), root.winfo_height()
+    dw, dh = dialog.winfo_reqwidth(), dialog.winfo_reqheight()
+    dialog.geometry(f"+{px + (pw - dw) // 2}+{py + (ph - dh) // 2}")
+
+    dialog.grab_set()
+    dialog.wait_window()
+    return result["overwrite"]
+
+
 class FileSection:
     """1. ADIF-Logbuch."""
 
@@ -195,7 +245,7 @@ class FilterSection:
     """
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="4. Zustellwege (Priorität)")
+        self.frame = ttk.LabelFrame(parent, text="4. Zustellwege")
 
         # Modell: Folge von Tokens (Weg-Codes + Trennlinie); die Listbox ist nur
         # die Ansicht. Start: alle Wege, Trennlinie nach den ersten zwei.
@@ -311,16 +361,11 @@ class LookupSection:
                 show="•" if secret else "",
             ).grid(row=i, column=1, padx=4, pady=1, sticky="we")
 
-        ttk.Label(
-            self.frame,
-            text="Lookup läuft automatisch beim Log-Laden.",
-            foreground="gray",
-        ).grid(row=4, column=0, columnspan=2, padx=4, pady=1, sticky="w")
         ttk.Checkbutton(
             self.frame,
             text="Adress-/Label-Export erzeugen",
             variable=self.address_export,
-        ).grid(row=5, column=0, columnspan=2, padx=4, pady=(1, 4), sticky="w")
+        ).grid(row=4, column=0, columnspan=2, padx=4, pady=(1, 4), sticky="w")
         self.frame.columnconfigure(1, weight=1)
 
 

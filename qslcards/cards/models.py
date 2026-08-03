@@ -33,6 +33,9 @@ class Card:
     confirm_mark: str = "none"  # global aus config: "qso" | "swl" | "none"
     remarks: str = ""  # REMARKS-Text der Karte; leer -> kein Kasten (dynamisch).
     #   Default = globaler Config-Wert; in der Vorschau je Karte überschreibbar.
+    # True, sobald der Remarks-Text in der Vorschau manuell gesetzt wurde (≠ globaler
+    # Wert). Schützt die Karte, wenn die globale Bemerkung geändert/gelöscht wird.
+    remarks_manual: bool = False
     # Manueller Via-Override aus der Vorschau: erzwingt einen Weg (B/D/Q/L) und
     # überschreibt die automatische Auflösung aus via_routes + Prioritätsliste.
     via_override: str | None = None

@@ -286,6 +286,15 @@ def test_normalize_remarks_card_acts_as_barrier():
     assert [(len(c.rows), c.remarks) for c in out] == [(2, ""), (2, "X"), (2, "")]
 
 
+def test_normalize_merge_clears_remarks_manual_flag():
+    # Ein zusammengeführter No-Remarks-Block darf das Manuell-Flag nicht erben,
+    # selbst wenn die erste (Template-)Karte manuell gesetzt war.
+    manual = _card(2, "")
+    manual.remarks_manual = True
+    out = normalize_station_cards([manual, _card(2, "")])
+    assert [(len(c.rows), c.remarks, c.remarks_manual) for c in out] == [(4, "", False)]
+
+
 def test_normalize_splits_overflow_per_state():
     assert [len(c.rows) for c in normalize_station_cards([_card(MAX_ROWS_PLAIN + 2, "")])] == [
         MAX_ROWS_PLAIN,

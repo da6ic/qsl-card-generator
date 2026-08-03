@@ -35,6 +35,7 @@ from .sections import (
     OutputSection,
     RemarksSection,
     SenderSection,
+    ask_overwrite_manual_remarks,
 )
 
 CONFIG_PATH = "config.yaml"
@@ -135,6 +136,9 @@ class App(tk.Tk):
         # Zuletzt für den Karten-Neuaufbau verwendeter globaler Remarks-Text.
         # Verhindert überflüssige Rebuilds bei jedem FocusOut ohne Textänderung.
         self._last_remarks_built = ""
+        # Schutz gegen Re-Entrancy: der Überschreiben-Dialog stiehlt den Fokus und
+        # löst sonst erneut FocusOut -> _on_remarks_commit aus.
+        self._remarks_dialog_open = False
 
         # Auto-Sync-Zustand
         self._suppress_save = False  # unterdrückt Auto-Save beim programmatischen Setzen
@@ -452,12 +456,33 @@ class App(tk.Tk):
     def _on_remarks_commit(self, _event=None) -> None:
         """Globaler Remarks-Text bestätigt (Fokusverlust/Enter): Karten neu bauen,
         aber nur wenn sich der Text wirklich geändert hat (spart Rebuilds und
-        erhält per-Karte-Überschreibungen bei unverändertem Text)."""
+        erhält per-Karte-Überschreibungen bei unverändertem Text).
+
+        Gibt es manuell geänderte Bemerkungen, fragt ein Dialog, ob diese vom neuen
+        globalen Text überschrieben werden sollen. Bei „Nicht überschreiben" werden
+        sie nach dem Rebuild wiederhergestellt (nur die manuellen Karten sind
+        geschützt; alle übrigen übernehmen den neuen/geleerten globalen Text).
+        """
+        if self._remarks_dialog_open:
+            return  # Re-Entrancy: Dialog hat den Fokus gestohlen
         value = self.remarks_section.remarks.get()
         if value == self._last_remarks_built:
             return
+
+        keep: list = []
+        manual = self.preview.manual_remark_cards()
+        if manual:
+            self._remarks_dialog_open = True
+            try:
+                overwrite = ask_overwrite_manual_remarks(self.remarks_section.frame)
+            finally:
+                self._remarks_dialog_open = False
+            if not overwrite:
+                keep = manual
+
         self._last_remarks_built = value
         self._rebuild_cards()
+        self.preview.reapply_manual_remarks(keep)
 
     def _on_cell_edited(self, iid: str, card, column: str) -> None:
         """Nach einer Via-Bearbeitung die Drucken-Markierung der Zeile nachziehen

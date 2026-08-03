@@ -177,5 +177,74 @@ def test_edit_via_rejects_invalid_code(app, tmp_path):
     assert card.via_routes == ("B",)
 
 
+# -- Schutz manuell geänderter Bemerkungen beim Ändern der globalen ----------
+
+# ADIF mit einer Station (DL1AA) mit vier QSOs -> im Modus „pro Station" mehrere
+# Karten, sobald Remarks die Zeilen/Karte begrenzen (für den Struktur-Fall).
+ADIF_MULTI = "".join(
+    f"<call:5>DL1AA<qso_date:8>2024010{n}<time_on:4>12{n:02d}<band:3>20m"
+    f"<mode:3>SSB<rst_sent:2>59<eor>\n"
+    for n in range(1, 5)
+) + (
+    "<call:5>DL2BB<qso_date:8>20240105<time_on:4>1200<band:3>20m" "<mode:3>SSB<rst_sent:2>59<eor>\n"
+)
+
+
+def _set_global_remarks(app, value, *, overwrite):
+    """Setzt die globale Bemerkung und stößt den Commit an; der Überschreiben-Dialog
+    wird auf die gewünschte Antwort gemockt."""
+    app.remarks_section.remarks.set(value)
+    with mock.patch.object(appmod, "ask_overwrite_manual_remarks", return_value=overwrite):
+        app._on_remarks_commit()
+
+
+def test_manual_remark_kept_on_global_change(app, tmp_path):
+    _load(app, tmp_path)  # per_qso, drei Stationen
+    _set_global_remarks(app, "A", overwrite=False)  # noch keine manuelle -> kein Dialog
+    app.preview._commit_edit(_iid_for(app, "DL1AA"), "remarks", "X")
+
+    _set_global_remarks(app, "B", overwrite=False)  # „Nicht überschreiben"
+
+    remarks = {
+        c.recipient_call: (c.remarks, c.remarks_manual) for c, _ in app.preview._rows.values()
+    }
+    assert remarks["DL1AA"] == ("X", True)  # manuelle Bemerkung geschützt
+    assert remarks["DL2BB"] == ("B", False)  # übrige folgen dem neuen globalen Text
+
+
+def test_manual_remark_overwritten_when_chosen(app, tmp_path):
+    _load(app, tmp_path)
+    _set_global_remarks(app, "A", overwrite=False)
+    app.preview._commit_edit(_iid_for(app, "DL1AA"), "remarks", "X")
+
+    _set_global_remarks(app, "B", overwrite=True)  # „Überschreiben"
+
+    remarks = {
+        c.recipient_call: (c.remarks, c.remarks_manual) for c, _ in app.preview._rows.values()
+    }
+    assert remarks["DL1AA"] == ("B", False)
+    assert remarks["DL2BB"] == ("B", False)
+
+
+def test_manual_remark_kept_on_global_delete_per_station(app, tmp_path):
+    # Struktur-Fall: „pro Station", global setzen -> weniger Zeilen/Karte -> Station
+    # gesplittet; eine Karte manuell ändern; global löschen -> Zeilen mergen wieder.
+    # Die manuelle Bemerkung muss an ihren QSO-Zeilen hängen bleiben.
+    app.mode_section.card_mode.set("per_station")
+    _load(app, tmp_path, log=ADIF_MULTI)
+    _set_global_remarks(app, "A", overwrite=False)
+
+    # Erste DL1AA-Karte (mehrere Zeilen) manuell auf „X".
+    app.preview._commit_edit(_iid_for(app, "DL1AA"), "remarks", "X")
+
+    _set_global_remarks(app, "", overwrite=False)  # global löschen, nicht überschreiben
+
+    dl1 = [c for c, _ in app.preview._rows.values() if c.recipient_call == "DL1AA"]
+    manual = [c for c in dl1 if c.remarks_manual]
+    assert len(manual) == 1 and manual[0].remarks == "X"  # manuelle Karte überlebt
+    # Nicht-manuelle DL1AA-Zeilen tragen den (geleerten) globalen Text.
+    assert all(c.remarks == "" for c in dl1 if not c.remarks_manual)
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

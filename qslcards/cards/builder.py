@@ -201,7 +201,9 @@ def normalize_station_cards(cards: list[Card]) -> list[Card]:
 
     def flush() -> None:
         if buffer and template is not None:
-            merged = replace(template, rows=list(buffer), remarks="")
+            # Zusammengeführter No-Remarks-Block: kein Text, kein Manuell-Flag
+            # (das Flag gehört nur zu Karten mit eigenständigem Remarks-Text).
+            merged = replace(template, rows=list(buffer), remarks="", remarks_manual=False)
             result.extend(regroup_card_by_remarks(merged))
             buffer.clear()
 

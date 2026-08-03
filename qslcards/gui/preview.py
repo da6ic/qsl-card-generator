@@ -10,11 +10,16 @@ from __future__ import annotations
 
 import tkinter as tk
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from tkinter import ttk
 from typing import TYPE_CHECKING
 
-from qslcards.cards.builder import effective_via, normalize_station_cards
+from qslcards.cards.builder import (
+    effective_via,
+    max_rows_for_remarks,
+    normalize_station_cards,
+)
 from qslcards.lookup import VIA_CODES, VIA_LABELS, resolve_route
 
 from .sections import REMARKS_MAX_LEN, limit_entry_length
@@ -395,6 +400,119 @@ class PreviewTable:
             if iid in self._rows and self._rows[iid][1]
         ]
 
+    # -- Manuelle Remarks über einen Rebuild retten ------------------------
+
+    @staticmethod
+    def _row_keys(card: Card) -> list[tuple]:
+        """Stabile Kennung je QSO-Zeile der Karte: Rufzeichen + Datum + Zeit.
+
+        Auf Zeilen-Ebene (nicht auf Karten-Ebene), damit die Zuordnung auch dann
+        hält, wenn sich die Karten-Gruppierung durch einen geänderten Remarks-Zustand
+        neu aufteilt (max. Zeilen mit/ohne Remarks unterschiedlich)."""
+        return [(card.recipient_call, r.date_y, r.date_m, r.date_d, r.utc) for r in card.rows]
+
+    def manual_remark_cards(self) -> list[tuple[tuple, str]]:
+        """Je manuell überschriebener Karte: (QSO-Zeilenschlüssel, Text)."""
+        return [
+            (tuple(self._row_keys(card)), card.remarks)
+            for card, _inc in self._rows.values()
+            if card.remarks_manual
+        ]
+
+    def reapply_manual_remarks(self, saved: list[tuple[tuple, str]]) -> None:
+        """Stellt manuelle Bemerkungen nach einem Rebuild wieder her.
+
+        `saved` stammt aus `manual_remark_cards()` (vor dem Rebuild) und bindet den
+        Text an einzelne QSO-Zeilen (Rufzeichen+Datum+Zeit), nicht an eine
+        Karten-Signatur. So überlebt die Zuordnung auch ein Neu-Splitten der Station
+        (Zeilen/Karte hängt am Remarks-Zustand). Im Modus „pro Station" wird jede
+        betroffene Station zeilenweise rekonstruiert; im Modus „pro QSO" (eine Zeile
+        je Karte) genügt die direkte Zuordnung."""
+        if not saved:
+            return
+        manual_by_row: dict[tuple, str] = {}
+        for row_keys, text in saved:
+            for key in row_keys:
+                manual_by_row[key] = text
+
+        if not self._groupable:  # per_qso: genau eine Zeile je Karte
+            for iid, (card, _inc) in list(self._rows.items()):
+                keys = self._row_keys(card)
+                if len(keys) == 1 and keys[0] in manual_by_row:
+                    card.remarks = manual_by_row[keys[0]]
+                    card.remarks_manual = True
+                    self._set_cell(iid, "remarks", card.remarks)
+            self._reapply_sort()
+            return
+
+        # per_station: je Station die Zeilen neu gruppieren (manueller Text bindet
+        # zusammenhängende Zeilen zu einer eigenständigen Karte).
+        station_keys: list[str] = []
+        for iid in self.tree.get_children():
+            if iid in self._rows:
+                key = self._station_key(self._rows[iid][0])
+                if key not in station_keys:
+                    station_keys.append(key)
+        for key in station_keys:
+            self._reconstruct_station(key, manual_by_row)
+        self._reapply_sort()
+
+    def _reconstruct_station(self, station_key: str, manual_by_row: dict[tuple, str]) -> None:
+        """Baut eine Station (alle Karten mit demselben Call) aus ihren QSO-Zeilen neu
+        auf: jede Zeile erhält ihren manuellen Text (falls vorhanden) oder den
+        globalen Text; zusammenhängende Zeilen mit gleichem Text werden zu Karten
+        gebündelt und nach `max_rows_for_remarks` in Blöcke geteilt."""
+        group_iids = [
+            i
+            for i in self.tree.get_children()
+            if i in self._rows and self._station_key(self._rows[i][0]) == station_key
+        ]
+        if not group_iids:
+            return
+        inc = self._rows[group_iids[0]][1]
+        template = self._rows[group_iids[0]][0]
+        global_text = template.remarks  # nach dem Rebuild = globaler Text
+        rows = [r for i in group_iids for r in self._rows[i][0].rows]
+
+        # Läufe gleicher (Text, manuell?)-Zeilen bilden.
+        runs: list[tuple[str, list, bool]] = []
+        for r in rows:
+            key = (template.recipient_call, r.date_y, r.date_m, r.date_d, r.utc)
+            if key in manual_by_row:
+                text, manual = manual_by_row[key], True
+            else:
+                text, manual = global_text, False
+            if runs and runs[-1][0] == text and runs[-1][2] == manual:
+                runs[-1][1].append(r)
+            else:
+                runs.append((text, [r], manual))
+
+        parts: list[Card] = []
+        for text, run_rows, manual in runs:
+            max_rows = max_rows_for_remarks(text)
+            for start in range(0, len(run_rows), max_rows):
+                parts.append(
+                    replace(
+                        template,
+                        rows=run_rows[start : start + max_rows],
+                        remarks=text,
+                        remarks_manual=manual,
+                    )
+                )
+
+        index = self.tree.index(group_iids[0])
+        for i in group_iids:
+            self.tree.delete(i)
+            del self._rows[i]
+        for offset, part in enumerate(parts):
+            self._insert_card(part, inc, index + offset)
+
+    def _set_cell(self, iid: str, col_name: str, value: str) -> None:
+        """Setzt eine einzelne Zellwert-Anzeige (ohne Neuberechnung der Zeile)."""
+        values = list(self.tree.item(iid, "values"))
+        values[_COLUMNS.index(col_name)] = value
+        self.tree.item(iid, values=values)
+
     # -- Inline-Bearbeitung (Via / Route-Manager) --------------------------
 
     def _begin_edit(self, event: tk.Event) -> None:
@@ -513,6 +631,7 @@ class PreviewTable:
             display = VIA_LABELS[code]
         elif col_name == "remarks":  # REMARKS-Text nur dieser Karte
             card.remarks = value
+            card.remarks_manual = True  # manuell gesetzt -> vor globalem Text schützen
             display = card.remarks
         else:  # "route" -> Manager-/Routentext auf der Karte
             card.via_text = value
