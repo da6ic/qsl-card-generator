@@ -65,5 +65,11 @@ generation:
                                #   pse : PSE QSL bei allen Karten (Karte anfordern)
                                #   tnx : TNX QSL bei allen Karten (für Karte danken)
                                #   none: beide leer (von Hand ankreuzen)
-  portable_mark: "none"        # /p oder /m ankreuzen (global): none|p|m
-                               #   p: /p ankreuzen, m: /m ankreuzen, none: keins
+  portable_mark: "none"        # Portabel-Kennung hinter dem eigenen Rufzeichen
+                               #   (global): none|p|m|t|r
+                               #   p: /p (portabel), m: /m (maritim mobil),
+                               #   t: /t (temporär/Sonderstandort), r: /r (rover),
+                               #   none: keine Kennung
+  confirm_mark: "none"         # Bestätigungs-Markierung (global): none|qso|swl
+                               #   qso: "Confirming QSO", swl: "Confirming SWL-Report",
+                               #   none: keine Markierung
