@@ -95,15 +95,17 @@ def test_multiple_qsos_same_call():
     assert [q.qso_date for q in qsos] == ["20260719", "20260720"]
 
 
-def test_via_normalization():
+def test_qsl_sent_via_raw():
+    # `qsl_sent_via` ist nur informativ und wird roh (gestrippt) übernommen; die
+    # Versandart (Via) kommt aus dem Lookup, nicht aus dem Log (SPECIFICATION §6).
     text = (
         "<CALL:5>DL2ND<QSO_DATE:8>20260719<TIME_ON:4>1508<QSL_SENT_VIA:1>d<EOR>"
         "<CALL:5>DL2ME<QSO_DATE:8>20260719<TIME_ON:4>1509<QSL_SENT_VIA:1>X<EOR>"
         "<CALL:5>DL2XX<QSO_DATE:8>20260719<TIME_ON:4>1510<EOR>"
     )
     qsos = parse_text(text)
-    assert qsos[0].qsl_sent_via == "D"  # kleingeschrieben -> Großbuchstabe
-    assert qsos[1].qsl_sent_via is None  # unbekannter Code -> None
+    assert qsos[0].qsl_sent_via == "d"  # Rohwert, keine Normalisierung mehr
+    assert qsos[1].qsl_sent_via == "X"  # beliebiger Rohwert bleibt erhalten
     assert qsos[2].qsl_sent_via is None  # Feld fehlt -> None
 
 

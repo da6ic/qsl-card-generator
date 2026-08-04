@@ -11,8 +11,6 @@ from pathlib import Path
 
 from .models import QSO
 
-VIA_CODES = {"B", "D", "E", "M"}
-
 
 def parse_file(path: str | Path) -> list[QSO]:
     """Liest eine ADIF-Datei und liefert die enthaltenen QSOs."""
@@ -99,14 +97,6 @@ def _tokenize(text: str) -> list[dict[str, str]]:
     return records
 
 
-def _normalize_via(raw_value: str | None) -> str | None:
-    """`qsl_sent_via` normalisieren: Großbuchstabe, nur erstes Zeichen B/D/E/M."""
-    if not raw_value:
-        return None
-    first = raw_value.strip().upper()[:1]
-    return first if first in VIA_CODES else None
-
-
 def _record_to_qso(record: dict[str, str]) -> QSO | None:
     """Bildet einen Roh-Record auf ein QSO ab. Records ohne `call` -> None."""
     call = record.get("call", "").strip()
@@ -122,7 +112,9 @@ def _record_to_qso(record: dict[str, str]) -> QSO | None:
         mode=record.get("mode"),
         rst_sent=record.get("rst_sent"),
         rst_rcvd=record.get("rst_rcvd"),
-        qsl_sent_via=_normalize_via(record.get("qsl_sent_via")),
+        # Rohwert; rein informativ. Die Versandart (Via) kommt aus dem Lookup,
+        # nicht aus dem Log (siehe docs/SPECIFICATION.md §6).
+        qsl_sent_via=(record.get("qsl_sent_via") or "").strip() or None,
         qsl_via=record.get("qsl_via"),
         name=record.get("name"),
         gridsquare=record.get("gridsquare"),

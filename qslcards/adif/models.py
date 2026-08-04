@@ -15,7 +15,7 @@ class QSO:
     mode: str | None = None
     rst_sent: str | None = None
     rst_rcvd: str | None = None
-    qsl_sent_via: str | None = None  # B/D/E/M oder None
+    qsl_sent_via: str | None = None  # Rohwert aus dem Log, nur informativ
     qsl_via: str | None = None  # Manager/Route-Text
     name: str | None = None  # falls im Log vorhanden
     gridsquare: str | None = None
