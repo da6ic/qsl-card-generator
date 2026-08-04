@@ -36,14 +36,16 @@ MARGIN = mm(3)
 ```
 (0,0) oben-links ───────────────────────────────────────────────► x
 │  ┌──────────────────────────────────────────────────────────┐
-│  │ DN5MT        ☐ /p   ☐ /m       To Amateur Radio Station:  │
+│  │ DN5MT/p       Confirming QSO   To Amateur Radio Station:  │
 │  │                                ┌────────────────────────┐ │
 │  │ Axel Tüner     Locator: JN48OM │ <CALL>                 │ │
 │  │ Wilhelmstr.76  DOK:     P31    └────────────────────────┘ │
-│  │ 72124 Ort      WAZ:     14     Via:                       │
+│  │ 72124 Ort      CQ-Zone: 14     Via:                       │
 │  │ Deutschland    ITU:     28     ┌────────────────────────┐ │
-│  │                                │ <VIA_TEXT>             │ │
-│  │ ☐ Confirming QSO   ☐ Confirming SWL-Report               │
+│  │ ┌────┬────┬────┐               │ <VIA_TEXT>             │ │
+│  │ │RIG │ANT │PWR │  (dynamisch)                             │
+│  │ │… │… │… │                                                │
+│  │ PSE QSL   └────┴────┴────┘                                │
 │  │ ┌──┬──┬──┬──────────┬──────────┬────────────┬─────────────┐│
 │  │ │D │M │Y │ UTC TIME │ FREQ MHZ │2-WAY QSO IN│SIGNAL REPORT││
 │  │ ├──┼──┼──┼──────────┼──────────┼────────────┼─────────────┤│
@@ -52,18 +54,27 @@ MARGIN = mm(3)
 │  │ REMARKS                                                   │
 │  │ ┌────────────────────────────────────────────────────────┐│
 │  │ └────────────────────────────────────────────────────────┘│
-│  │ TNX FR NICE CONTACT, 73        ☐ PSE QSL   ☐ TNX QSL       │
+│  │ TNX FR NICE CONTACT, 73                                   │
 │  └──────────────────────────────────────────────────────────┘
 ▼ yt
 ```
 
-Gegenüber der Original-DARC-Karte bewusst geändert: kein „Responsive"-Untertitel,
-`/p`/`/m` oben zwischen eigenem Call und dem „To Amateur…"-Block, Stationsdaten
-(Locator/DOK/WAZ/ITU) als Spalte neben der Adresse, eine **dynamisch hohe**
-Datentabelle (ohne Remarks bis `MAX_ROWS_PLAIN = 6` Zeilen, mit Remarks bis
-`MAX_ROWS_WITH_REMARKS = 3`) und ein **dynamischer** REMARKS-Block, der nur
-erscheint, wenn die Karte einen Remarks-Text hat (Footer darunter, kein
-TRAINEE-Feld).
+Gegenüber der Original-DARC-Karte bewusst geändert:
+- kein „Responsive"-Untertitel;
+- die **Portabel-Kennung** (`/p`/`/m`/`/t`/`/r`) hängt **hinter dem eigenen
+  Rufzeichen** (nicht als separate Kästchen);
+- die **Bestätigungs-Markierung** (`Confirming QSO`/`Confirming SWL-Report`) steht
+  oben mittig — nur der gewählte Text, kein Kästchen;
+- die **QSL-Markierung** (`PSE QSL`/`TNX QSL`) steht links unter dem Stationsblock
+  als Text (kein Kästchen, kein Fuß-Feld mehr);
+- Stationsdaten (Locator/DOK/CQ-Zone/ITU) als Spalte neben der Adresse;
+- ein **dynamischer Funk-Block** (RIG/ANT/PWR-Tabelle), der nur erscheint, wenn
+  mind. eins der Felder gefüllt ist; dann rücken QSL-Markierung und Tabelle nach
+  unten;
+- eine **dynamisch hohe** Datentabelle (ohne Remarks bis `MAX_ROWS_PLAIN = 6`
+  Zeilen, mit Remarks bis `MAX_ROWS_WITH_REMARKS = 3`);
+- ein **dynamischer** REMARKS-Block, der nur erscheint, wenn die Karte einen
+  Remarks-Text hat (Footer darunter, kein TRAINEE-Feld).
 
 ---
 
@@ -83,11 +94,17 @@ Schrift = DejaVuSans (regular/bold). Linksbündig, sofern nicht anders angegeben
 
 Kein „Untertitel"/„Responsive" mehr (Feld `subtitle` entfernt).
 
-### Portabel-Markierungen (oben mittig)
-| Element | Inhalt / Quelle                     | x  | yt | Font/Size |
-|---------|-------------------------------------|----|----|-----------|
-| ☐ /p    | checked, wenn `portable_mark=="p"`  | 52 | 8  | Regular 8 |
-| ☐ /m    | checked, wenn `portable_mark=="m"`  | 66 | 8  | Regular 8 |
+### Portabel-Kennung (hinter dem eigenen Rufzeichen)
+Ist `portable_mark != "none"`, wird das eigene Rufzeichen als
+`{callsign}/{portable_mark}` gezeichnet (`/p`/`/m`/`/t`/`/r`) — **kein** separates
+Element, keine feste Position (siehe `_draw_sender`).
+
+### Bestätigungs-Markierung (oben mittig)
+Nur der **gewählte** Text (kein Kästchen), an fester, zentrierter Position.
+| Element                | Inhalt / Quelle                          | x  | yt | Font/Size |
+|------------------------|------------------------------------------|----|----|-----------|
+| Confirming QSO         | Text, wenn `confirm_mark=="qso"`         | 66 | 8  | Bold 11   |
+| Confirming SWL-Report  | Text, wenn `confirm_mark=="swl"`         | 66 | 8  | Bold 11   |
 
 ### Kopf rechts (Empfänger + Via)
 | Element              | Inhalt / Quelle          | x   | yt  | Font/Size |
@@ -102,15 +119,26 @@ Kein „Untertitel"/„Responsive" mehr (Feld `subtitle` entfernt).
 ### Stationsblock (Absender-Stationsdaten, aus Config)
 Als Label/Wert-Spalte **neben** der Adresse, auf Höhe der Adresszeilen
 (yt = 18 / 23.5 / 29 / 34.5), Regular 9:
-Label-Spalte `x=50`, Wert-Spalte `x=64`; Zeilen `Locator:` / `DOK:` / `WAZ:` / `ITU:`.
+Label-Spalte `x=50` (`STATION_LABEL_X`), Wert-Spalte `x=68` (`STATION_VALUE_X`);
+Zeilen `Locator:` / `DOK:` / `CQ-Zone:` (Wert = `sender.waz`) / `ITU:`.
 
-### Bestätigungs-Checkboxen
-| Element                    | x  | yt | Font/Size |
-|----------------------------|----|----|-----------|
-| ☐ Confirming QSO           | 6  | 44 | Regular 8 |
-| ☐ Confirming SWL-Report    | 48 | 44 | Regular 8 |
+### Funk-Block (RIG/ANT/PWR) — dynamisch, nur wenn gefüllt
+Kleine beschriftete Tabelle **direkt unter dem Stationsblock**, linksbündig, die
+Breite links der Via-Box ausschöpfend (`x=6 … RADIO_TABLE_X1=85`, oben
+`RADIO_TABLE_YT_TOP=38.5`, unten bündig zur Via-Box `=47`). Kopfzeile (Bold 6)
+`RIG`/`ANT`/`PWR`, Werte darunter (Regular 8). Nur **befüllte** Felder
+(`sender.receiver`/`antenna`/`power`) bekommen eine Spalte; die vorhandenen Spalten
+teilen sich die Breite gleichmäßig. Ist der Block sichtbar, rücken QSL-Markierung
+und QSO-Tabelle nach unten (`QSL_MARK_YT_RADIO` / `TABLE_YT_TOP_RADIO`).
 
-(yt=44 -> Kästchen-Unterkante bündig mit der Via-Box-Unterkante.)
+### QSL-Markierung (PSE/TNX QSL)
+Links unter dem Stationsblock, nur der **gewählte** Text (kein Kästchen). `yt=44`
+(`QSL_MARK_YT`); ist der Funk-Block sichtbar, rutscht sie auf `yt=47.7`
+(`QSL_MARK_YT_RADIO`, unter die Funk-Tabelle).
+| Element   | Inhalt / Quelle              | x | yt   | Font/Size |
+|-----------|------------------------------|---|------|-----------|
+| PSE QSL   | Text, wenn `qsl_mark=="pse"` | 6 | 44   | Bold 11   |
+| TNX QSL   | Text, wenn `qsl_mark=="tnx"` | 6 | 44   | Bold 11   |
 
 ### QSO-Tabelle
 - Bounding-Box: `x=6 … 142` (Breite 136), oben `yt=50`; die Unterkante ist
@@ -148,34 +176,37 @@ Label-Spalte `x=50`, Wert-Spalte `x=64`; Zeilen `Locator:` / `DOK:` / `WAZ:` / `
   Spalte hat keine Unterspalten mehr.
 
 ### Fuß
-REMARKS-Block über die volle Breite und flach; Footer-Text und PSE/TNX
-**darunter**. Der REMARKS-Block wird **dynamisch** gezeichnet: nur wenn die Karte
-einen Remarks-Text (`card.remarks`) hat — sonst bleibt der Platz frei (und die
-Tabelle darf mehr Zeilen nutzen, siehe QSO-Tabelle). Der Block sitzt an fester
-Position knapp über dem Footer (~3 mm Abstand zum Rahmen); Abstand Label→Box wie
-„Via:"→Via-Box (4 mm). Der Footer-Text steht **immer** (unabhängig von Remarks).
+REMARKS-Block über die volle Breite und flach; Footer-Text **darunter**. Der
+REMARKS-Block wird **dynamisch** gezeichnet: nur wenn die Karte einen Remarks-Text
+(`card.remarks`) hat — sonst bleibt der Platz frei (und die Tabelle darf mehr
+Zeilen nutzen, siehe QSO-Tabelle). Der Block sitzt an fester Position knapp über
+dem Footer (~3 mm Abstand zum Rahmen); Abstand Label→Box wie „Via:"→Via-Box
+(4 mm). Der Footer-Text steht **immer** (unabhängig von Remarks). Die
+PSE/TNX-QSL-Markierung steht **nicht** mehr im Fuß, sondern oben links (siehe
+„QSL-Markierung").
 | Element              | Inhalt / Quelle                    | x   | yt | Font/Size |
 |----------------------|------------------------------------|-----|----|-----------|
 | Label „REMARKS"      | statisch (nur wenn Remarks)        | 6   | 79 | Regular 10 |
 | REMARKS-Box          | `card.remarks` (b=136, h=10)       | 6   | 83 | Rahmen 0.6pt |
 | REMARKS-Text         | `card.remarks`, links, mittig-vert.| 8   | –  | Regular 9 |
 | Footer-Text          | `generation.static_footer`         | 6   | 96 | Bold 8    |
-| ☐ PSE QSL            | checked, wenn `qsl_mark=="pse"`    | 62  | 96 | Regular 8 |
-| ☐ TNX QSL            | checked, wenn `qsl_mark=="tnx"`    | 92  | 96 | Regular 8 |
 
 Der Remarks-Text ist auf **80 Zeichen** begrenzt (passt in eine Zeile der Box);
 die Begrenzung sitzt in den Eingabefeldern der GUI (global + je Karte).
 
 ---
 
-## 4. Checkbox- & Hilfsfunktionen (in `layout_back.py`)
+## 4. Hilfsfunktionen (in `layout_back.py`)
 
-- `checkbox(c, x, yt, label, checked=False, size=8)`: kleines Quadrat
-  (Seite ≈ 3mm) + Text rechts daneben. `checked=True` zeichnet ein Kreuz, das
-  über das Kästchen hinausragt (`CHECKBOX_CROSS_OVERHANG`), sonst leer.
+Es gibt **keine** Checkbox-Funktion mehr: alle Markierungen (Portabel, Bestätigung,
+PSE/TNX QSL) werden als reiner **Text** gezeichnet (die Karte wird ohnehin gezielt
+für die gewählte Aussage gedruckt).
 - Text-Helfer `text(c, x, yt, s, font, size, align="left")` mit interner
-  `y_pdf = PAGE_H - mm(yt)`-Umrechnung, damit im Zeichencode nur „von-oben"-mm
+  `y_pdf = PAGE_H - yt - ascent`-Umrechnung, damit im Zeichencode nur „von-oben"-mm
   benutzt werden.
+- `_text_in_band(c, x, yt_top, band_h, s, font, size, align)`: Text vertikal mittig
+  in einem Band (für Box-Inhalte und Tabellenzellen), über `getAscent`/`getDescent`.
+- `_box`/`_hline`/`_vline`: Rahmen und Linien (Oberkante/Position als `yt`).
 
 ---
 
