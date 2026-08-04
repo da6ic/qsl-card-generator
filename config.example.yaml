@@ -46,6 +46,14 @@ generation:
                                #   "?" oder keine Credentials); nur hier, kein
                                #   GUI-Feld. Solche Stationen gelten als Büro.
   page_orientation: "landscape"  # A6 quer (Referenz). Alternativ "portrait"
+  print_mode: "duplex"         # wie die PDF(s) erzeugt werden:
+                               #   duplex   : eine PDF, pro Karte Vorder-/Rückseite
+                               #              abwechselnd (für Duplexdrucker).
+                               #   separate : zwei PDFs (…_vorderseiten.pdf und
+                               #              …_rueckseiten.pdf) für Drucker ohne
+                               #              beidseitigen Druck – erst Vorderseiten
+                               #              drucken, Papier umgedreht neu einlegen,
+                               #              dann Rückseiten drucken.
   static_footer: "TNX FR NICE CONTACT, 73"
   remarks: ""                  # globaler REMARKS-Text für ALLE Karten. Leer =
                                #   kein Remarks-Kasten (dynamisch). Je Karte in

@@ -390,11 +390,39 @@ class RemarksSection:
         self.frame.columnconfigure(1, weight=1)
 
 
-class OutputSection:
-    """9. Ausgabe."""
+class PrintModeSection:
+    """9. Druckmodus.
+
+    Wählt, wie die PDF(s) erzeugt werden: „duplex" (eine PDF, Vorder-/Rückseite
+    abwechselnd, für Duplexdrucker) oder „separate" (zwei PDFs – erst alle
+    Vorderseiten, dann alle Rückseiten – für Drucker ohne beidseitigen Druck).
+    """
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="9. Ausgabe")
+        self.frame = ttk.LabelFrame(parent, text="9. Druckmodus")
+        self.print_mode = tk.StringVar(value="duplex")
+
+        self.radio_duplex = ttk.Radiobutton(
+            self.frame,
+            text="Duplexdruck (Vorder-/Rückseite abwechselnd)",
+            variable=self.print_mode,
+            value="duplex",
+        )
+        self.radio_separate = ttk.Radiobutton(
+            self.frame,
+            text="Vorder-/Rückseite getrennt (2 PDFs)",
+            variable=self.print_mode,
+            value="separate",
+        )
+        self.radio_duplex.grid(row=0, column=0, padx=4, pady=1, sticky="w")
+        self.radio_separate.grid(row=1, column=0, padx=4, pady=(1, 4), sticky="w")
+
+
+class OutputSection:
+    """10. Ausgabe."""
+
+    def __init__(self, parent: tk.Misc) -> None:
+        self.frame = ttk.LabelFrame(parent, text="10. Ausgabe")
         self.output_var = tk.StringVar(value="qsl_karten.pdf")
         self.status_var = tk.StringVar(value="Bereit")
 

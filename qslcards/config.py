@@ -56,6 +56,12 @@ class GenerationConfig:
     default_via: str = "B"  # Fallback, wenn der Lookup nichts/"?" liefert
     #   -> nur hier in der Config, kein GUI-Widget. Via kommt sonst aus dem Lookup.
     page_orientation: str = "landscape"  # A6, siehe CARD_LAYOUT.md
+    # Wie die PDF(s) erzeugt werden:
+    #   "duplex"   -> eine PDF, pro Karte Vorder-/Rückseite abwechselnd (Duplexdruck).
+    #   "separate" -> zwei PDFs (alle Vorderseiten, alle Rückseiten) für Drucker
+    #                 ohne beidseitigen Druck: erst Vorderseiten drucken, Papier
+    #                 umgedreht neu einlegen, dann Rückseiten drucken.
+    print_mode: str = "duplex"  # "duplex" | "separate"
     static_footer: str = "TNX FR NICE CONTACT, 73"
     remarks: str = ""  # globaler REMARKS-Text (alle Karten); leer -> kein Kasten
     qsl_mark: str = "none"  # "pse" | "tnx" | "none" (global)

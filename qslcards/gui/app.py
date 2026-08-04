@@ -33,6 +33,7 @@ from .sections import (
     LookupSection,
     ModeSection,
     OutputSection,
+    PrintModeSection,
     RemarksSection,
     SenderSection,
     ask_overwrite_manual_remarks,
@@ -178,16 +179,21 @@ class App(tk.Tk):
         self.lookup_section = LookupSection(root)
         self.remarks_section = RemarksSection(root)
         self.preview = PreviewTable(root)
+        self.printmode_section = PrintModeSection(root)
         self.output_section = OutputSection(root)
 
         self._left.grid(row=0, column=0, padx=6, pady=4, sticky="nsew")
         self.sender_section.frame.grid(row=0, column=1, padx=6, pady=4, sticky="nsew")
         self._midleft.grid(row=1, column=0, padx=6, pady=4, sticky="nsew")
         self.lookup_section.frame.grid(row=1, column=1, padx=6, pady=4, sticky="nsew")
-        # Abschnitt 7 (Remarks) über volle Breite, dann Vorschau (8) und Ausgabe (9).
+        # Abschnitt 7 (Remarks) über volle Breite, dann Vorschau (8), Druckmodus (9)
+        # und Ausgabe (10).
         self.remarks_section.frame.grid(row=2, column=0, columnspan=2, padx=6, pady=4, sticky="we")
         self.preview.frame.grid(row=3, column=0, columnspan=2, padx=6, pady=4, sticky="nsew")
-        self.output_section.frame.grid(row=4, column=0, columnspan=2, padx=6, pady=4, sticky="we")
+        self.printmode_section.frame.grid(
+            row=4, column=0, columnspan=2, padx=6, pady=4, sticky="we"
+        )
+        self.output_section.frame.grid(row=5, column=0, columnspan=2, padx=6, pady=4, sticky="we")
 
         root.columnconfigure(0, weight=1)
         root.columnconfigure(1, weight=1)
@@ -251,6 +257,7 @@ class App(tk.Tk):
                 config.generation.via_priority, config.generation.via_cut
             )
             self.mode_section.card_mode.set(config.generation.card_mode)
+            self.printmode_section.print_mode.set(config.generation.print_mode)
             self.sender_section.qsl_mark.set(
                 QSL_CODE_TO_DISPLAY.get(config.generation.qsl_mark, "Leer lassen")
             )
@@ -284,6 +291,7 @@ class App(tk.Tk):
             via_cut=via_cut,
             default_via=self.base_config.generation.default_via,
             page_orientation=self.base_config.generation.page_orientation,
+            print_mode=self.printmode_section.print_mode.get(),
             static_footer=self.base_config.generation.static_footer,
             remarks=self.remarks_section.remarks.get(),
             qsl_mark=QSL_MARK_TO_CODE.get(self.sender_section.qsl_mark.get(), "none"),
@@ -322,6 +330,7 @@ class App(tk.Tk):
             self.lookup_section.qrz_pass,
             self.lookup_section.address_export,
             self.mode_section.card_mode,
+            self.printmode_section.print_mode,
         ]
         for var in watched:
             var.trace_add("write", self._on_var_change)
@@ -594,33 +603,37 @@ class App(tk.Tk):
             self.after(0, self._update_progress, done, total)
 
         try:
-            generate(cards, config, front, output, progress_cb=progress)
+            outputs = generate(cards, config, front, output, progress_cb=progress)
         except Exception as exc:  # bewusst breit: Fehler nicht in den Thread schlucken
-            self.after(0, self._generate_done, output, exc)
+            self.after(0, self._generate_done, [output], exc)
             return
-        self.after(0, self._generate_done, output, None)
+        self.after(0, self._generate_done, [str(p) for p in outputs], None)
 
     def _update_progress(self, done: int, total: int) -> None:
-        self.output_section.progress.config(value=done)
+        # maximum mitziehen: im getrennten Modus sind es 2×Kartenzahl Schritte.
+        self.output_section.progress.config(maximum=total, value=done)
         self.output_section.status_var.set(f"Erzeuge PDF… {done}/{total}")
 
-    def _generate_done(self, output: str, error: Exception | None) -> None:
+    def _generate_done(self, outputs: list[str], error: Exception | None) -> None:
         self._generating = False
         self._update_generate_state()
         if error is not None:
             self.output_section.status_var.set(f"Fehler: {error}")
             messagebox.showerror("Fehler", f"PDF-Erzeugung fehlgeschlagen:\n{error}")
             return
-        # Erfolg: kein Popup — die PDF wird direkt in der Standardanwendung
-        # geöffnet. Schlägt das Öffnen fehl, bleibt nur der Statushinweis.
+        # Erfolg: kein Popup — alle erzeugten PDFs (im getrennten Modus zwei) werden
+        # direkt in der Standardanwendung geöffnet. Schlägt das Öffnen einer Datei
+        # fehl, bleibt nur der Statushinweis.
+        joined = ", ".join(outputs)
         try:
-            open_file(output)
-            self.output_section.status_var.set(f"Fertig: {output} (geöffnet)")
+            for path in outputs:
+                open_file(path)
+            self.output_section.status_var.set(f"Fertig: {joined} (geöffnet)")
         except (OSError, subprocess.SubprocessError) as exc:
-            self.output_section.status_var.set(f"Fertig: {output}")
+            self.output_section.status_var.set(f"Fertig: {joined}")
             messagebox.showinfo(
                 "Fertig",
-                f"PDF erzeugt:\n{output}\n\n(Automatisches Öffnen nicht möglich: {exc})",
+                f"PDF erzeugt:\n{joined}\n\n(Automatisches Öffnen nicht möglich: {exc})",
             )
 
     def _browse_output(self) -> None:
