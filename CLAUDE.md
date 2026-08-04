@@ -17,10 +17,14 @@ automatisch **QSL-Karten** erzeugt und als **eine große PDF** ausgibt.
 - Ein **einziges Frontbild** wird für **alle** Karten verwendet.
 - Absenderdaten kommen aus der **Config**, QSO-Daten aus dem **ADIF-Log**,
   Empfänger-/Routing-Daten aus **HamQTH** (primär) bzw. **QRZ** (optional).
-- Die **Versandart (Via)** steht **nicht** im Log — sie wird je Station per
-  **Lookup** bestimmt (Manager > Büro > Direkt > Elektronisch, siehe §5). Der
-  Via-Filter (B/D/M) markiert dann nur, welche Karten gedruckt werden.
+- Die **Versandart (Via)** steht **nicht** im Log — der Lookup liefert je Station
+  die **Menge akzeptierter Zustellwege** (B=Büro inkl. Manager, D=Direkt, Q=eQSL,
+  L=LOTW, siehe §5). In der GUI **priorisiert** der Nutzer diese Wege und zieht
+  eine **Trennlinie** (`via_cut`): Wege darüber werden gedruckt, Wege darunter
+  nicht. Gedruckt wird je Karte der höchstpriorisierte aktive Weg der Station.
 - Modus wählbar: **eine Karte pro QSO** oder **eine Karte pro Station**.
+- Druckmodus wählbar: **Duplex** (eine PDF, Vorder-/Rückseite abwechselnd) oder
+  **getrennt** (zwei PDFs: alle Vorderseiten, alle Rückseiten).
 
 ---
 
@@ -93,15 +97,15 @@ docs/
 ADIF-Datei ──parser──> [QSO, QSO, ...]
                             │
 HamQTH/QRZ (auto beim Laden, alle Stationen, gecacht)
-   └─> je CALL: Via (M>B>D>E) + Manager + Adresse
+   └─> je CALL: akzeptierte Wege {B,D,Q,L} + Manager + Adresse
                             │
                             ▼
-        builder(alle QSOs, Via aus Lookup, Gruppierung) ──> [Card, ...]
+        builder(alle QSOs, via_routes aus Lookup, Gruppierung) ──> [Card, ...]
                                                     │
 Config (Absender) ──────────────────────────────────┤
 Frontbild ──────────────────────────────────────────┤
                                                     ▼
-GUI: Via-Filter markiert Drucken/nicht ──> generator ──> gesamt.pdf (+ Adress-CSV)
+GUI: Priorität + Trennlinie (effective_via) ──> generator ──> PDF(s) (+ Adress-CSV)
 ```
 
 Jede `Card` erzeugt genau zwei Seiten: `layout_front` + `layout_back`.
@@ -113,15 +117,22 @@ Jede `Card` erzeugt genau zwei Seiten: `layout_front` + `layout_back`.
 1. **Signalrapport auf der Karte = `RST_SENT`** (der Rapport, den *wir* dem
    Gegenüber gegeben haben = wie wir ihn gehört haben). Nicht `RST_RCVD`.
 2. **Via kommt aus dem Lookup, NICHT aus dem Log.** Das Log enthält keine
-   Versandart. `derive_via(result, default_via)` bestimmt je Station eine
-   Kategorie nach fester Priorität **M > B > D > E**:
-   - Manager (`qsl_via`/`qslmgr`) vorhanden → `M` (drucken; Manager ins Feld „Via:").
-   - sonst Büro (`qsl=Y`) → `B`; sonst Direkt (`qsldirect=Y`) → `D`.
-   - sonst LoTW/eQSL (`lotw=Y`/`eqsl=Y`) → `E` = **Ausschluss** (angezeigt, aber
-     standardmäßig **nicht** gedruckt; manuell aktivierbar). `E` ist kein Druckweg.
-   - sonst (nichts/„?"/Fehler) → `default_via` (Config-only, Default `B`).
-   Der **Via-Filter** (Checkboxen `B`/`D`/`M`, kein `E`) entfernt keine Zeilen,
-   sondern setzt nur die Drucken-Markierung. Kein `include_missing_via` mehr.
+   Versandart. `accepted_routes(result, default_via)` liefert je Station die
+   **Menge** akzeptierter Zustellwege (kanonisch geordnet B, D, Q, L):
+   - `B` (Büro) wenn `qsl=Y` **oder** ein echtes Manager-Rufzeichen hinterlegt
+     ist (der Manager zählt als Büro-Weg; sein Callsign steht dann im Feld „Via:").
+   - `D` (Direkt) wenn `qsldirect=Y`.
+   - `Q` (eQSL) wenn `eqsl=Y`.
+   - `L` (LOTW) wenn `lotw=Y`.
+   - leere Menge (kein Treffer/nur „?"/„N"/keine Credentials) → `(default_via,)`
+     (Config-only, Default `B`), damit die Station druckbar bleibt.
+   In der GUI (Abschnitt 4) **priorisiert** der Nutzer die Wege (Listbox) und zieht
+   eine **Trennlinie** (`via_cut`): die ersten `via_cut` Wege sind aktiv. Gedruckt
+   wird je Karte der höchstpriorisierte **aktive** Weg, der in der Menge der Station
+   liegt (`resolve_route`/`effective_via`); liegt keiner über der Linie, wird die
+   Karte **nicht** gedruckt. Ein manueller `via_override` (Vorschau) erzwingt einen
+   Weg, respektiert aber weiter die Trennlinie. Kein `derive_via`/`include_missing_
+   via`/Via-Filter (B/D/M) mehr.
 3. **Absenderblock** (Call, Name, Straße, PLZ/Ort, Land, Locator, DOK, WAZ, ITU)
    kommt **immer aus der Config**, nie aus dem Log.
 4. **Empfänger** auf der Karte = **nur das Rufzeichen** (`CALL`) im Feld
@@ -154,10 +165,12 @@ class QSO:
     mode: str | None
     rst_sent: str | None
     rst_rcvd: str | None
-    qsl_sent_via: str | None   # B/D/E/M oder None
-    qsl_via: str | None        # Manager/Route-Text
+    qsl_sent_via: str | None   # Rohwert aus dem Log, rein informativ
+    qsl_via: str | None        # Manager/Route-Text (roh, informativ)
     name: str | None           # falls im Log vorhanden
     gridsquare: str | None
+    qth: str | None            # Ort der Gegenstation (falls im Log)
+    country: str | None        # Land der Gegenstation (falls im Log)
     raw: dict[str, str]        # alle Felder roh, kleingeschrieben
 ```
 
@@ -190,25 +203,40 @@ class LookupResult:
 class LookupProvider(Protocol):
     def lookup(self, call: str) -> LookupResult | None: ...
 
-def derive_via(result, default_via) -> str: ...  # "B"|"M"|"D"|"E" (M>B>D>E)
+# Menge akzeptierter Wege (B/D/Q/L), kanonisch geordnet; leer -> (default_via,).
+def accepted_routes(result, default_via="B") -> tuple[str, ...]: ...
+# Höchstpriorisierter aktiver Weg (erster aus active_priority, der akzeptiert ist)
+def resolve_route(accepted, active_priority) -> str | None: ...
+# Nur ein Manager-Rufzeichen aus dem freien qsl_via/qslmgr-Text ziehen (fürs "Via:")
+def extract_manager_callsign(text) -> str: ...
+# Aktive Wege (über der Trennlinie) = die ersten `cut` der normalisierten Liste
+def active_via_priority(priority, cut) -> list[str]: ...
 ```
 - HamQTH: Session per `u`/`p` holen, dann `id`+`callsign` abfragen; Session ~1h
   gültig, bei Ablauf neu anmelden. Endpunkte/Details in `docs/SPECIFICATION.md`.
 - QRZ: nur wenn Credentials gesetzt; ohne bezahltes Abo liefert QRZ nur
   eingeschränkte Felder → als „best effort" behandeln, Fehler nicht fatal.
-- `enrich_recipients(...)` schlägt **alle** Stationen nach und füllt je Karte
-  `via_code`/`via_text`/`recipient`. Netz-/Auth-Fehler nie fatal.
+- `lookup_calls(calls, config, ...)` schlägt **alle** (eindeutigen) Rufzeichen
+  nach → Map `CALL -> LookupResult|None`; der Builder füllt daraus je Karte
+  `via_routes`/`via_text`/`recipient`. Netz-/Auth-Fehler nie fatal.
 
 ### `cards/builder.py`
 - `build_cards(qsos, config, lookups=None) -> list[Card]`
-- **kein Via-Filter**: baut Karten für **alle** QSOs; `via_code` via
-  `derive_via(lookups[call], config.default_via)`, `via_text` = Manager. Gruppiert
-  nach `config.card_mode` (`per_qso`|`per_station`), sortiert deterministisch.
+- **kein Via-Filter**: baut Karten für **alle** QSOs; `via_routes` via
+  `accepted_routes(lookups[call], config.default_via)`, `via_text` =
+  `extract_manager_callsign(...)`. Gruppiert nach `config.card_mode`
+  (`per_qso`|`per_station`), sortiert deterministisch.
+- `effective_via(card, active_priority)` = der tatsächlich zu druckende Weg (oder
+  `None` = nicht drucken); einzige Quelle der Wahrheit für Vorschau **und** Export.
 
 ### `pdf/generator.py`
-- `generate(cards, config, front_image_path, output_path, progress_cb=None)`
-- iteriert Karten; pro Karte `draw_front(canvas, ...)` dann
-  `draw_back(canvas, card, config)`, `canvas.showPage()` zwischen den Seiten.
+- `generate(cards, config, front_image_path, output_path, progress_cb=None) -> list[Path]`
+- `config.generation.print_mode`:
+  - `"duplex"` → **eine** PDF, pro Karte `draw_front` dann `draw_back` mit
+    `showPage()` dazwischen (Seite 1=Front, 2=Back, …; Duplexdruck lange Kante).
+  - `"separate"` → **zwei** PDFs (`…_vorderseiten.pdf`, `…_rueckseiten.pdf`) für
+    Drucker ohne beidseitigen Druck.
+- Liefert die Liste der erzeugten PDF-Pfade zurück.
 
 ---
 
@@ -252,14 +280,16 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
 - [x] ADIF-Datei wählbar, Parser liefert korrekte QSO-Liste (Tests grün).
 - [x] Frontbild wählbar + Vorschau.
 - [x] Absender-Config editierbar, wird gespeichert/geladen.
-- [ ] Via-Filter (B/D/M) und Modus (pro QSO / pro Station) wählbar; Filter setzt
-      nur die Drucken-Markierung, Via kommt aus dem Lookup.
+- [x] Zustellwege priorisierbar (Liste B/D/Q/L + Trennlinie) und Modus (pro QSO /
+      pro Station) wählbar; die Priorität setzt nur die Drucken-Markierung, die
+      akzeptierten Wege kommen aus dem Lookup.
+- [x] Druckmodus wählbar (Duplex / getrennte Vorder-/Rückseiten-PDFs).
 - [x] Vorschau-Tabelle zeigt **alle** QSOs mit Via (ausgeschrieben) / Route;
       Lookup-Status sichtbar; bearbeitbare Zellen mit Stift-/Umschalt-Hinweis.
 - [x] „PDF erzeugen" liefert eine PDF mit 2 A6-Seiten pro Karte.
-- [ ] Rückseite entspricht `docs/CARD_LAYOUT.md` (visuell iteriert).
-- [ ] Auto-Lookup beim Laden bestimmt Via (M>B>D>E) + Manager + Adresse für alle
-      Stationen; Cache funktioniert; Ausfälle sind nicht fatal.
+- [x] Rückseite entspricht `docs/CARD_LAYOUT.md` (visuell iteriert).
+- [x] Auto-Lookup beim Laden bestimmt die akzeptierten Wege {B,D,Q,L} + Manager +
+      Adresse für alle Stationen; Cache funktioniert; Ausfälle sind nicht fatal.
 ---
 
 ## 10. Nicht raten — nachschlagen
@@ -323,15 +353,19 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   aufeinanderfolgende Karten **ohne** Remarks wieder zusammen. Sicherung pro Karte
   zusätzlich im Generator (`regroup_card_by_remarks`). Vom Nutzer iterativ so
   bestätigt (Split beim Setzen, Merge beim Leeren, Einzel-Remarks möglich).
-- **GUI-Abschnitte**: 1 ADIF, 2 Frontbild, 3 Absender, 4 Via-Filter, 5 Modus,
-  6 Lookups, **7 Bemerkungen**, 8 Vorschau, 9 Ausgabe.
+- **GUI-Abschnitte**: 1 ADIF, 2 Frontbild, 3 Absender (inkl. Funk-Ausrüstung +
+  globale Markierungen QSL/Portabel/Bestätigung), 4 Zustellwege (priorisierbare
+  Liste + Trennlinie), 5 Kartenmodus, 6 Lookups, **7 Bemerkungen**, 8 Vorschau,
+  9 Druckmodus, 10 Ausgabe.
 - **Absender kommt komplett aus der Config** (Rufzeichen, Locator, DOK, …), nie
   aus dem Log — vom Nutzer bewusst so bestätigt (ein kurzer Versuch, Rufzeichen/
   Locator aus `STATION_CALLSIGN`/`MY_GRIDSQUARE` zu ziehen, wurde zurückgenommen).
 - **Kein `subtitle`/„Responsive"** — komplett entfernt.
 - **Front im Cover-Modus** (füllt die Seite randlos, Überstand wird geclippt).
-- `MARGIN = 3 mm`; `/p`/`/m` oben mittig; Stationsdaten als Label/Wert-Spalte neben
-  der Adresse; REMARKS über volle Breite; Fuß unten mit ~3 mm Rahmenabstand.
+- `MARGIN = 3 mm`; Portabel-Kennung `/p`/`/m`/`/t`/`/r` **hinter dem eigenen
+  Rufzeichen**; Bestätigungs-Markierung (Confirming QSO/SWL) oben mittig;
+  Stationsdaten als Label/Wert-Spalte neben der Adresse; Funk-Block (RIG/ANT/PWR)
+  dynamisch darunter; REMARKS über volle Breite; Fuß unten mit ~3 mm Rahmenabstand.
 - **GUI: keine Speichern/Laden-Buttons** — Config wird automatisch gespeichert
   (debounced) und bei externer Datei-Änderung neu geladen (mtime-Poll, Loop-Schutz
   via `_suppress_save`). Enter in Eingabefeldern gibt den Fokus frei.
@@ -339,8 +373,8 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
 **Realität der Testdaten (`Log.adi`)**
 - Enthält **kein** `QSL_SENT_VIA` (und keine Via-Info) — das ist der **Normalfall**:
   die Via kommt aus dem Lookup, nicht aus dem Log. Ohne Lookup-Credentials fallen
-  alle Karten auf `default_via` (Default `B`); mit Credentials wird je Station
-  M>B>D>E bestimmt. Jede Station kommt nur 1× vor.
+  alle Karten auf `default_via` (Default `B`); mit Credentials liefert der Lookup
+  je Station die akzeptierten Wege {B,D,Q,L}. Jede Station kommt nur 1× vor.
 - FT8-QSOs haben dB-Rapporte (z. B. `-07`), die **bewusst** nicht sinnvoll ins
   R/S/T-Raster passen (so vom Nutzer akzeptiert).
 
