@@ -22,21 +22,28 @@ Ein Hauptfenster mit klaren Abschnitten (top → bottom), jeweils in `gui/sectio
    dient als manueller Reload. Nach dem Laden: Anzahl gelesener QSOs.
 2. **Frontbild**: `Bild wählen…` (png/jpg/jpeg/webp), kleine Vorschau (Thumbnail).
 3. **Absender**: Eingabefelder für Call, Name, Straße, PLZ, Ort, Land, Locator,
-   DOK, WAZ, ITU. Zusätzlich die beiden globalen Dropdowns (gelten für **alle**
-   Karten):
+   DOK, CQ-Zone (WAZ), ITU. Durch eine Trennlinie abgesetzt die **Funk-Ausrüstung**
+   (erscheint dynamisch auf der Karte, sobald gefüllt): `Empfänger` (RIG),
+   `Antenne` (ANT), `Leistung` (PWR). Zusätzlich drei globale Dropdowns (gelten für
+   **alle** Karten):
    - **QSL-Markierung** (`qsl_mark`): `PSE QSL` / `TNX QSL` / `Leer lassen`.
-   - **Portabel-Markierung** (`portable_mark`): `Keins` / `/p` / `/m`.
+   - **Portabel-Markierung** (`portable_mark`): `Keins` / `/p` / `/m` / `/t` / `/r`
+     (Kennung hinter dem eigenen Rufzeichen).
+   - **Bestätigung** (`confirm_mark`): `Leer lassen` / `Confirming QSO` /
+     `Confirming SWL-Report`.
    Kein „Untertitel"/„Responsive" mehr. Keine Speichern/Laden-Buttons: die
    Config wird **automatisch** gespeichert (debounced) und bei externer Änderung
    von `config.yaml` **automatisch neu geladen**.
-4. **Via-Filter**: drei Checkboxen `B Büro`, `D Direkt`, `M Manager`. **Kein**
-   `E`-Filter (Elektronisch ist eine Ausschluss-Kategorie, kein Druckweg — siehe
-   §6). Der Filter **entfernt keine Zeilen**, sondern setzt nur die Drucken-
-   Markierung: gedruckt werden Karten mit `via_code ∈ Filter` (E-Karten sind
-   damit standardmäßig abgewählt). Die Via je Karte kommt aus dem **Lookup**
-   (§6), nicht aus dem Log.
+4. **Zustellwege**: eine priorisierbare **Liste** (Listbox) der Wege `Büro` (B),
+   `Direkt` (D), `eQSL` (Q), `LOTW` (L) plus eine verschiebbare **Trennlinie**
+   (`via_cut`). Buttons ▲/▼ verschieben den ausgewählten Eintrag (Trennlinie
+   eingeschlossen). Wege **oberhalb** der Linie sind aktiv (werden gedruckt, in
+   Reihenfolge = Priorität), Wege **darunter** nicht. Gedruckt wird je Empfänger
+   der höchstpriorisierte aktive Weg aus dessen **akzeptierten** Wegen (aus dem
+   Lookup, §6). Die Liste **entfernt keine Zeilen**, sondern setzt nur die
+   Drucken-Markierung. Kein Via-Filter (B/D/M) mehr.
 5. **Kartenmodus**: Radiobuttons `Eine Karte pro QSO` / `Eine Karte pro Station`.
-   (Die globalen Markierungen QSL/Portabel stehen in Abschnitt 3.)
+   (Die globalen Markierungen QSL/Portabel/Bestätigung stehen in Abschnitt 3.)
 6. **Lookups (optional)**: HamQTH-Benutzer/Passwort, QRZ-Benutzer/Passwort,
    Checkbox „Adress-/Label-Export erzeugen". **Kein** Schalter „Adressen
    nachschlagen" mehr — der Lookup läuft **automatisch beim Log-Laden** (§6),
@@ -73,9 +80,13 @@ Ein Hauptfenster mit klaren Abschnitten (top → bottom), jeweils in `gui/sectio
    **Oben rechts** ein Button „Neu abrufen" (holt fehlende/abgebrochene Stationen
    nach) sowie eine Lookup-Statuszeile. Die gesamte Oberfläche ist scrollbar; die
    Tabelle zeigt mindestens ~5 Einträge.
-9. **Ausgabe**: Zielpfad der PDF, Button `PDF erzeugen`, Fortschrittsbalken
+9. **Druckmodus**: Radiobuttons `Duplexdruck (Vorder-/Rückseite abwechselnd)` /
+   `Vorder-/Rückseite getrennt (2 PDFs)` → `generation.print_mode` (`duplex` |
+   `separate`, siehe §7).
+10. **Ausgabe**: Zielpfad der PDF, Button `PDF erzeugen`, Fortschrittsbalken
    (`ttk.Progressbar`) + Statuszeile. `PDF erzeugen` ist **deaktiviert**, solange
    der Lookup nach dem Log-Laden noch läuft, und wird erst danach wieder aktiv.
+   Nach Erfolg werden die erzeugten PDF(s) direkt in der Standardanwendung geöffnet.
 
 Langlaufende Arbeit (PDF, Lookups) läuft in einem **Worker-Thread**; UI-Updates
 nur über `root.after(...)` (Tkinter ist nicht thread-safe). Der Lookup startet
@@ -99,8 +110,13 @@ class SenderConfig:
     country: str             # "Deutschland"
     locator: str             # "JN48OM"
     dok: str                 # "P31"
-    waz: str                 # "14"
+    waz: str                 # "14"  (auf der Karte als "CQ-Zone")
     itu: str                 # "28"
+    # Funk-Ausrüstung: erscheint dynamisch auf der Karte (RIG/ANT/PWR-Tabelle),
+    # nur wenn gefüllt. Leer -> keine Spalte.
+    receiver: str = ""       # Empfänger/TRX, z.B. "IC-7300"
+    antenna: str = ""        # Antenne, z.B. "Dipol 2×20 m"
+    power: str = ""          # Sendeleistung, z.B. "100 W"
 
 @dataclass
 class LookupConfig:
@@ -116,17 +132,23 @@ class LookupConfig:
 @dataclass
 class GenerationConfig:
     card_mode: str = "per_qso"         # "per_qso" | "per_station"
-    via_filter: list[str] = ["B","D","M"]   # Druck-Kategorien; E nie im Filter
+    # Zustellwege in Prioritätsreihenfolge (oben = höchste Priorität):
+    #   B=Büro (inkl. Manager), D=Direkt, Q=eQSL, L=LOTW.
+    via_priority: list[str] = ["B","D","Q","L"]
+    via_cut: int = 2                   # Trennlinie: die ersten `via_cut` Wege sind
+                                       #   aktiv (werden gedruckt), der Rest nicht.
     default_via: str = "B"             # Fallback, wenn der Lookup nichts/"?" liefert
                                        #   -> NUR hier in der Config, kein GUI-Widget
     page_orientation: str = "landscape" # A6, siehe CARD_LAYOUT.md
+    print_mode: str = "duplex"         # "duplex" (eine PDF) | "separate" (2 PDFs)
     static_footer: str = "TNX FR NICE CONTACT, 73"
     remarks: str = ""                  # globaler REMARKS-Text (alle Karten); leer
                                        #   -> kein Kasten. Max. 80 Zeichen (GUI).
     qsl_mark: str = "none"             # "pse" | "tnx" | "none" (global)
-    portable_mark: str = "none"        # "none" | "p" | "m" (global)
-    # Hinweis: KEIN `include_missing_via` mehr — die Via steht nie im Log,
-    # sie wird immer per Lookup bestimmt (§6).
+    portable_mark: str = "none"        # "none" | "p" | "m" | "t" | "r" (global)
+    confirm_mark: str = "none"         # "none" | "qso" | "swl" (global)
+    # Hinweis: KEIN `via_filter`/`include_missing_via` mehr — die Via steht nie im
+    # Log, sie wird immer per Lookup bestimmt (§6).
 
 @dataclass
 class AppConfig:
@@ -189,6 +211,8 @@ class AppConfig:
 | `qsl_via`        | `qsl_via`        | nur informativ; der Manager fürs Feld „Via:" kommt aus dem **Lookup**, nicht aus dem Log |
 | `name`           | `name`           | falls vorhanden                            |
 | `gridsquare`     | `gridsquare`     |                                            |
+| `qth`            | `qth`            | Ort der Gegenstation (falls vorhanden)     |
+| `country`        | `country`        | Land der Gegenstation (falls vorhanden)    |
 | (alle)           | `raw`            | vollständiger Roh-Record                   |
 
 Die Felder `qsl_sent_via`/`qsl_via` werden weiterhin geparst (Rohdaten), steuern
@@ -221,28 +245,39 @@ class CardRow:                 # eine Tabellenzeile der Rückseite
 @dataclass
 class Card:
     recipient_call: str
-    via_text: str              # Feld "Via:" (aus qsl_via oder leer)
-    via_code: str              # B/D/E/M (für Export/Sortierung)
+    via_text: str              # Feld "Via:" (Manager-Callsign aus dem Lookup, oder leer)
+    via_routes: tuple[str, ...] # akzeptierte Zustellwege der Station (B/D/Q/L)
     rows: list[CardRow]        # 1..N (per_station kann mehrere haben)
     qsl_mark: str = "none"     # global aus config: "pse" | "tnx" | "none"
-    portable_mark: str = "none" # global aus config: "none" | "p" | "m"
+    portable_mark: str = "none" # global aus config: "none" | "p" | "m" | "t" | "r"
+    confirm_mark: str = "none" # global aus config: "none" | "qso" | "swl"
     remarks: str = ""          # REMARKS-Text dieser Karte (leer -> kein Kasten);
                                #   Default = config.remarks, je Karte überschreibbar
+    remarks_manual: bool = False  # True, sobald in der Vorschau manuell gesetzt
+                               #   (schützt vor Überschreiben durch den globalen Text)
+    via_override: str | None = None  # manuell erzwungener Weg (Vorschau), respektiert
+                               #   weiterhin die Trennlinie
     # Empfängeradresse nur bei Bedarf gefüllt (Export), NICHT auf der Karte:
     recipient: LookupResult | None = None
 ```
+
+Der tatsächlich zu druckende Weg ist **nicht** direkt am Card, sondern wird über
+`effective_via(card, active_priority)` ermittelt (höchstpriorisierter aktiver Weg
+aus `via_routes`, ggf. per `via_override` erzwungen; `None` = nicht drucken).
 
 ### 5.2 Ablauf `build_cards(qsos, config, lookups=None)`
 1. **Kein Via-Filter!** `build_cards` behält **alle** QSOs. Die Via kommt nicht
    aus dem Log, sondern aus dem Lookup (§6): `lookups` ist eine Map
    `CALL -> LookupResult`. Je Karte wird gesetzt:
-   - `via_code = derive_via(lookups[call], config.default_via)` (Priorität
-     M > B > D > E, Fallback `default_via`; siehe §6).
-   - `via_text = lookups[call].manager` (Manager-Ruf oder leer) → Feld „Via:".
+   - `via_routes = accepted_routes(lookups[call], config.default_via)` (Menge der
+     akzeptierten Wege B/D/Q/L; leer → `(default_via,)`; siehe §6).
+   - `via_text = extract_manager_callsign(lookups[call].manager)` (genau **ein**
+     Manager-Rufzeichen oder leer) → Feld „Via:".
    - `recipient = lookups[call]` (Adresse, nur für den Export; nicht auf der Karte).
-   Fehlt `lookups` oder der Eintrag → `via_code = default_via`, `via_text` leer.
-   Das **Drucken/Abwählen** übernimmt die GUI anhand des Via-Filters (E-Karten
-   standardmäßig abgewählt), nicht der Builder.
+   Fehlt `lookups` oder der Eintrag → `via_routes = (default_via,)`, `via_text` leer.
+   Das **Drucken/Abwählen** ermittelt die GUI über `effective_via` anhand der
+   Priorität + Trennlinie (Wege unter der Linie standardmäßig abgewählt), nicht der
+   Builder.
 2. **Datum splitten**: `qso_date` "YYYYMMDD" → `date_y=YY` (2-stellig, wie
    Referenz „D M Y"), `date_m=MM`, `date_d=DD`. (Reihenfolge auf der Karte: D M Y.)
 3. **UTC**: `time_on` → "HH:MM" (Sekunden abschneiden, sofern vorhanden).
@@ -258,7 +293,9 @@ class Card:
 7. **Markierungen (global, manuell)**: jede Karte erhält unverändert die
    Werte aus der Config:
    - `card.qsl_mark = config.qsl_mark` (`"pse"` | `"tnx"` | `"none"`).
-   - `card.portable_mark = config.portable_mark` (`"none"` | `"p"` | `"m"`).
+   - `card.portable_mark = config.portable_mark`
+     (`"none"` | `"p"` | `"m"` | `"t"` | `"r"`).
+   - `card.confirm_mark = config.confirm_mark` (`"none"` | `"qso"` | `"swl"`).
    - `card.remarks = config.remarks` (globaler REMARKS-Text; je Karte in der
      Vorschau überschreibbar).
    Es gibt **keine** automatische Ableitung aus dem Log; der Nutzer wählt die
@@ -293,17 +330,27 @@ zusätzlich die QSL-Routing-Felder:
 - `accepts_direct: str | None` — HamQTH `qsldirect` („Y"/„N"/„?").
 - `lotw: str | None`, `eqsl: str | None` — HamQTH `lotw`/`eqsl` („Y"/„N"/„?").
 
-### 6.2 Via-Ableitung `derive_via(result, default_via) -> "B"|"M"|"D"|"E"`
-Feste Priorität (Ham-Standard: Manager hat Vorrang; Elektronisch schließt nur
-aus, wenn **kein** Papierweg vorhanden ist):
-1. `manager` gesetzt → **M** (drucken; Manager ins Feld „Via:").
-2. sonst `accepts_bureau == "Y"` → **B** (drucken).
-3. sonst `accepts_direct == "Y"` → **D** (drucken).
-4. sonst `lotw == "Y"` oder `eqsl == "Y"` → **E** (Station wird in der Tabelle
-   angezeigt, aber **standardmäßig nicht gedruckt**; manuell aktivierbar).
-5. sonst (nichts/„?"/kein Treffer/Lookup-Fehler) → **`default_via`** (Default „B").
+### 6.2 Wege-Ableitung `accepted_routes(result, default_via="B") -> tuple[str,...]`
+Der Lookup liefert je Station die **Menge** akzeptierter Zustellwege (kanonisch
+geordnet B, D, Q, L) — nicht einen einzelnen Code:
+- **B** (Büro) wenn `accepts_bureau == "Y"` **oder** ein echtes Manager-Rufzeichen
+  hinterlegt ist (`extract_manager_callsign(manager)` liefert eins). Der Manager
+  zählt als Büro-Weg; sein Callsign steht dann im Feld „Via:". Reiner Routing-
+  Freitext ohne Rufzeichen (z.B. „LoTW") zählt **nicht** als Büro.
+- **D** (Direkt) wenn `accepts_direct == "Y"`.
+- **Q** (eQSL) wenn `eqsl == "Y"`.
+- **L** (LOTW) wenn `lotw == "Y"`.
+- leere Menge (kein Treffer/nur „?"/„N"/keine Credentials) → `(default_via,)`
+  (Default „B"), damit die Station druckbar bleibt.
 
-`E` ist damit **kein** Druckweg, sondern eine Ausschluss-Kategorie.
+**Welcher Weg gedruckt wird**, entscheidet erst die GUI-Priorität + Trennlinie:
+`resolve_route(accepted, active_priority)` liefert den ersten Weg aus
+`active_priority` (Reihenfolge = Priorität, nur Wege über der Linie), der in der
+akzeptierten Menge liegt; gibt es keinen, wird die Karte **nicht** gedruckt
+(`None`). `active_via_priority(priority, cut)` sind die aktiven Wege (die ersten
+`cut` der normalisierten Prioritätsliste). `effective_via(card, active_priority)`
+kapselt das inkl. `via_override` und ist die **einzige** Quelle der Wahrheit für
+Vorschau **und** Export.
 
 ### 6.3 HamQTH (primär, kostenlos — kostenloses Konto nötig)
 - Session holen: `https://www.hamqth.com/xml.php?u=USER&p=PASS`
@@ -342,9 +389,14 @@ aus, wenn **kein** Papierweg vorhanden ist):
 
 - **Seitengröße**: A6. Querformat (`landscape`) als Default, da die Referenzkarte
   querformatig ist. In `geometry.py` umschaltbar.
-- **Reihenfolge**: für jede Karte zuerst Vorderseite, dann Rückseite, dann
-  `canvas.showPage()`. So entsteht Seite 1=Front(Karte1), 2=Back(Karte1),
-  3=Front(Karte2), … → passt für Duplexdruck (lange Kante).
+- **Druckmodus** (`generation.print_mode`), `generate(...) -> list[Path]`:
+  - `"duplex"`: **eine** PDF, pro Karte zuerst Vorderseite, dann Rückseite, dann
+    `canvas.showPage()`. So entsteht Seite 1=Front(Karte1), 2=Back(Karte1),
+    3=Front(Karte2), … → passt für Duplexdruck (lange Kante).
+  - `"separate"`: **zwei** PDFs (`…_vorderseiten.pdf`, `…_rueckseiten.pdf`) für
+    Drucker ohne beidseitigen Druck: erst alle Vorderseiten drucken, Papier
+    umgedreht neu einlegen, dann die Rückseiten. Da **ein** Frontbild für alle
+    Karten gilt, sind alle Vorderseiten identisch (keine Umkehrung nötig).
 - **Front** (`layout_front.py`): Frontbild im **Cover-Modus** die ganze Seite
   füllen (kein weißer Rand), Seitenverhältnis wahren, Überstand am Seitenrand
   beschneiden (Clip), zentriert. Einmal via Pillow geladen und als ImageReader
@@ -352,7 +404,10 @@ aus, wenn **kein** Papierweg vorhanden ist):
 - **Back** (`layout_back.py`): exakt nach `CARD_LAYOUT.md`. Alle Positionen/
   Größen aus `geometry.py`. Der REMARKS-Block (Label + Kasten + Text) wird nur
   gezeichnet, wenn `card.remarks` gesetzt ist (dynamisch); der Footer-Text steht
-  immer.
+  immer. Der **Funk-Block** (RIG/ANT/PWR-Tabelle) erscheint nur, wenn mindestens
+  eins der Felder `receiver`/`antenna`/`power` gefüllt ist; dann rücken QSL-
+  Markierung und QSO-Tabelle nach unten. Portabel-Kennung (`/p`/`/m`/`/t`/`/r`)
+  steht hinter dem eigenen Rufzeichen, die Bestätigungs-Markierung oben mittig.
 - **Normalisierung vor dem Zeichnen**: `generate` wendet auf jede Karte
   `regroup_card_by_remarks` an (§5.2) — so bekommt keine Karte mehr Zeilen, als je
   nach Remarks-Zustand Platz haben (Sicherung pro Karte, egal wie die Remarks auf
@@ -373,9 +428,9 @@ aus, wenn **kein** Papierweg vorhanden ist):
 |----------------------------------------|---------------------------------------------|
 | ADIF unlesbar/leer                     | GUI-Meldung, keine Karten                   |
 | QSO ohne `call`                        | überspringen                                |
-| Lookup ohne Treffer/„?"                | Via = `default_via` (Config), Karte trotzdem |
-| Station nur elektronisch (LoTW/eQSL)   | Via = `E`, angezeigt, nicht gedruckt (manuell aktivierbar) |
-| keine Lookup-Credentials               | kein Netzcall, alle Via = `default_via`     |
+| Lookup ohne Treffer/„?"                | `via_routes = (default_via,)`, Karte trotzdem |
+| Station nur elektronisch (LoTW/eQSL)   | Wege = `Q`/`L`; unter der Trennlinie standardmäßig nicht gedruckt (manuell aktivierbar) |
+| keine Lookup-Credentials               | kein Netzcall, alle `via_routes = (default_via,)` |
 | Frontbild fehlt                        | Erzeugung blockieren + Hinweis              |
 | Lookup schlägt fehl / kein Konto       | Via = `default_via`, Adressfelder leer, kein Abbruch |
 | zu viele QSOs pro Station für Tabelle  | Folge-Karte(n) anlegen                      |
@@ -389,14 +444,18 @@ in `geometry.py` referenzieren.
 
 ## 9. Tests (`tests/`)
 - `test_adif_parser.py`: alle Fälle aus §4.4.
-- `test_card_builder.py`: alle QSOs (kein Via-Filter mehr), Via aus Lookup-Map +
-  `default_via`-Fallback, Datum-Split, Gruppierung per_qso/per_station,
-  Zeilen-Überlauf (MAX_ROWS_PLAIN/WITH_REMARKS), `regroup_card_by_remarks` und
+- `test_card_builder.py`: alle QSOs (kein Via-Filter mehr), `via_routes` aus
+  Lookup-Map + `default_via`-Fallback, `effective_via` (Priorität + Trennlinie +
+  `via_override`), Datum-Split, Gruppierung per_qso/per_station, Zeilen-Überlauf
+  (MAX_ROWS_PLAIN/WITH_REMARKS), `regroup_card_by_remarks` und
   `normalize_station_cards` (Split/Merge, Remarks je Karte, Idempotenz).
-- `test_lookup.py`: `derive_via`-Priorität M>B>D>E (inkl. E nur ohne Papierweg,
-  Fallback `default_via`), Parsing der Routing-Felder (HamQTH inkl. lotw/eqsl,
+- `test_lookup.py`: `accepted_routes` (B/D/Q/L; Manager zählt als Büro; leer →
+  `default_via`), `resolve_route`/`active_via_priority`/`normalize_via_priority`,
+  `extract_manager_callsign`, Parsing der Routing-Felder (HamQTH inkl. lotw/eqsl,
   QRZ-Manager), Enrichment über alle Stationen, Cache, Reauth — HTTP gemockt.
+- `test_config.py`: Laden/Speichern, fehlende Felder → Defaults.
 - `test_geometry.py`: mm-Umrechnung, Seitenmaße, dass alle Konstanten definiert
   sind und im Blattbereich liegen.
-- PDF-Erzeugung: Smoke-Test (läuft ohne Exception, erzeugt Datei mit
-  2 × Kartenanzahl Seiten).
+- `test_generator.py`: Smoke-Test beider Druckmodi (läuft ohne Exception; duplex
+  erzeugt eine Datei mit 2 × Kartenanzahl Seiten, separate zwei Dateien).
+- `test_gui.py`: Widget-Baum baut headless; Auto-Sync der Config.
