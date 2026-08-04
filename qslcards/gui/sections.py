@@ -2,14 +2,24 @@
 
 Jede Klasse baut ihren LabelFrame und legt Tk-Variablen sowie Buttons offen.
 Es steckt KEINE Geschäftslogik hier: Kommandos/Callbacks bindet `app.py`.
+
+Farben und Abstände kommen ausschließlich aus `gui/theme.py` (benannte
+ttk-Styles + Abstands-Konstanten) — kein Widget setzt hier eine Farbe selbst.
 """
 
 from __future__ import annotations
 
 import tkinter as tk
+from pathlib import Path
 from tkinter import ttk
 
 from qslcards.lookup import VIA_LABELS, normalize_via_priority
+
+from .icon_canvas import icon_canvas
+from .theme import GAP_COL, GAP_ROW, PAD_INNER, Palette
+
+# Kantenlänge des Icons im „Über"-Dialog (Tk-Punkte).
+ABOUT_ICON_SIZE = 64
 
 # Absender-Grunddaten (Adresse + Stationsblock), oben in Abschnitt 3.
 STATION_FIELDS: list[tuple[str, str]] = [
@@ -55,11 +65,28 @@ SENDER_FIELD_WIDTH = 28
 # der Vorschau). Passt in eine Zeile des Remarks-Kastens auf der Karte.
 REMARKS_MAX_LEN = 80
 
+# Statuspunkt der Fußzeile: Stufe -> (Zeichen, ttk-Style des Punktes).
+STATUS_LEVELS = {
+    "info": ("●", "Status.TLabel"),
+    "busy": ("●", "StatusWarning.TLabel"),
+    "ok": ("●", "StatusSuccess.TLabel"),
+    "error": ("●", "StatusDanger.TLabel"),
+}
+
 
 def limit_entry_length(entry: ttk.Entry, max_len: int) -> None:
     """Begrenzt die Eingabelänge eines Entry per Tastatur-Validierung."""
     vcmd = (entry.register(lambda proposed: len(proposed) <= max_len), "%P")
     entry.config(validate="key", validatecommand=vcmd)
+
+
+def _center_over(dialog: tk.Toplevel, root: tk.Misc) -> None:
+    """Platziert `dialog` mittig über dem Hauptfenster."""
+    dialog.update_idletasks()
+    px, py = root.winfo_rootx(), root.winfo_rooty()
+    pw, ph = root.winfo_width(), root.winfo_height()
+    dw, dh = dialog.winfo_reqwidth(), dialog.winfo_reqheight()
+    dialog.geometry(f"+{px + (pw - dw) // 2}+{py + (ph - dh) // 2}")
 
 
 def ask_overwrite_manual_remarks(parent: tk.Misc) -> bool:
@@ -92,24 +119,104 @@ def ask_overwrite_manual_remarks(parent: tk.Misc) -> bool:
 
     btns = ttk.Frame(dialog, padding=(12, 0, 12, 12))
     btns.grid(row=1, column=0, sticky="e")
-    ttk.Button(btns, text="Überschreiben", command=lambda: choose(True)).pack(
-        side="left", padx=(0, 6)
+    ttk.Button(btns, text="Nicht überschreiben", command=lambda: choose(False)).pack(
+        side="left", padx=(0, GAP_COL)
     )
-    ttk.Button(btns, text="Nicht überschreiben", command=lambda: choose(False)).pack(side="left")
+    ttk.Button(
+        btns, text="Überschreiben", style="Accent.TButton", command=lambda: choose(True)
+    ).pack(side="left")
 
     dialog.protocol("WM_DELETE_WINDOW", lambda: choose(False))
     dialog.bind("<Escape>", lambda _e: choose(False))
 
-    # Über dem Hauptfenster zentrieren.
-    dialog.update_idletasks()
-    px, py = root.winfo_rootx(), root.winfo_rooty()
-    pw, ph = root.winfo_width(), root.winfo_height()
-    dw, dh = dialog.winfo_reqwidth(), dialog.winfo_reqheight()
-    dialog.geometry(f"+{px + (pw - dw) // 2}+{py + (ph - dh) // 2}")
-
+    _center_over(dialog, root)
     dialog.grab_set()
     dialog.wait_window()
     return result["overwrite"]
+
+
+def show_about_dialog(
+    parent: tk.Misc, version: str, palette: Palette, icon_size: int = ABOUT_ICON_SIZE
+) -> None:
+    """„Über"-Fenster: Icon, Name, Version und die wichtigsten Eckdaten.
+
+    Das Icon wird als Vektor auf einen Canvas gezeichnet statt als PNG geladen:
+    Tk skaliert Bitmaps auf Retina-Displays sichtbar hoch (siehe
+    `gui/icon_canvas.py`).
+    """
+    root = parent.winfo_toplevel()
+    dialog = tk.Toplevel(parent)
+    dialog.title("Über QSL-Karten-Generator")
+    dialog.transient(root)
+    dialog.resizable(False, False)
+
+    body = ttk.Frame(dialog, padding=PAD_INNER * 2)
+    body.pack(fill="both", expand=True)
+
+    icon_canvas(body, icon_size, palette.bg).grid(
+        row=0, column=0, rowspan=3, padx=(0, PAD_INNER * 2), sticky="n"
+    )
+
+    ttk.Label(body, text="QSL-Karten-Generator", style="Heading.TLabel").grid(
+        row=0, column=1, sticky="w"
+    )
+    ttk.Label(body, text=f"Version {version}", style="Muted.TLabel").grid(
+        row=1, column=1, sticky="w", pady=(2, PAD_INNER)
+    )
+    ttk.Label(
+        body,
+        text=(
+            "Erzeugt aus einem ADIF-Logbuch QSL-Karten als PDF\n"
+            "(A6, Bild-Vorderseite + Rückseite im DARC-Layout).\n\n"
+            "Versandart je Station über HamQTH/QRZ.\n"
+            "Absenderdaten aus config.yaml."
+        ),
+        justify="left",
+    ).grid(row=2, column=1, sticky="w")
+
+    btns = ttk.Frame(dialog, padding=(PAD_INNER * 2, 0, PAD_INNER * 2, PAD_INNER * 2))
+    btns.pack(fill="x")
+    ttk.Button(btns, text="Schließen", style="Accent.TButton", command=dialog.destroy).pack(
+        side="right"
+    )
+
+    dialog.bind("<Escape>", lambda _e: dialog.destroy())
+    _center_over(dialog, root)
+    dialog.grab_set()
+
+
+def confirm(parent: tk.Misc, title: str, message: str, ok_label: str = "OK") -> bool:
+    """Schlichter Ja/Nein-Dialog im App-Stil (statt der System-Messagebox)."""
+    root = parent.winfo_toplevel()
+    dialog = tk.Toplevel(parent)
+    dialog.title(title)
+    dialog.transient(root)
+    dialog.resizable(False, False)
+    result = {"ok": False}
+
+    ttk.Label(dialog, text=message, justify="left", padding=PAD_INNER * 2).grid(
+        row=0, column=0, sticky="w"
+    )
+
+    def choose(ok: bool) -> None:
+        result["ok"] = ok
+        dialog.destroy()
+
+    btns = ttk.Frame(dialog, padding=(PAD_INNER * 2, 0, PAD_INNER * 2, PAD_INNER * 2))
+    btns.grid(row=1, column=0, sticky="e")
+    ttk.Button(btns, text="Abbrechen", command=lambda: choose(False)).pack(
+        side="left", padx=(0, GAP_COL)
+    )
+    ttk.Button(btns, text=ok_label, style="Accent.TButton", command=lambda: choose(True)).pack(
+        side="left"
+    )
+
+    dialog.protocol("WM_DELETE_WINDOW", lambda: choose(False))
+    dialog.bind("<Escape>", lambda _e: choose(False))
+    _center_over(dialog, root)
+    dialog.grab_set()
+    dialog.wait_window()
+    return result["ok"]
 
 
 class FileSection:
@@ -121,14 +228,14 @@ class FileSection:
         self.count_var = tk.StringVar(value="Keine Datei geladen")
 
         self.browse_btn = ttk.Button(self.frame, text="Durchsuchen…")
-        self.browse_btn.grid(row=0, column=0, padx=4, pady=4, sticky="w")
+        self.browse_btn.grid(row=0, column=0, pady=GAP_ROW, sticky="w")
         ttk.Entry(self.frame, textvariable=self.path_var, width=40).grid(
-            row=0, column=1, padx=4, pady=4, sticky="we"
+            row=0, column=1, padx=GAP_COL, pady=GAP_ROW, sticky="we"
         )
         self.load_btn = ttk.Button(self.frame, text="Log laden")
-        self.load_btn.grid(row=0, column=2, padx=4, pady=4)
-        ttk.Label(self.frame, textvariable=self.count_var).grid(
-            row=1, column=0, columnspan=3, padx=4, pady=(0, 4), sticky="w"
+        self.load_btn.grid(row=0, column=2, pady=GAP_ROW)
+        ttk.Label(self.frame, textvariable=self.count_var, style="Muted.TLabel").grid(
+            row=1, column=0, columnspan=3, pady=(GAP_ROW, 0), sticky="w"
         )
         self.frame.columnconfigure(1, weight=1)
 
@@ -142,14 +249,16 @@ class ImageSection:
         self.path_var = tk.StringVar()
 
         self.choose_btn = ttk.Button(self.frame, text="Bild wählen…")
-        self.choose_btn.grid(row=0, column=0, padx=4, pady=4, sticky="w")
+        self.choose_btn.grid(row=0, column=0, pady=GAP_ROW, sticky="w")
         ttk.Entry(self.frame, textvariable=self.path_var, width=32).grid(
-            row=0, column=1, padx=4, pady=4, sticky="we"
+            row=0, column=1, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="we"
         )
         # Vorschaufeld füllt den restlichen Platz; das Thumbnail (feste Größe,
         # PhotoImage in app.py gesetzt/gehalten) wird darin zentriert.
-        self.thumb_label = ttk.Label(self.frame, text="keine Vorschau", anchor="center")
-        self.thumb_label.grid(row=1, column=0, columnspan=2, padx=4, pady=4, sticky="nsew")
+        self.thumb_label = ttk.Label(
+            self.frame, text="keine Vorschau", anchor="center", style="Thumb.TLabel"
+        )
+        self.thumb_label.grid(row=1, column=0, columnspan=2, pady=(GAP_ROW, 0), sticky="nsew")
         self.frame.columnconfigure(1, weight=1)
         self.frame.rowconfigure(1, weight=1)
 
@@ -163,59 +272,23 @@ class SenderSection:
 
         # Stationsdaten (Adresse + Locator/DOK/CQ/ITU).
         row = self._add_fields(STATION_FIELDS, 0)
-
-        ttk.Separator(self.frame, orient="horizontal").grid(
-            row=row, column=0, columnspan=2, sticky="we", padx=4, pady=4
-        )
-        row += 1
+        row = self._add_separator(row, "Funk-Ausrüstung (optional)")
 
         # Funk-Ausrüstung (Empfänger/Antenne/Leistung): dynamisch auf der Karte.
         row = self._add_fields(RADIO_FIELDS, row)
-
-        ttk.Separator(self.frame, orient="horizontal").grid(
-            row=row, column=0, columnspan=2, sticky="we", padx=4, pady=4
-        )
-        row += 1
+        row = self._add_separator(row, "Markierungen (für alle Karten)")
 
         # Globale Markierungen (gelten für alle Karten).
-        ttk.Label(self.frame, text="QSL-Markierung").grid(
-            row=row, column=0, padx=4, pady=1, sticky="w"
-        )
         self.qsl_mark = tk.StringVar(value=QSL_MARK_CHOICES[0])
-        self.qsl_combo = ttk.Combobox(
-            self.frame,
-            textvariable=self.qsl_mark,
-            values=QSL_MARK_CHOICES,
-            state="readonly",
-            width=SENDER_FIELD_WIDTH,
-        )
-        self.qsl_combo.grid(row=row, column=1, padx=4, pady=1, sticky="we")
+        self.qsl_combo = self._add_combo(row, "QSL-Markierung", self.qsl_mark, QSL_MARK_CHOICES)
         row += 1
-
-        ttk.Label(self.frame, text="Portabel").grid(row=row, column=0, padx=4, pady=1, sticky="w")
         self.portable = tk.StringVar(value=PORTABLE_CHOICES[0])
-        self.portable_combo = ttk.Combobox(
-            self.frame,
-            textvariable=self.portable,
-            values=PORTABLE_CHOICES,
-            state="readonly",
-            width=SENDER_FIELD_WIDTH,
-        )
-        self.portable_combo.grid(row=row, column=1, padx=4, pady=1, sticky="we")
+        self.portable_combo = self._add_combo(row, "Portabel", self.portable, PORTABLE_CHOICES)
         row += 1
-
-        ttk.Label(self.frame, text="Bestätigung").grid(
-            row=row, column=0, padx=4, pady=1, sticky="w"
-        )
         self.confirm_mark = tk.StringVar(value=CONFIRM_MARK_CHOICES[0])
-        self.confirm_combo = ttk.Combobox(
-            self.frame,
-            textvariable=self.confirm_mark,
-            values=CONFIRM_MARK_CHOICES,
-            state="readonly",
-            width=SENDER_FIELD_WIDTH,
+        self.confirm_combo = self._add_combo(
+            row, "Bestätigung", self.confirm_mark, CONFIRM_MARK_CHOICES
         )
-        self.confirm_combo.grid(row=row, column=1, padx=4, pady=1, sticky="we")
 
         # Kein Speichern/Laden-Button mehr: die Config wird automatisch
         # gespeichert und bei externer Änderung neu geladen.
@@ -225,14 +298,38 @@ class SenderSection:
         """Legt Label+Entry je Feld an (dynamisch dehnbar) und liefert die
         nächste freie Zeile zurück. Die Variablen landen in self.vars."""
         for field, label in fields:
-            ttk.Label(self.frame, text=label).grid(row=row, column=0, padx=4, pady=1, sticky="w")
+            ttk.Label(self.frame, text=label).grid(row=row, column=0, pady=GAP_ROW, sticky="w")
             var = tk.StringVar()
             self.vars[field] = var
             ttk.Entry(self.frame, textvariable=var, width=SENDER_FIELD_WIDTH).grid(
-                row=row, column=1, padx=4, pady=1, sticky="we"
+                row=row, column=1, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="we"
             )
             row += 1
         return row
+
+    def _add_separator(self, row: int, caption: str) -> int:
+        """Trennlinie mit Beschriftung; gliedert den langen Absender-Block."""
+        ttk.Separator(self.frame, orient="horizontal").grid(
+            row=row, column=0, columnspan=2, sticky="we", pady=(PAD_INNER, GAP_ROW)
+        )
+        ttk.Label(self.frame, text=caption, style="Muted.TLabel").grid(
+            row=row + 1, column=0, columnspan=2, pady=(0, GAP_ROW), sticky="w"
+        )
+        return row + 2
+
+    def _add_combo(
+        self, row: int, label: str, var: tk.StringVar, choices: list[str]
+    ) -> ttk.Combobox:
+        ttk.Label(self.frame, text=label).grid(row=row, column=0, pady=GAP_ROW, sticky="w")
+        combo = ttk.Combobox(
+            self.frame,
+            textvariable=var,
+            values=choices,
+            state="readonly",
+            width=SENDER_FIELD_WIDTH,
+        )
+        combo.grid(row=row, column=1, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="we")
+        return combo
 
 
 class FilterSection:
@@ -255,13 +352,21 @@ class FilterSection:
         self.listbox = tk.Listbox(
             self.frame, height=5, width=24, exportselection=False, activestyle="none"
         )
-        self.listbox.grid(row=0, column=0, rowspan=2, padx=4, pady=4, sticky="nsew")
+        self.listbox.grid(row=0, column=0, rowspan=2, pady=GAP_ROW, sticky="nsew")
 
         # command wird in app.py gesetzt (verschieben + speichern + Filter neu).
-        self.btn_up = ttk.Button(self.frame, text="▲", width=3)
-        self.btn_down = ttk.Button(self.frame, text="▼", width=3)
-        self.btn_up.grid(row=0, column=1, padx=(0, 4), pady=(4, 1), sticky="s")
-        self.btn_down.grid(row=1, column=1, padx=(0, 4), pady=(1, 4), sticky="n")
+        self.btn_up = ttk.Button(self.frame, text="▲", width=3, style="Icon.TButton")
+        self.btn_down = ttk.Button(self.frame, text="▼", width=3, style="Icon.TButton")
+        self.btn_up.grid(row=0, column=1, padx=(GAP_COL, 0), pady=(GAP_ROW, 1), sticky="s")
+        self.btn_down.grid(row=1, column=1, padx=(GAP_COL, 0), pady=(1, GAP_ROW), sticky="n")
+
+        ttk.Label(
+            self.frame,
+            text="Über der Linie = wird gedruckt (oben = höchste Priorität).",
+            style="Muted.TLabel",
+            wraplength=260,
+            justify="left",
+        ).grid(row=2, column=0, columnspan=2, pady=(GAP_ROW, 0), sticky="w")
 
         self.frame.columnconfigure(0, weight=1)
         self._render(select=0)
@@ -331,8 +436,8 @@ class ModeSection:
             variable=self.card_mode,
             value="per_station",
         )
-        self.radio_qso.grid(row=0, column=0, padx=4, pady=1, sticky="w")
-        self.radio_station.grid(row=1, column=0, padx=4, pady=(1, 4), sticky="w")
+        self.radio_qso.grid(row=0, column=0, pady=GAP_ROW, sticky="w")
+        self.radio_station.grid(row=1, column=0, pady=GAP_ROW, sticky="w")
 
 
 class LookupSection:
@@ -353,19 +458,26 @@ class LookupSection:
             ("QRZ Passwort", self.qrz_pass, True),
         ]
         for i, (label, var, secret) in enumerate(rows):
-            ttk.Label(self.frame, text=label).grid(row=i, column=0, padx=4, pady=1, sticky="w")
+            ttk.Label(self.frame, text=label).grid(row=i, column=0, pady=GAP_ROW, sticky="w")
             ttk.Entry(
                 self.frame,
                 textvariable=var,
                 width=22,
                 show="•" if secret else "",
-            ).grid(row=i, column=1, padx=4, pady=1, sticky="we")
+            ).grid(row=i, column=1, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="we")
 
         ttk.Checkbutton(
             self.frame,
             text="Adress-/Label-Export erzeugen",
             variable=self.address_export,
-        ).grid(row=4, column=0, columnspan=2, padx=4, pady=(1, 4), sticky="w")
+        ).grid(row=4, column=0, columnspan=2, pady=(PAD_INNER, GAP_ROW), sticky="w")
+        ttk.Label(
+            self.frame,
+            text="Ohne Zugangsdaten: kein Netzzugriff, alle Wege = Standard.",
+            style="Muted.TLabel",
+            wraplength=300,
+            justify="left",
+        ).grid(row=5, column=0, columnspan=2, sticky="w")
         self.frame.columnconfigure(1, weight=1)
 
 
@@ -381,13 +493,39 @@ class RemarksSection:
         self.frame = ttk.LabelFrame(parent, text="7. Bemerkungen")
         self.remarks = tk.StringVar()
 
-        ttk.Label(self.frame, text="Text für alle Karten").grid(
-            row=0, column=0, padx=4, pady=4, sticky="w"
-        )
+        ttk.Label(self.frame, text="Text für alle Karten").grid(row=0, column=0, sticky="w")
         self.remarks_entry = ttk.Entry(self.frame, textvariable=self.remarks)
-        self.remarks_entry.grid(row=0, column=1, padx=4, pady=4, sticky="we")
+        self.remarks_entry.grid(row=0, column=1, padx=GAP_COL, sticky="we")
         limit_entry_length(self.remarks_entry, REMARKS_MAX_LEN)
+
+        # Mitlaufender Zähler „geschrieben/erlaubt". Feste Breite und rechts-
+        # bündig, damit die Spalte beim Wechsel der Stellenzahl nicht springt.
+        self.count_var = tk.StringVar()
+        self.count_label = ttk.Label(
+            self.frame,
+            textvariable=self.count_var,
+            style="Muted.TLabel",
+            width=len(str(REMARKS_MAX_LEN)) * 2 + 1,
+            anchor="e",
+        )
+        self.count_label.grid(row=0, column=2, sticky="e")
+        self.remarks.trace_add("write", lambda *_: self._update_count())
+        self._update_count()
+
         self.frame.columnconfigure(1, weight=1)
+
+    def _update_count(self) -> None:
+        """Setzt „x/80" und hebt den Zähler hervor, sobald das Limit erreicht ist.
+
+        Hervorgehoben wird in der Akzentfarbe (nicht in der Warnfarbe): das
+        erreichte Limit ist kein Fehler, und Orange fiele im blauen Thema
+        unangenehm auf.
+        """
+        used = len(self.remarks.get())
+        self.count_var.set(f"{used}/{REMARKS_MAX_LEN}")
+        self.count_label.configure(
+            style="Accent.TLabel" if used >= REMARKS_MAX_LEN else "Muted.TLabel"
+        )
 
 
 class PrintModeSection:
@@ -414,29 +552,59 @@ class PrintModeSection:
             variable=self.print_mode,
             value="separate",
         )
-        self.radio_duplex.grid(row=0, column=0, padx=4, pady=1, sticky="w")
-        self.radio_separate.grid(row=1, column=0, padx=4, pady=(1, 4), sticky="w")
+        self.radio_duplex.grid(row=0, column=0, pady=GAP_ROW, sticky="w")
+        self.radio_separate.grid(row=1, column=0, pady=GAP_ROW, sticky="w")
 
 
 class OutputSection:
-    """10. Ausgabe."""
+    """10. Ausgabe. Der Status steht in der Fußzeile (`StatusBar`)."""
 
     def __init__(self, parent: tk.Misc) -> None:
         self.frame = ttk.LabelFrame(parent, text="10. Ausgabe")
         self.output_var = tk.StringVar(value="qsl_karten.pdf")
-        self.status_var = tk.StringVar(value="Bereit")
 
         self.browse_btn = ttk.Button(self.frame, text="Ziel…")
-        self.browse_btn.grid(row=0, column=0, padx=4, pady=4, sticky="w")
+        self.browse_btn.grid(row=0, column=0, pady=GAP_ROW, sticky="w")
         ttk.Entry(self.frame, textvariable=self.output_var, width=40).grid(
-            row=0, column=1, padx=4, pady=4, sticky="we"
+            row=0, column=1, padx=GAP_COL, pady=GAP_ROW, sticky="we"
         )
-        self.generate_btn = ttk.Button(self.frame, text="PDF erzeugen")
-        self.generate_btn.grid(row=0, column=2, padx=4, pady=4)
+        self.generate_btn = ttk.Button(self.frame, text="PDF erzeugen", style="Accent.TButton")
+        self.generate_btn.grid(row=0, column=2, pady=GAP_ROW)
 
         self.progress = ttk.Progressbar(self.frame, mode="determinate")
-        self.progress.grid(row=1, column=0, columnspan=3, padx=4, pady=2, sticky="we")
-        ttk.Label(self.frame, textvariable=self.status_var).grid(
-            row=2, column=0, columnspan=3, padx=4, pady=(0, 4), sticky="w"
-        )
+        self.progress.grid(row=1, column=0, columnspan=3, pady=(GAP_ROW, 0), sticky="we")
         self.frame.columnconfigure(1, weight=1)
+
+
+class StatusBar:
+    """Fußzeile des Fensters: Statuspunkt + Meldung links, Kurzinfo rechts.
+
+    Ersetzt die frühere Statuszeile in Abschnitt 10 — der Status ist damit immer
+    sichtbar, auch wenn die Seite gescrollt ist.
+    """
+
+    def __init__(self, parent: tk.Misc) -> None:
+        self.frame = ttk.Frame(parent, style="Status.TFrame", padding=(PAD_INNER, 4))
+        self.status_var = tk.StringVar(value="Bereit")
+        self.info_var = tk.StringVar(value="")
+
+        self.dot = ttk.Label(self.frame, text="●", style="Status.TLabel")
+        self.dot.pack(side="left", padx=(0, GAP_COL))
+        ttk.Label(self.frame, textvariable=self.status_var, style="StatusAccent.TLabel").pack(
+            side="left"
+        )
+        ttk.Label(self.frame, textvariable=self.info_var, style="Status.TLabel").pack(side="right")
+
+    def set(self, text: str, level: str = "info") -> None:
+        """Setzt Meldung + Farbe des Punktes (`info`/`busy`/`ok`/`error`)."""
+        symbol, style = STATUS_LEVELS.get(level, STATUS_LEVELS["info"])
+        self.status_var.set(text)
+        self.dot.configure(text=symbol, style=style)
+
+    def set_info(self, text: str) -> None:
+        self.info_var.set(text)
+
+
+def project_root() -> Path:
+    """Wurzel des Projekts (enthält README.md/docs/) — für Menü „Dokumentation"."""
+    return Path(__file__).resolve().parent.parent.parent

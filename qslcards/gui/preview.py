@@ -22,7 +22,9 @@ from qslcards.cards.builder import (
 )
 from qslcards.lookup import VIA_CODES, VIA_LABELS, resolve_route
 
+from .scrolling import bind_wheel, wheel_step
 from .sections import REMARKS_MAX_LEN, limit_entry_length
+from .theme import GAP_COL, Palette, palette_for
 
 if TYPE_CHECKING:
     from qslcards.cards.models import Card
@@ -53,21 +55,35 @@ _VIA_LABEL_TO_CODE = {VIA_LABELS[c]: c for c in _VIA_CHOICES}
 _ICON_DIR = Path(__file__).resolve().parent.parent / "assets" / "icons"
 _EDIT_ICON_PATH = _ICON_DIR / "edit_icon.svg"  # Stift: Text/Dropdown bearbeiten
 _TOGGLE_ICON_PATH = _ICON_DIR / "toggle_icon.svg"  # Schalter: Drucken Ja/Nein
-_ICON_COLOR = "#555555"
 _ICON_HEIGHT = 13  # Zielhöhe der (Hover-)Icons in px
 _HOVER_ICON_PAD = 4  # Abstand des Hover-Icons zum rechten Zellrand (px)
 _DEFAULT_HEADER_PX = 28  # Start-Header-Höhe (wird beim ersten set_cards nachgemessen)
 
+# Zeilen-Tags: Zebrastreifen (setzen NUR den Hintergrund) und der Zustand
+# „wird nicht gedruckt" (setzt NUR die Schriftfarbe) — so überschreiben sie
+# sich gegenseitig nicht, wenn beide an einer Zeile hängen.
+_TAG_ODD = "odd"
+_TAG_EVEN = "even"
+_TAG_OFF = "off"
 
-def _load_svg_icon(widget: tk.Misc, path: Path) -> tk.PhotoImage | None:
+# Label-Styles für die Icon-Overlays (Hintergrund passend zum Untergrund, siehe
+# gui/theme.py). Ohne den passenden Style läge ein andersfarbiges Kästchen auf
+# der Zeile, weil Tk das transparente SVG gegen den Label-Hintergrund mischt.
+_ICON_STYLE_HEAD = "TreeIconHead.TLabel"
+_ICON_STYLE_ODD = "TreeIconOdd.TLabel"
+_ICON_STYLE_EVEN = "TreeIconEven.TLabel"
+_ICON_STYLE_SELECTED = "TreeIconSelected.TLabel"
+
+
+def _load_svg_icon(widget: tk.Misc, path: Path, color: str) -> tk.PhotoImage | None:
     """Lädt ein SVG als Tk-`PhotoImage` (Tk 9 kann SVG nativ).
 
-    `currentColor` wird durch eine konkrete Farbe ersetzt, sonst bleibt der Strich
+    `currentColor` wird durch `color` ersetzt, sonst bleibt der Strich
     unsichtbar. Jeder Fehler (alte Tk-Version, fehlende Datei) ist nicht fatal —
     dann gibt es eben kein Icon.
     """
     try:
-        svg = path.read_text(encoding="utf-8").replace("currentColor", _ICON_COLOR)
+        svg = path.read_text(encoding="utf-8").replace("currentColor", color)
         return tk.PhotoImage(master=widget, data=svg, format=f"svg -scaletoheight {_ICON_HEIGHT}")
     except Exception:
         return None
@@ -76,22 +92,24 @@ def _load_svg_icon(widget: tk.Misc, path: Path) -> tk.PhotoImage | None:
 class PreviewTable:
     """Treeview der Karten; Zeilen per Klick auf die Spalte 'Drucken' abwählbar."""
 
-    def __init__(self, parent: tk.Misc) -> None:
+    def __init__(self, parent: tk.Misc, palette: Palette | None = None) -> None:
         self.frame = ttk.LabelFrame(parent, text="8. Vorschau")
+        # Farben für Zeilen-Tags und Icons (ohne Angabe: aktuelles Systemthema).
+        self._palette = palette or palette_for("system")
 
         # Kopfzeile: Lookup-Status links, „Neu abrufen"-Button rechts.
         header = ttk.Frame(self.frame)
-        header.grid(row=0, column=0, columnspan=2, sticky="we", padx=4, pady=(2, 0))
+        header.grid(row=0, column=0, columnspan=2, sticky="we", pady=(0, GAP_COL))
         self.status_var = tk.StringVar(value="")
-        ttk.Label(header, textvariable=self.status_var).pack(side="left")
+        ttk.Label(header, textvariable=self.status_var, style="Muted.TLabel").pack(side="left")
         self.refresh_btn = ttk.Button(header, text="Neu abrufen")
         self.refresh_btn.pack(side="right")
 
         # Icons laden (als Attribut halten gegen Garbage Collection). Schlägt das
         # Laden fehl (alte Tk-Version, fehlende Datei), bleibt es None und die
         # Hinweise fallen still weg — nie fatal.
-        self._edit_icon = _load_svg_icon(self.frame, _EDIT_ICON_PATH)  # Stift
-        self._toggle_icon = _load_svg_icon(self.frame, _TOGGLE_ICON_PATH)  # Schalter
+        self._edit_icon = _load_svg_icon(self.frame, _EDIT_ICON_PATH, self._palette.text_muted)
+        self._toggle_icon = _load_svg_icon(self.frame, _TOGGLE_ICON_PATH, self._palette.text_muted)
 
         # height=6 -> immer mindestens ~5 Einträge sichtbar; bei mehr Karten
         # scrollt die Tabelle intern (zusätzlich zum Seiten-Scroll).
@@ -113,6 +131,7 @@ class PreviewTable:
         self.scroll.grid(row=1, column=1, sticky="ns")
         self.frame.rowconfigure(1, weight=1)
         self.frame.columnconfigure(0, weight=1)
+        self._configure_tags()
 
         # ttk zeichnet ein Bild im Spaltenkopf nicht vertikal auf die Textmitte;
         # daher wird der Stift im Kopf als eigenes, randloses Overlay-Label
@@ -122,7 +141,9 @@ class PreviewTable:
         self._header_icons: dict[str, ttk.Label] = {}
         if self._edit_icon is not None:
             for col in _HEADER_HINT:
-                lbl = ttk.Label(self.tree, image=self._edit_icon, borderwidth=0, padding=0)
+                # Style: Hintergrund = Farbe des Spaltenkopfs, sonst zeichnet
+                # sich das Label als Kästchen ab (SVG ist transparent).
+                lbl = ttk.Label(self.tree, image=self._edit_icon, style=_ICON_STYLE_HEAD)
                 # Klick genau auf das Kopf-Icon (rechter Rand) soll ebenfalls
                 # sortieren, sonst ginge er ins Leere (Label schluckt den Klick).
                 lbl.bind("<Button-1>", lambda _e, c=col: self._on_sort(c))
@@ -160,9 +181,10 @@ class PreviewTable:
         self._hover_icon: ttk.Label | None = None
         start_icon = self._edit_icon or self._toggle_icon
         if start_icon is not None:
-            # randlos (borderwidth/padding=0), sonst sitzt das Icon ~2px zu tief.
+            # Der Style ist randlos (sonst säße das Icon ~2px zu tief); den zur
+            # Zeile passenden Hintergrund setzt `_show_hover_icon`.
             self._hover_icon = ttk.Label(
-                self.tree, image=start_icon, borderwidth=0, padding=0, cursor="hand2"
+                self.tree, image=start_icon, style=_ICON_STYLE_ODD, cursor="hand2"
             )
             self._hover_icon.bind("<Button-1>", self._on_hover_icon_click)
 
@@ -170,8 +192,41 @@ class PreviewTable:
         self.tree.bind("<Double-1>", self._begin_edit)
         self.tree.bind("<Motion>", self._on_motion)
         self.tree.bind("<Leave>", self._hide_hover_icon)
-        # Mausrad über der Tabelle scrollt die Tabelle (nicht die Seite).
-        self.tree.bind("<MouseWheel>", self._on_wheel)
+        # Mausrad über der Tabelle scrollt die Tabelle (nicht die Seite) —
+        # plattformabhängige Ereignisse, siehe `scrolling.bind_wheel`.
+        bind_wheel(self.tree, self._on_wheel)
+
+    # -- Farben (Zebra + „wird nicht gedruckt") ----------------------------
+
+    def _configure_tags(self) -> None:
+        """Setzt die Farben der Zeilen-Tags aus der aktuellen Palette."""
+        pal = self._palette
+        self.tree.tag_configure(_TAG_ODD, background=pal.surface)
+        self.tree.tag_configure(_TAG_EVEN, background=pal.surface_alt)
+        self.tree.tag_configure(_TAG_OFF, foreground=pal.text_disabled)
+
+    def _row_tags(self, index: int, included: bool) -> tuple[str, ...]:
+        stripe = _TAG_EVEN if index % 2 else _TAG_ODD
+        return (stripe, _TAG_OFF) if not included else (stripe,)
+
+    def _restripe(self) -> None:
+        """Zebrastreifen nach Einfügen/Sortieren/Umschalten neu vergeben."""
+        for index, iid in enumerate(self.tree.get_children()):
+            included = self._rows[iid][1] if iid in self._rows else True
+            self.tree.item(iid, tags=self._row_tags(index, included))
+
+    def apply_palette(self, palette: Palette) -> None:
+        """Übernimmt ein neues Farbthema (Menü „Ansicht"): Tags + Icons neu."""
+        self._palette = palette
+        self._configure_tags()
+        self._restripe()
+        self._edit_icon = _load_svg_icon(self.frame, _EDIT_ICON_PATH, palette.text_muted)
+        self._toggle_icon = _load_svg_icon(self.frame, _TOGGLE_ICON_PATH, palette.text_muted)
+        for label in self._header_icons.values():
+            if self._edit_icon is not None:
+                label.configure(image=self._edit_icon)
+        if self._hover_icon is not None:
+            self._hide_hover_icon()
 
     def _apply_headings(self) -> None:
         """Setzt die Spaltentitel (zentriert) und den Sortier-Command je Kopf. Der
@@ -233,6 +288,7 @@ class PreviewTable:
         for index, iid in enumerate(order):
             self.tree.move(iid, "", index)
         self._update_sort_indicators()
+        self._restripe()
 
     def _reapply_sort(self) -> None:
         """Sortierung nach einer strukturellen Änderung erneut anwenden (no-op,
@@ -278,8 +334,25 @@ class PreviewTable:
             py = (self._header_px - icon.height()) // 2  # vertikal mittig im Kopf
             lbl.place(x=px, y=py)
 
-    def _on_wheel(self, event: tk.Event) -> str:
-        step = -1 if event.delta > 0 else 1
+    def _on_wheel(self, event: tk.Event | None) -> str | None:
+        """Mausrad über der Tabelle: scrollt die Tabelle — aber nur solange sie
+        noch scrollen kann.
+
+        Steht sie am oberen bzw. unteren Anschlag, wird das Ereignis **nicht**
+        verschluckt (kein „break"), sondern an die Seite weitergereicht. Sonst
+        bliebe das Fenster hängen, sobald der Zeiger über der Tabelle steht —
+        und die ist das größte Element der Oberfläche.
+
+        Das „break" hat einen zweiten Zweck: es hält auch die eingebaute
+        Treeview-Klassenbindung an. Ohne sie würde die Tabelle unter Linux
+        doppelt scrollen (einmal durch uns, einmal durch Tk).
+        """
+        step = wheel_step(event)
+        if not step:
+            return "break"  # zu kleine Bewegung: nichts tun, aber auch nicht weiterreichen
+        first, last = self.tree.yview()
+        if (step < 0 and first <= 0.0) or (step > 0 and last >= 1.0):
+            return None  # am Anschlag -> die Seite scrollt weiter
         self.tree.yview_scroll(step, "units")
         return "break"
 
@@ -326,6 +399,7 @@ class PreviewTable:
         self.tree.update_idletasks()
         self._place_header_icons()
         self._reapply_sort()  # aktive Sortierung über den Rebuild hinweg erhalten
+        self._restripe()
 
     def _card_values(self, card: Card, inc: bool) -> tuple:
         """Werte-Tupel einer Baumzeile in Spaltenreihenfolge (_COLUMNS)."""
@@ -380,6 +454,7 @@ class PreviewTable:
             values[0] = "Ja" if inc else "Nein"
             values[_COLUMNS.index("via")] = self._via_display(card)
             self.tree.item(iid, values=values)
+        self._restripe()
 
     def set_row_included(self, iid: str, included: bool) -> None:
         """Setzt die Drucken-Markierung einer einzelnen Zeile (z.B. nach Via-Edit)."""
@@ -390,6 +465,7 @@ class PreviewTable:
         values = list(self.tree.item(iid, "values"))
         values[0] = "Ja" if included else "Nein"
         self.tree.item(iid, values=values)
+        self._restripe()
 
     def included_cards(self) -> list[Card]:
         # Baum-Reihenfolge (nicht Insertionsreihenfolge): die erzeugte PDF folgt so
@@ -691,6 +767,19 @@ class PreviewTable:
         """Icon für die Hover-Zelle: Umschalter für „Drucken", sonst Stift."""
         return self._toggle_icon if col_name == "print" else self._edit_icon
 
+    def _row_icon_style(self, iid: str) -> str:
+        """Label-Style, dessen Hintergrund zur Zeile `iid` passt.
+
+        Die SVG-Icons sind transparent; Tk mischt sie gegen den Hintergrund des
+        Labels, nicht gegen die Tabelle. Passt der nicht zur Zeile, liegt ein
+        sichtbares Kästchen auf der Zeile — deshalb hier die Zeile abfragen
+        (markiert / Zebra hell / Zebra getönt).
+        """
+        if iid in self.tree.selection():
+            return _ICON_STYLE_SELECTED
+        tags = self.tree.item(iid, "tags")
+        return _ICON_STYLE_EVEN if _TAG_EVEN in tags else _ICON_STYLE_ODD
+
     def _on_motion(self, event: tk.Event) -> None:
         """Zeigt beim Hovern das passende Icon rechtsbündig in der Zelle (Stift für
         Text/Dropdown, Umschalter für „Drucken")."""
@@ -718,7 +807,7 @@ class PreviewTable:
         x, y, w, h = bbox
         px = x + w - icon.width() - _HOVER_ICON_PAD  # rechtsbündig
         py = y + (h - icon.height()) // 2  # vertikal mittig
-        self._hover_icon.configure(image=icon)
+        self._hover_icon.configure(image=icon, style=self._row_icon_style(iid))
         self._hover_icon.place(x=px, y=py)
         self._hover_iid = iid
         self._hover_col = col_name
@@ -763,8 +852,4 @@ class PreviewTable:
         if iid not in self._rows:
             return
         card, inc = self._rows[iid]
-        inc = not inc
-        self._rows[iid] = (card, inc)
-        values = list(self.tree.item(iid, "values"))
-        values[0] = "Ja" if inc else "Nein"
-        self.tree.item(iid, values=values)
+        self.set_row_included(iid, not inc)

@@ -12,6 +12,7 @@ from unittest import mock
 
 import pytest
 
+from qslcards import config as cfg
 from qslcards.gui import app as appmod
 from qslcards.lookup.base import LookupResult
 
@@ -78,6 +79,14 @@ def _row_map(app):
         vals = app.preview.tree.item(iid, "values")
         out[vals[1]] = vals
     return out
+
+
+class _wheel:
+    """Minimales Mausrad-Ereignis (tk.Event lässt sich nicht sinnvoll bauen)."""
+
+    def __init__(self, delta: int, num: int | str = "??") -> None:
+        self.delta = delta
+        self.num = num
 
 
 def _iid_for(app, call):
@@ -244,6 +253,278 @@ def test_manual_remark_kept_on_global_delete_per_station(app, tmp_path):
     assert len(manual) == 1 and manual[0].remarks == "X"  # manuelle Karte überlebt
     # Nicht-manuelle DL1AA-Zeilen tragen den (geleerten) globalen Text.
     assert all(c.remarks == "" for c in dl1 if not c.remarks_manual)
+
+
+# -- Aussehen, Menüleiste und „Zuletzt verwendet" ---------------------------
+
+
+def test_theme_applied_on_start(app):
+    """Beim Start hängt das Farbthema am Fenster (clam + Palette)."""
+    from tkinter import ttk
+
+    from qslcards.gui import theme
+
+    assert app.palette in (theme.LIGHT, theme.DARK)
+    style = ttk.Style(app)
+    assert style.theme_use() == "clam"
+    assert style.lookup("Accent.TButton", "background") == app.palette.accent
+    # Der Erzeugen-Button ist der Primärbutton.
+    assert str(app.output_section.generate_btn.cget("style")) == "Accent.TButton"
+
+
+def test_remarks_counter_follows_input(app):
+    """Abschnitt 7 zeigt „geschrieben/erlaubt" und läuft beim Tippen mit."""
+    from qslcards.gui.sections import REMARKS_MAX_LEN
+
+    section = app.remarks_section
+    assert section.count_var.get() == f"0/{REMARKS_MAX_LEN}"
+
+    section.remarks.set("TNX FR QSO")
+    assert section.count_var.get() == f"10/{REMARKS_MAX_LEN}"
+    assert str(section.count_label.cget("style")) == "Muted.TLabel"
+
+    # Limit erreicht -> Zähler wird hervorgehoben.
+    section.remarks.set("x" * REMARKS_MAX_LEN)
+    assert section.count_var.get() == f"{REMARKS_MAX_LEN}/{REMARKS_MAX_LEN}"
+    # Hervorhebung in der Akzentfarbe des Themas, nicht in Warn-Orange.
+    assert str(section.count_label.cget("style")) == "Accent.TLabel"
+
+    section.remarks.set("")
+    assert section.count_var.get() == f"0/{REMARKS_MAX_LEN}"
+    assert str(section.count_label.cget("style")) == "Muted.TLabel"
+
+
+def test_remarks_entry_still_enforces_the_limit(app):
+    """Der Zähler ersetzt die Begrenzung nicht — mehr als 80 Zeichen sind per
+    Tastatur weiterhin nicht eingebbar."""
+    from qslcards.gui.sections import REMARKS_MAX_LEN
+
+    entry = app.remarks_section.remarks_entry
+    assert str(entry.cget("validate")) == "key"
+    # validatecommand ist "<befehlsname> %P" -> für den direkten Aufruf muss der
+    # Platzhalter für den vorgeschlagenen Text abgeschnitten werden.
+    command = str(entry.cget("validatecommand")).rsplit(" ", 1)[0]
+    assert app.call(command, "x" * REMARKS_MAX_LEN) in (1, "1", True)
+    assert app.call(command, "x" * (REMARKS_MAX_LEN + 1)) in (0, "0", False)
+
+
+def test_listbox_selection_uses_theme_color(app):
+    """Die Prioritätsliste (klassisches tk-Widget) muss schon beim Start die
+    Auswahlfarbe des Themas tragen — nicht die des Betriebssystems."""
+    listbox = app.filter_section.listbox
+    assert listbox.cget("selectbackground") == app.palette.select_bg
+    assert listbox.cget("selectforeground") == app.palette.text
+    assert listbox.cget("background") == app.palette.surface
+
+
+def test_radio_and_checkbutton_indicators_use_accent(app):
+    """Angewählte Radio-/Checkbuttons zeigen die Akzentfarbe.
+
+    `clam` färbt den Indikator über `indicatorbackground`/`indicatorforeground`
+    — `indicatorcolor` (die Option der alten tk-Widgets) wird ignoriert.
+    """
+    from tkinter import ttk
+
+    style = ttk.Style(app)
+    for widget in ("TRadiobutton", "TCheckbutton"):
+        assert style.lookup(widget, "indicatorbackground", ["selected"]) == app.palette.accent
+        assert style.lookup(widget, "indicatorforeground", ["selected"]) == app.palette.accent_text
+        # nicht angewählt: unauffällige Fläche in Feldfarbe
+        assert style.lookup(widget, "indicatorbackground") == app.palette.surface
+
+
+def test_app_icons_are_largest_first(app):
+    """Das größte Bild muss zuerst kommen.
+
+    `wm iconphoto` skaliert auf macOS das ERSTE übergebene Bild auf alle
+    gebrauchten Größen — steht dort ein kleines, ist das Dock-Icon verpixelt.
+    """
+    icons = appmod.load_app_icons(app)
+    assert icons, "keine Icon-PNGs gefunden (scripts/make_icon.py ausführen)"
+    widths = [icon.width() for icon in icons]
+    assert widths == sorted(widths, reverse=True)
+    assert widths[0] == appmod.ICON_SIZES[0]
+
+
+def test_switch_theme_updates_widgets_and_config(app, tmp_path):
+    from qslcards.gui import theme
+
+    app._set_theme("dark")
+    assert app.palette is theme.DARK
+    assert app.base_config.appearance.theme == "dark"
+    assert app.menubar.theme_var.get() == "dark"
+    assert app.filter_section.listbox.cget("background") == theme.DARK.surface
+    assert app.preview._palette is theme.DARK
+
+    app._set_theme("light")
+    assert app.palette is theme.LIGHT
+    assert app.filter_section.listbox.cget("background") == theme.LIGHT.surface
+
+    # Das Thema landet in der Config-Datei und übersteht ein erneutes Laden.
+    saved = cfg.load(appmod.CONFIG_PATH)
+    assert saved.appearance.theme == "light"
+
+
+def test_status_bar_reports_loaded_log(app, tmp_path):
+    _load(app, tmp_path)
+    assert "3 QSOs" in app.status.info_var.get()
+    assert app.status.status_var.get()  # irgendeine Meldung steht da
+
+
+def test_recent_files_are_remembered(app, tmp_path):
+    _load(app, tmp_path)
+    log_path = str(tmp_path / "log.adi")
+    assert app.base_config.recent.logs == [log_path]
+
+    image = tmp_path / "bild.png"
+    image.write_bytes(b"")  # Inhalt egal: das Thumbnail scheitert nur sichtbar
+    app._set_image(str(image))
+    assert app.base_config.recent.images == [str(image)]
+
+    # Gespeichert wird sofort -> nach dem Neuladen der Datei noch da.
+    saved = cfg.load(appmod.CONFIG_PATH)
+    assert saved.recent.logs == [log_path]
+    assert saved.recent.images == [str(image)]
+
+    app._clear_recent()
+    assert app.base_config.recent.logs == [] and app.base_config.recent.images == []
+
+
+def test_autosave_keeps_appearance_and_recent(app, tmp_path):
+    """Der Auto-Save baut die Config aus den Widgets — Aussehen und
+    „Zuletzt verwendet" haben keine Widgets und dürfen nicht verloren gehen."""
+    _load(app, tmp_path)
+    app._set_theme("dark")
+    app.sender_section.vars["callsign"].set("DN5MT")
+    app._auto_save()
+
+    saved = cfg.load(appmod.CONFIG_PATH)
+    assert saved.sender.callsign == "DN5MT"
+    assert saved.appearance.theme == "dark"
+    assert saved.recent.logs == [str(tmp_path / "log.adi")]
+
+
+def test_menu_generate_entry_follows_button_state(app, tmp_path):
+    app._lookup_running = True
+    app._update_generate_state()
+    assert str(app.output_section.generate_btn["state"]) == "disabled"
+    app._lookup_running = False
+    app._update_generate_state()
+    assert str(app.output_section.generate_btn["state"]) == "normal"
+
+
+def test_open_recent_log_loads_it(app, tmp_path):
+    _load(app, tmp_path)
+    path = str(tmp_path / "log.adi")
+    app.qsos = []
+    with (
+        mock.patch.object(appmod.threading, "Thread", _SyncThread),
+        mock.patch.object(appmod, "lookup_calls", side_effect=_fake_lookup),
+        mock.patch.object(appmod, "messagebox"),
+    ):
+        app._open_recent_log(path)
+        app.update()
+    assert len(app.qsos) == 3
+    assert app.file_section.path_var.get() == path
+
+
+def test_preview_icon_backgrounds_match_their_row(app, tmp_path):
+    """Die SVG-Icons sind transparent und werden gegen den Label-Hintergrund
+    gemischt — der muss zur Zeile passen, sonst liegt ein Kästchen darauf."""
+    from tkinter import ttk
+
+    _load(app, tmp_path)
+    preview, style, pal = app.preview, ttk.Style(app), app.palette
+
+    # Kopf-Icons: Hintergrund = Farbe des Spaltenkopfs.
+    for label in preview._header_icons.values():
+        assert str(label.cget("style")) == "TreeIconHead.TLabel"
+    assert style.lookup("TreeIconHead.TLabel", "background") == pal.surface_alt
+
+    # Zellen-Icons: Zebra-Zeile hell/getönt, markierte Zeile in Auswahlfarbe.
+    rows = preview.tree.get_children()
+    assert preview._row_icon_style(rows[0]) == "TreeIconOdd.TLabel"
+    assert preview._row_icon_style(rows[1]) == "TreeIconEven.TLabel"
+    preview.tree.selection_set(rows[1])
+    assert preview._row_icon_style(rows[1]) == "TreeIconSelected.TLabel"
+
+    for name, expected in (
+        ("TreeIconOdd.TLabel", pal.surface),
+        ("TreeIconEven.TLabel", pal.surface_alt),
+        ("TreeIconSelected.TLabel", pal.select_bg),
+    ):
+        assert style.lookup(name, "background") == expected
+
+
+def test_preview_rows_are_striped(app, tmp_path):
+    """Zebrastreifen + Graustufe für nicht gedruckte Zeilen hängen als Tags."""
+    app.lookup_section.hamqth_user.set("u")
+    app.lookup_section.hamqth_pass.set("p")
+    _load(app, tmp_path)
+
+    tags_by_call = {}
+    for index, iid in enumerate(app.preview.tree.get_children()):
+        call = app.preview.tree.item(iid, "values")[1]
+        tags = app.preview.tree.item(iid, "tags")
+        assert tags[0] == ("even" if index % 2 else "odd")
+        tags_by_call[call] = tags
+    # DL3CC (nur LoTW) wird nicht gedruckt -> zusätzliches „off"-Tag.
+    assert "off" in tags_by_call["DL3CC"]
+    assert "off" not in tags_by_call["DL1AA"]
+
+
+def test_wheel_over_table_scrolls_the_page_at_the_end(app, tmp_path):
+    """Die Vorschautabelle darf das Mausrad nur verschlucken, solange sie selbst
+    scrollen kann — sonst hinge die Seite fest, sobald der Zeiger über der
+    Tabelle steht (sie ist das größte Element der Oberfläche)."""
+    _load(app, tmp_path)  # 3 Zeilen -> Tabelle ist nicht scrollbar
+    app.update()
+    tree = app.preview.tree
+
+    # Mit zu wenigen Zeilen steht die Tabelle sofort am Anschlag: nach unten wie
+    # nach oben muss sie das Ereignis durchreichen.
+    assert app.preview._on_wheel(_wheel(-120)) is None  # nach unten
+    assert app.preview._on_wheel(_wheel(120)) is None  # nach oben
+
+    # Mit vielen Zeilen scrollt die Tabelle selbst und behält das Ereignis…
+    _load(app, tmp_path, log=ADIF * 6)
+    app.update()
+    assert app.preview._on_wheel(_wheel(-120)) == "break"
+    # …bis sie unten angekommen ist.
+    tree.yview_moveto(1.0)
+    app.update()
+    assert app.preview._on_wheel(_wheel(-120)) is None
+
+
+def test_page_wheel_handles_platform_deltas(app):
+    """Der Seiten-Scroll verarbeitet die Ereignisse aller Plattformen.
+
+    (Die Schrittweite selbst prüft `tests/test_scrolling.py`; hier geht es um
+    die Verdrahtung mit dem Canvas.)
+    """
+    canvas = app.body.canvas
+    scrolled = []
+    canvas.yview_scroll = lambda step, what: scrolled.append(step)  # type: ignore[method-assign]
+    wheel = app.body._on_mousewheel
+
+    wheel(_wheel(-120))  # Windows: eine Rastung nach unten
+    wheel(_wheel(240))  # Windows: zwei Rastungen nach oben
+    wheel(_wheel(-3))  # macOS: kleine Bewegung nach unten
+    wheel(_wheel(0))  # macOS: zu kleine Bewegung -> ignorieren
+    assert scrolled == [1, -2, 1]
+
+    scrolled.clear()
+    wheel(_wheel(0, num=4))  # X11/Tk 8.6: Rad nach oben
+    wheel(_wheel(0, num=5))  # X11/Tk 8.6: Rad nach unten
+    assert scrolled == [-1, 1]
+
+
+def test_goto_section_scrolls(app, tmp_path):
+    _load(app, tmp_path)
+    app.update()
+    app._goto_section(10)  # Ausgabe ganz unten
+    app.update()
+    assert app.body.canvas.yview()[0] > 0.0
 
 
 if __name__ == "__main__":  # pragma: no cover

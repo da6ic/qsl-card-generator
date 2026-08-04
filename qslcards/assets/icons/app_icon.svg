@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Programm-Icon: QSL-Karte mit austretenden Funkwellen.
+       Farben aus gui/theme.py (Akzent #1F6FEB). Bewusst wenige, kräftige
+       Formen ohne Überschneidung, damit das Motiv auch bei 16 px lesbar
+       bleibt: Wellen oben rechts, Karte unten links. -->
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="#1F6FEB"/>
+
+  <!-- Funkwellen (Sender oben rechts, Abstrahlung nach oben rechts) -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="26" stroke-linecap="round">
+    <circle cx="318" cy="138" r="15" fill="#FFFFFF" stroke="none"/>
+    <path d="M 318 80 A 58 58 0 0 1 376 138"/>
+    <path d="M 318 26 A 112 112 0 0 1 430 138"/>
+  </g>
+
+  <!-- QSL-Karte (Schatten + Fläche + Zeilen) -->
+  <rect x="66" y="188" width="340" height="232" rx="26" fill="#0B2A5B" opacity="0.28"/>
+  <rect x="52" y="172" width="340" height="232" rx="26" fill="#FFFFFF"/>
+  <rect x="88" y="208" width="140" height="28" rx="14" fill="#1F6FEB"/>
+  <rect x="88" y="268" width="200" height="18" rx="9" fill="#C7D3E4"/>
+  <rect x="88" y="306" width="272" height="18" rx="9" fill="#C7D3E4"/>
+  <rect x="88" y="344" width="150" height="18" rx="9" fill="#C7D3E4"/>
+</svg>

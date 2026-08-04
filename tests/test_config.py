@@ -93,5 +93,59 @@ def test_empty_file_uses_all_defaults(tmp_path: Path):
     assert c == cfg.AppConfig()
 
 
+# -- Aussehen + „Zuletzt verwendet" ----------------------------------------
+
+
+def test_appearance_defaults_and_roundtrip(tmp_path: Path):
+    assert cfg.AppConfig().appearance.theme == "system"
+
+    path = tmp_path / "c.yaml"
+    config = cfg.AppConfig()
+    config.appearance = cfg.AppearanceConfig(theme="dark")
+    cfg.save(config, path)
+    assert cfg.load(path).appearance.theme == "dark"
+
+
+def test_recent_roundtrip_and_defensive_load(tmp_path: Path):
+    path = tmp_path / "c.yaml"
+    config = cfg.AppConfig()
+    config.recent = cfg.RecentConfig(logs=["/a.adi"], images=["/b.png"])
+    cfg.save(config, path)
+    loaded = cfg.load(path)
+    assert loaded.recent.logs == ["/a.adi"]
+    assert loaded.recent.images == ["/b.png"]
+
+    # Von Hand kaputt editiert: leere/nicht-String-Einträge fliegen raus.
+    broken = tmp_path / "broken.yaml"
+    broken.write_text(
+        "recent:\n  logs: ['/ok.adi', '', 42, '  ']\n  images: 'kein_list'\n", encoding="utf-8"
+    )
+    loaded = cfg.load(broken)
+    assert loaded.recent.logs == ["/ok.adi"]
+    assert loaded.recent.images == []
+
+
+def test_recent_is_capped(tmp_path: Path):
+    path = tmp_path / "many.yaml"
+    entries = "\n".join(f"    - /log{i}.adi" for i in range(cfg.MAX_RECENT + 5))
+    path.write_text(f"recent:\n  logs:\n{entries}\n", encoding="utf-8")
+    assert len(cfg.load(path).recent.logs) == cfg.MAX_RECENT
+
+
+def test_push_recent_moves_to_front_without_duplicates():
+    entries = ["/a", "/b", "/c"]
+    assert cfg.push_recent(entries, "/c") == ["/c", "/a", "/b"]
+    assert cfg.push_recent(entries, "/neu") == ["/neu", "/a", "/b", "/c"]
+    assert cfg.push_recent(entries, "  ") == entries  # leer -> unverändert
+    assert cfg.push_recent(entries, "/a") is not entries  # Original bleibt heil
+
+
+def test_push_recent_respects_limit():
+    entries = [f"/log{i}" for i in range(cfg.MAX_RECENT)]
+    pushed = cfg.push_recent(entries, "/neu")
+    assert len(pushed) == cfg.MAX_RECENT
+    assert pushed[0] == "/neu" and entries[-1] not in pushed
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

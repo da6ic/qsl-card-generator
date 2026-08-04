@@ -70,10 +70,48 @@ class GenerationConfig:
 
 
 @dataclass
+class AppearanceConfig:
+    """Aussehen der Oberfläche (nicht der Karte!).
+
+    `theme`: "system" folgt der Betriebssystem-Einstellung (hell/dunkel),
+    "light"/"dark" erzwingen einen Modus. Umschaltbar über Menü „Ansicht".
+    """
+
+    theme: str = "system"  # "system" | "light" | "dark"
+
+
+# Wie viele Einträge die Menüs „Zuletzt verwendet" höchstens führen.
+MAX_RECENT = 8
+
+
+@dataclass
+class RecentConfig:
+    """Zuletzt geöffnete Dateien für das Menü „Datei" (neueste zuerst)."""
+
+    logs: list[str] = field(default_factory=list)
+    images: list[str] = field(default_factory=list)
+
+
+@dataclass
 class AppConfig:
     sender: SenderConfig = field(default_factory=SenderConfig)
     lookup: LookupConfig = field(default_factory=LookupConfig)
     generation: GenerationConfig = field(default_factory=GenerationConfig)
+    appearance: AppearanceConfig = field(default_factory=AppearanceConfig)
+    recent: RecentConfig = field(default_factory=RecentConfig)
+
+
+def push_recent(entries: list[str], path: str, limit: int = MAX_RECENT) -> list[str]:
+    """Setzt `path` an die Spitze der Liste (ohne Duplikate) und kürzt auf `limit`.
+
+    Rein (ohne Seiteneffekt): liefert die neue Liste zurück. Leere Pfade werden
+    ignoriert, damit kein Leereintrag ins Menü rutscht.
+    """
+    path = (path or "").strip()
+    if not path:
+        return list(entries)
+    rest = [p for p in entries if p != path]
+    return [path, *rest][:limit]
 
 
 T = TypeVar("T")
@@ -89,6 +127,25 @@ def _from_dict(cls: type[T], data: Any) -> T:
     return cls(**kwargs)
 
 
+def _recent_from_dict(data: Any) -> RecentConfig:
+    """Baut `RecentConfig` defensiv: nur nicht-leere Strings, auf MAX_RECENT gekürzt.
+
+    Die Listen werden von der App geschrieben, können aber von Hand editiert
+    worden sein — kaputte Einträge dürfen den Start nicht kippen.
+    """
+
+    def clean(value: Any) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        return [item.strip() for item in value if isinstance(item, str) and item.strip()][
+            :MAX_RECENT
+        ]
+
+    if not isinstance(data, dict):
+        return RecentConfig()
+    return RecentConfig(logs=clean(data.get("logs")), images=clean(data.get("images")))
+
+
 def load(path: str | Path) -> AppConfig:
     """Lädt die YAML-Config und füllt fehlende Felder mit Defaults auf."""
     with open(path, encoding="utf-8") as fh:
@@ -98,6 +155,8 @@ def load(path: str | Path) -> AppConfig:
         sender=_from_dict(SenderConfig, data.get("sender")),
         lookup=_from_dict(LookupConfig, data.get("lookup")),
         generation=_from_dict(GenerationConfig, data.get("generation")),
+        appearance=_from_dict(AppearanceConfig, data.get("appearance")),
+        recent=_recent_from_dict(data.get("recent")),
     )
 
 

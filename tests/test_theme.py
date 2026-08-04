@@ -1,0 +1,115 @@
+"""Tests für das Farbthema (`gui/theme.py`).
+
+Die reinen Funktionen (Palette, Modus-Auflösung) laufen ohne Tk; alles, was
+Widgets färbt, braucht ein Tk-Display und wird sonst übersprungen.
+"""
+
+from __future__ import annotations
+
+import tkinter as tk
+from dataclasses import fields
+from tkinter import ttk
+from unittest import mock
+
+import pytest
+
+from qslcards.gui import theme
+
+
+@pytest.fixture
+def root():
+    try:
+        window = tk.Tk()
+    except tk.TclError as exc:  # kein Display -> Test überspringen
+        pytest.skip(f"kein Tk-Display: {exc}")
+    window.withdraw()
+    yield window
+    window.destroy()
+
+
+# -- Palette ---------------------------------------------------------------
+
+
+def test_palettes_define_every_role():
+    """Beide Paletten füllen jede Rolle mit einer Hex-Farbe (keine Lücken)."""
+    for palette in (theme.LIGHT, theme.DARK):
+        for f in fields(theme.Palette):
+            value = getattr(palette, f.name)
+            assert value, f"{palette.name}.{f.name} ist leer"
+            if f.name == "name":
+                continue
+            assert value.startswith("#") and len(value) == 7, f"{palette.name}.{f.name}={value}"
+
+
+def test_light_and_dark_differ():
+    """Hell und dunkel müssen sich in den Flächenfarben unterscheiden."""
+    assert theme.LIGHT.bg != theme.DARK.bg
+    assert theme.LIGHT.surface != theme.DARK.surface
+    assert theme.LIGHT.text != theme.DARK.text
+
+
+def test_resolve_mode_explicit_modes_skip_detection():
+    """„light"/„dark" werden direkt übernommen — ohne Systemabfrage."""
+    with mock.patch.object(theme, "detect_system_theme", side_effect=AssertionError):
+        assert theme.resolve_mode("light") == "light"
+        assert theme.resolve_mode("dark") == "dark"
+        assert theme.resolve_mode("DARK") == "dark"
+
+
+def test_resolve_mode_system_asks_os():
+    with mock.patch.object(theme, "detect_system_theme", return_value="dark"):
+        assert theme.resolve_mode("system") == "dark"
+        assert theme.resolve_mode(None) == "dark"
+        assert theme.resolve_mode("quatsch") == "dark"  # unbekannt -> wie „system"
+
+
+def test_detect_system_theme_never_raises():
+    """Schlägt die Erkennung fehl, gilt „light" (nie eine Exception nach oben)."""
+    with mock.patch.object(theme.subprocess, "run", side_effect=OSError("kein Tool")):
+        assert theme.detect_system_theme() == "light"
+
+
+def test_palette_for_returns_matching_palette():
+    assert theme.palette_for("light") is theme.LIGHT
+    assert theme.palette_for("dark") is theme.DARK
+
+
+# -- Anwendung auf Widgets (braucht Tk) ------------------------------------
+
+
+def test_apply_uses_clam_and_colors_styles(root):
+    palette = theme.apply(root, "dark")
+    assert palette is theme.DARK
+    style = ttk.Style(root)
+    assert style.theme_use() == "clam"  # nur clam lässt sich voll einfärben
+    assert style.lookup("TFrame", "background") == theme.DARK.bg
+    assert style.lookup("Accent.TButton", "background") == theme.DARK.accent
+    assert style.lookup("Treeview", "fieldbackground") == theme.DARK.surface
+
+
+def test_apply_switches_back_to_light(root):
+    theme.apply(root, "dark")
+    theme.apply(root, "light")
+    style = ttk.Style(root)
+    assert style.lookup("TFrame", "background") == theme.LIGHT.bg
+    assert style.lookup("Accent.TButton", "background") == theme.LIGHT.accent
+
+
+def test_restyle_tree_colors_classic_widgets(root):
+    """Listbox/Canvas sind keine ttk-Widgets: sie werden direkt umgefärbt."""
+    listbox = tk.Listbox(root)
+    canvas = tk.Canvas(root)
+    listbox.pack()
+    canvas.pack()
+
+    theme.restyle_tree(root, theme.DARK)
+    assert listbox.cget("background") == theme.DARK.surface
+    assert canvas.cget("background") == theme.DARK.bg
+
+    theme.restyle_tree(root, theme.LIGHT)
+    assert listbox.cget("background") == theme.LIGHT.surface
+    assert canvas.cget("background") == theme.LIGHT.bg
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(pytest.main([__file__, "-v"]))

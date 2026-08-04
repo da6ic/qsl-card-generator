@@ -9,13 +9,19 @@ Ausführliche Spezifikation. Ergänzt `CLAUDE.md`. Layout separat in `CARD_LAYOU
 Ein Funkamateur (Absender, z.B. DN5MT) hat ein Logbuch im ADIF-Format. Er will
 QSL-Karten für bestätigte QSOs drucken. Das Programm erzeugt eine PDF, in der
 jede Karte aus zwei A6-Seiten besteht (Bild vorne, Daten hinten). Vor der
-Erzeugung wählt er ADIF, Frontbild, Absenderdaten, Via-Filter und Kartenmodus.
+Erzeugung wählt er ADIF, Frontbild, Absenderdaten, die Priorität der Zustellwege
+(inkl. Trennlinie), Kartenmodus und Druckmodus.
 
 ---
 
 ## 2. GUI (Tkinter)
 
-Ein Hauptfenster mit klaren Abschnitten (top → bottom), jeweils in `gui/sections.py`:
+Ein Hauptfenster mit **Menüleiste** (§2.1), einem scrollbaren Bereich mit den
+Abschnitten 1–10 und einer **Statusleiste** am Fuß (§2.3). Farben und Abstände
+kommen ausschließlich aus `gui/theme.py` (§2.2) — kein Widget setzt selbst eine
+Farbe, so wie kein Zeichencode eine Layoutzahl setzt (`pdf/geometry.py`).
+
+Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
 
 1. **ADIF-Logbuch**: `Durchsuchen…`-Button, Pfadanzeige, Button `Log laden`.
    Nach der Auswahl wird das Log **automatisch geladen** (Hot-Load); der Button
@@ -83,15 +89,81 @@ Ein Hauptfenster mit klaren Abschnitten (top → bottom), jeweils in `gui/sectio
 9. **Druckmodus**: Radiobuttons `Duplexdruck (Vorder-/Rückseite abwechselnd)` /
    `Vorder-/Rückseite getrennt (2 PDFs)` → `generation.print_mode` (`duplex` |
    `separate`, siehe §7).
-10. **Ausgabe**: Zielpfad der PDF, Button `PDF erzeugen`, Fortschrittsbalken
-   (`ttk.Progressbar`) + Statuszeile. `PDF erzeugen` ist **deaktiviert**, solange
-   der Lookup nach dem Log-Laden noch läuft, und wird erst danach wieder aktiv.
-   Nach Erfolg werden die erzeugten PDF(s) direkt in der Standardanwendung geöffnet.
+10. **Ausgabe**: Zielpfad der PDF, Button `PDF erzeugen` (Primärbutton,
+   `Accent.TButton`) und Fortschrittsbalken (`ttk.Progressbar`). Die Statuszeile
+   steht **nicht** mehr hier, sondern in der Fußleiste (§2.3). `PDF erzeugen` ist
+   **deaktiviert**, solange der Lookup nach dem Log-Laden noch läuft, und wird erst
+   danach wieder aktiv (synchron dazu der Menüeintrag). Nach Erfolg werden die
+   erzeugten PDF(s) direkt in der Standardanwendung geöffnet.
 
 Langlaufende Arbeit (PDF, Lookups) läuft in einem **Worker-Thread**; UI-Updates
 nur über `root.after(...)` (Tkinter ist nicht thread-safe). Der Lookup startet
 automatisch beim Log-Laden im Hintergrund, ohne die GUI zu blockieren (Bild/
 Einstellungen bleiben bedienbar); es läuft immer nur **ein** Lookup-Thread.
+
+### 2.1 Menüleiste (`gui/menu.py`)
+
+`MenuBar` bekommt die Aktionen als Callbacks (`MenuActions`) — **keine**
+Geschäftslogik, verdrahtet wird in `app.py` (wie bei `sections.py`).
+
+| Menü | Einträge |
+|------|----------|
+| **Datei** | ADIF-Logbuch öffnen… (⌘/Strg+O), Zuletzt verwendete Logs ▸, Frontbild wählen… (+B), Zuletzt verwendete Bilder ▸, Ausgabeziel wählen… (+⇧S), PDF erzeugen (+P) |
+| **Bearbeiten** | Ausschneiden/Kopieren/Einfügen/Alles auswählen — als virtuelle Events ans fokussierte Widget |
+| **Aktionen** | Log neu laden (+R), Lookups neu abrufen (+⇧R), Lookup-Cache leeren… |
+| **Ansicht** | Farbthema ▸ System/Hell/Dunkel, Gehe zu Abschnitt ▸ 1–10 |
+| **Hilfe** | Dokumentation ▸, config.yaml öffnen, Ausgabeordner anzeigen, Lookup-Cache anzeigen, Über… |
+
+Plattform-Eigenheiten sind in `menu.py` gekapselt: auf **macOS** ⌘-Kürzel sowie
+„Über…"/„Beenden" im Programm-Menü (`name="apple"`, `tk::mac::Quit`), sonst
+Strg-Kürzel mit „Beenden" in „Datei" und „Über…" in „Hilfe". Ein `accelerator`
+ist bei Tk nur Beschriftung — die Kürzel werden zusätzlich per `bind_all`
+registriert.
+
+### 2.2 Farbthema (`gui/theme.py`)
+
+Palette „Funk-Blau" in **hell** und **dunkel**, je Rolle benannt (`bg`,
+`surface`, `surface_alt`, `text`, `text_muted`, `border`, `accent`, `select_bg`,
+`success`/`warning`/`danger`). Basis ist das ttk-Theme **`clam`** — nur die
+mitgelieferten „klassischen" Themes lassen sich vollständig einfärben; die App
+sieht dadurch auf allen Plattformen gleich aus.
+
+- Modus aus `appearance.theme`: `system` (Default, erkennt macOS `defaults`,
+  Windows-Registry, Linux `gsettings`), `light`, `dark`. Jede Erkennung ist „best
+  effort" und fällt bei Fehlern auf hell zurück — nie fatal.
+- Klassische tk-Widgets (Listbox, Canvas, Menüs) kennen keine ttk-Styles und
+  werden per `restyle_tree(widget, palette)` eingefärbt — **beim Start und** bei
+  jedem Wechsel, sonst behalten sie die Farben des Betriebssystems.
+- Achtung `clam`: Radio-/Checkbuttons färbt man über `indicatorbackground`/
+  `indicatorforeground`; `indicatorcolor` (die Option der alten tk-Widgets) wird
+  ignoriert.
+- Die Icon-Overlays in der Vorschautabelle sind transparent und werden gegen den
+  Hintergrund ihres **Labels** gemischt. Dafür gibt es je einen Style pro
+  möglichem Untergrund (`TreeIconHead`/`Odd`/`Even`/`Selected`), sonst liegt ein
+  andersfarbiges Kästchen auf der Zeile.
+
+Das Programm-Icon liegt als `assets/icons/app_icon.svg` und wird von
+`scripts/make_icon.py` zu PNG (16–1024), `.ico` und `.icns` gerendert. Fürs
+Fenster werden die PNGs **größte zuerst** an `iconphoto` übergeben (macOS
+skaliert das erste Bild auf alle Größen); im „Über"-Dialog wird das Icon als
+**Vektor** auf einen Canvas gezeichnet (`gui/icon_canvas.py`), weil Tk Bitmaps
+auf Retina-Displays sichtbar hochskaliert.
+
+### 2.3 Statusleiste, Scrollen, Tastenkürzel
+
+- **Statusleiste** am Fensterfuß: farbiger Punkt + Meldung links
+  (`info`/`busy`/`ok`/`error`), Kurzinfo rechts (QSO-Zahl, Dateiname). Sie liegt
+  außerhalb des scrollbaren Bereichs und ist damit immer sichtbar.
+- **Scrollen** (`gui/scrolling.py`): Die Fenstersysteme melden das Mausrad
+  unterschiedlich — macOS kleine `delta`, Windows Vielfache von 120, X11 mit
+  Tk 9 ebenfalls `<MouseWheel>`, X11 mit Tk 8.6 dagegen `<Button-4>`/`<Button-5>`.
+  Die Alt-Buttons dürfen **nur** bei X11 + Tk < 9 gebunden werden, sonst kommt
+  jede Rastung doppelt an. Die Vorschautabelle verschluckt das Rad nur, solange
+  sie selbst scrollen kann, und reicht es am Anschlag an die Seite weiter.
+- **Tastenkürzel in Eingabefeldern** (`gui/textedit.py`): Tk kann nur zeichenweise
+  löschen. Ergänzt werden wort- und zeilenweises Löschen (macOS ⌥⌫/⌥⌦/⌘⌫/⌘⌦,
+  sonst Strg+Rücktaste/Strg+Entf/Strg+U), gebunden an die Klasse `TEntry` und
+  damit auch in den Editoren der Vorschautabelle wirksam.
 
 ---
 
@@ -151,13 +223,32 @@ class GenerationConfig:
     # Log, sie wird immer per Lookup bestimmt (§6).
 
 @dataclass
+class AppearanceConfig:
+    theme: str = "system"        # "system" (folgt dem OS) | "light" | "dark"
+                                 #   Menü „Ansicht > Farbthema" schreibt hierher.
+
+@dataclass
+class RecentConfig:              # Menü „Datei > Zuletzt verwendet", neueste zuerst
+    logs: list[str] = []         # max. MAX_RECENT (8) Einträge
+    images: list[str] = []
+
+@dataclass
 class AppConfig:
     sender: SenderConfig
     lookup: LookupConfig
     generation: GenerationConfig
+    appearance: AppearanceConfig
+    recent: RecentConfig
 ```
 
 `load(path) -> AppConfig` / `save(config, path)`. Fehlende Felder → Defaults.
+`recent` wird **defensiv** geladen (nur nicht-leere Strings, auf `MAX_RECENT`
+gekürzt) — die Listen schreibt zwar die App, sie können aber von Hand editiert
+worden sein. `push_recent(entries, path)` setzt einen Pfad duplikatfrei nach vorn.
+
+> **Achtung beim Auto-Save:** `appearance` und `recent` haben keine Eingabefelder.
+> `App._gather_config()` baut die Config aus den Widgets und muss beide aus der
+> Basis-Config übernehmen, sonst löscht das nächste automatische Speichern sie.
 
 ---
 
@@ -453,9 +544,24 @@ in `geometry.py` referenzieren.
   `default_via`), `resolve_route`/`active_via_priority`/`normalize_via_priority`,
   `extract_manager_callsign`, Parsing der Routing-Felder (HamQTH inkl. lotw/eqsl,
   QRZ-Manager), Enrichment über alle Stationen, Cache, Reauth — HTTP gemockt.
-- `test_config.py`: Laden/Speichern, fehlende Felder → Defaults.
+- `test_config.py`: Laden/Speichern, fehlende Felder → Defaults, `appearance`/
+  `recent` (Roundtrip, defensives Laden, Kappung, `push_recent`).
 - `test_geometry.py`: mm-Umrechnung, Seitenmaße, dass alle Konstanten definiert
   sind und im Blattbereich liegen.
 - `test_generator.py`: Smoke-Test beider Druckmodi (läuft ohne Exception; duplex
   erzeugt eine Datei mit 2 × Kartenanzahl Seiten, separate zwei Dateien).
-- `test_gui.py`: Widget-Baum baut headless; Auto-Sync der Config.
+- `test_gui.py`: Widget-Baum baut headless; Auto-Sync der Config (inkl. Erhalt von
+  `appearance`/`recent`); Themenwechsel, Statusleiste, „Zuletzt verwendet",
+  Icon-Reihenfolge, Zebra-/Icon-Hintergründe, Zeichenzähler, Seiten-Scroll.
+- `test_theme.py`: Paletten vollständig, Modus-Auflösung, `clam` + gesetzte
+  Style-Farben, `restyle_tree` für klassische tk-Widgets.
+- `test_menu.py`: Menüstruktur, dynamische Teile („Zuletzt verwendet", Sperre von
+  „PDF erzeugen"), jeder Eintrag löst seinen Callback aus, Kürzel je Plattform.
+- `test_icon_canvas.py`: **gleicht die Vektor-Zeichnung mit `app_icon.svg` ab**
+  (Rechtecke, Bögen, Strichstärke, gemischte Schattenfarbe) — schlägt fehl, sobald
+  SVG und Canvas auseinanderlaufen.
+- `test_scrolling.py`: Schrittweite je Meldeart (macOS/Windows/X11) und dass unter
+  Tk 9/X11 **nicht** beide Meldearten gebunden sind (sonst doppeltes Scrollen).
+- `test_textedit.py`: Wortgrenzen, Belegung je Plattform, echtes Tastenverhalten.
+  **Merke:** ein per `withdraw()` verstecktes Fenster nimmt keine synthetischen
+  Tastenereignisse an — Testfenster off-screen öffnen statt verstecken.

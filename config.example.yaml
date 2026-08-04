@@ -73,3 +73,17 @@ generation:
   confirm_mark: "none"         # Bestätigungs-Markierung (global): none|qso|swl
                                #   qso: "Confirming QSO", swl: "Confirming SWL-Report",
                                #   none: keine Markierung
+
+appearance:
+  # Farbthema der Oberfläche (NICHT der Karte). Umschaltbar im Menü
+  # „Ansicht > Farbthema"; die App schreibt die Wahl hierher zurück.
+  #   system : folgt der Hell/Dunkel-Einstellung des Betriebssystems
+  #   light  : immer hell
+  #   dark   : immer dunkel
+  theme: "system"
+
+recent:
+  # Zuletzt geöffnete Dateien für das Menü „Datei" (neueste zuerst, max. 8).
+  # Wird von der App gepflegt – hier normalerweise nichts von Hand eintragen.
+  logs: []
+  images: []

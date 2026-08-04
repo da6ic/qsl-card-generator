@@ -1,6 +1,11 @@
 # Konfiguration & lokale Daten (nicht einchecken)
 config.yaml
 lookup_cache.json
+*.png
+
+# Ausnahme: das Programm-Icon gehört zum Code (aus app_icon.svg gerendert,
+# siehe scripts/make_icon.py) und muss mit eingecheckt werden.
+!qslcards/assets/icons/*.png
 
 # ADIF-Logbücher (lokale/persönliche Daten)
 *.adi

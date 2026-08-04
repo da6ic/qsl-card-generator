@@ -76,11 +76,24 @@ qslcards/
     app.py                # Hauptfenster, verdrahtet alles
     sections.py           # UI-Abschnitte (Datei, Bild, Absender, Filter, ...)
     preview.py            # Tabelle: ALLE QSOs/Karten + Via/Route, Drucken-Flag
+    theme.py              # Farbthema (hell/dunkel) + ALLE Farben/Abstände der GUI
+    menu.py               # Menüleiste (plattformabhängige Kürzel/Sonderfälle)
+    icon_canvas.py        # Programm-Icon als Vektor (für den „Über"-Dialog)
+    scrolling.py          # Mausrad je Fenstersystem (macOS/Windows/X11)
+    textedit.py           # Wort-/zeilenweises Löschen in Eingabefeldern
+  assets/
+    fonts/                # DejaVuSans (Umlaute auf der Karte)
+    icons/                # Tabellen-Icons + app_icon.svg und dessen Renderings
 tests/
-  test_adif_parser.py
-  test_card_builder.py
-  test_lookup.py
-  test_geometry.py
+  test_adif_parser.py     test_theme.py
+  test_card_builder.py    test_menu.py
+  test_lookup.py          test_icon_canvas.py
+  test_geometry.py        test_scrolling.py
+  test_config.py          test_textedit.py
+  test_generator.py       test_gui.py
+scripts/
+  preview_card.py         # Karten-Preview als PDF
+  make_icon.py            # app_icon.svg -> PNG (16–1024) + .ico + .icns
 config.example.yaml       # Vorlage -> Nutzer kopiert nach config.yaml
 requirements.txt
 README.md
@@ -290,6 +303,8 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
 - [x] Rückseite entspricht `docs/CARD_LAYOUT.md` (visuell iteriert).
 - [x] Auto-Lookup beim Laden bestimmt die akzeptierten Wege {B,D,Q,L} + Manager +
       Adresse für alle Stationen; Cache funktioniert; Ausfälle sind nicht fatal.
+- [x] Farbthema (hell/dunkel, folgt dem System) + Programm-Icon; Menüleiste mit
+      Datei/Bearbeiten/Aktionen/Ansicht/Hilfe auf macOS, Windows und Linux.
 ---
 
 ## 10. Nicht raten — nachschlagen
@@ -328,6 +343,35 @@ kompletten Widget-Baum; damit Struktur/Größen prüfen
 (`winfo_reqheight`, Variablenwerte), z. B. `THUMB_MAX` gegen Absender-Höhe.
 Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
 `config.yaml` nicht zu überschreiben.
+
+**Aussehen der GUI (Stolperfallen, alle teuer erkauft)**
+- **Alle** Farben/Abstände der Oberfläche stehen in `gui/theme.py` — dieselbe
+  Regel wie `pdf/geometry.py` fürs Kartenlayout. Basis ist `clam` (nur die
+  klassischen ttk-Themes lassen sich voll einfärben; `aqua` ignoriert Farben).
+- `restyle_tree` muss **beim Start** laufen, nicht nur beim Themenwechsel: Listbox,
+  Canvas und Menüs sind keine ttk-Widgets und behielten sonst die Systemfarben
+  (die Auswahl in der Prioritätsliste war deshalb schwarz).
+- `clam` kennt **kein** `indicatorcolor` — Radio-/Checkbuttons färbt man über
+  `indicatorbackground`/`indicatorforeground`. Eine Zuweisung an `indicatorcolor`
+  schlägt nicht fehl, sie wirkt nur nicht.
+- Transparente Icons in der Tabelle werden gegen den Hintergrund ihres **Labels**
+  gemischt, nicht gegen die Zeile darunter → je ein Style pro Untergrund
+  (`TreeIconHead/Odd/Even/Selected`), sonst liegt ein Kästchen auf der Zeile.
+- **Tk bildet 1 Bildpixel auf 1 Tk-Punkt ab.** Auf Retina (hier 1440 Punkte auf
+  2560 Pixeln) skaliert macOS jedes Bitmap ~1,8× hoch — eine größere PNG-Datei
+  hilft **nicht**, das Bild würde nur proportional größer. Scharf wird es nur als
+  Canvas-Vektor (`icon_canvas.py`, gegen das SVG getestet).
+- `wm iconphoto` bekommt die PNGs **größte zuerst**: macOS skaliert das *erste*
+  übergebene Bild auf alle Größen (mit 16 px zuerst wirkt das Dock-Icon pixelig).
+- Mausrad: X11 meldet ab **Tk 9** `<MouseWheel>` statt `<Button-4/5>` (TIP 474) —
+  beides zu binden scrollt doppelt (`scrolling.py` unterscheidet). Scrollbare
+  Kinder dürfen das Ereignis nur verschlucken, solange sie selbst scrollen können.
+- Ein per `withdraw()` verstecktes Fenster nimmt **keine** synthetischen
+  Tastenereignisse an — Testfenster off-screen öffnen (`geometry("+3000+3000")`),
+  sonst sieht ein funktionierendes Kürzel wie ein kaputtes aus.
+- Screenshots der laufenden App sind hier **nicht** möglich (`screencapture`
+  scheitert ohne die macOS-Berechtigung „Bildschirmaufnahme"). Optische Änderungen
+  headless prüfen (Style-Werte, `winfo`-Maße) und den Nutzer draufschauen lassen.
 
 **Layout-Wahrheit**
 - **Alle** Layout-Zahlen stehen in `pdf/geometry.py` (maßgeblich; `docs/CARD_LAYOUT.md`
@@ -369,6 +413,18 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
 - **GUI: keine Speichern/Laden-Buttons** — Config wird automatisch gespeichert
   (debounced) und bei externer Datei-Änderung neu geladen (mtime-Poll, Loop-Schutz
   via `_suppress_save`). Enter in Eingabefeldern gibt den Fokus frei.
+  **Achtung:** `_gather_config()` baut die Config aus den Widgets — Felder ohne
+  Widget (`appearance`, `recent`) müssen aus `base_config` übernommen werden,
+  sonst löscht der nächste Auto-Save sie.
+- **Farbthema „Funk-Blau"** (Akzent `#1F6FEB` hell / `#4C93FF` dunkel), hell +
+  dunkel, Default folgt dem System. Bewusst **gleiches Aussehen auf allen
+  Plattformen** statt nativem macOS-Look.
+- **Icon-Farben folgen NICHT dem Thema** (blaue Fläche, weiße Karte) — ein
+  Programmsymbol muss dem Dock-/Taskleisten-Icon entsprechen.
+- **Zeichenzähler** der Bemerkung zeigt „x/80" und hebt bei erreichtem Limit in der
+  **Akzentfarbe** hervor, nicht in der Warnfarbe (Limit ist kein Fehler).
+- **Kein „Alle/Keine Karten drucken"** im Menü — vom Nutzer als überflüssig
+  verworfen; Karten werden über die Spalte „Drucken" bzw. die Trennlinie gesteuert.
 
 **Realität der Testdaten (`Log.adi`)**
 - Enthält **kein** `QSL_SENT_VIA` (und keine Via-Info) — das ist der **Normalfall**:
