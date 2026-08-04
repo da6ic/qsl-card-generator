@@ -129,7 +129,6 @@ def draw_back(c: Canvas, card: Card, config: AppConfig) -> None:
     qsl_yt = g.QSL_MARK_YT_RADIO if radio else g.QSL_MARK_YT
     table_top = g.TABLE_YT_TOP_RADIO if radio else g.TABLE_YT_TOP
 
-    _draw_frame(c)
     _draw_sender(c, config, card.portable_mark)
     _draw_recipient(c, card)
     _draw_station(c, config)
@@ -168,19 +167,6 @@ def _draw_radio(c: Canvas, entries: list[tuple[str, str]]) -> None:
         cx = x0 + (i + 0.5) * col_w
         _text_in_band(c, cx, top, g.RADIO_HEAD_H, label, g.FONT_BOLD, g.SIZE_RADIO_HEAD)
         _text_in_band(c, cx, head_bottom, value_h, value, g.FONT_REGULAR, g.SIZE_RADIO)
-
-
-def _draw_frame(c: Canvas) -> None:
-    """Äußerer Rahmen entlang des Rands."""
-    c.setLineWidth(g.LINE_WIDTH)
-    c.rect(
-        g.MARGIN,
-        g.MARGIN,
-        g.PAGE_W - 2 * g.MARGIN,
-        g.PAGE_H - 2 * g.MARGIN,
-        stroke=1,
-        fill=0,
-    )
 
 
 def _draw_sender(c: Canvas, config: AppConfig, portable_mark: str) -> None:

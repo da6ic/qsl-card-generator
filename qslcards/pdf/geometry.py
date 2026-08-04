@@ -29,7 +29,11 @@ def mm(v: float) -> float:
 
 PAGE_W = mm(148)  # A6 quer: Breite
 PAGE_H = mm(105)  # A6 quer: Höhe
-MARGIN = mm(3)  # Außenrand des Rückseiten-Rahmens (nur Rückseite; Front clippt voll)
+# Einheitlicher Inhaltsrand auf ALLEN vier Kanten. Es gibt keinen sichtbaren
+# Rahmen mehr (die schwarze Umrandung sah im Druck unruhig aus); MARGIN legt nur
+# noch fest, wie weit der Inhalt von der Papierkante wegbleibt. Linke/obere
+# Anker liegen bei MARGIN, rechte/untere Kanten bei PAGE_W/PAGE_H - MARGIN.
+MARGIN = mm(3)
 
 LINE_WIDTH = 0.6  # Standard-Rahmenlinienstärke in pt
 
@@ -93,32 +97,32 @@ SIZE_FOOTER = 8
 # Kopf links: Absenderblock (§3)
 # --------------------------------------------------------------------------- #
 
-SENDER_X = mm(6)
-CALLSIGN_YT = mm(6)
-# Adresse direkt unter dem Rufzeichen (kein Untertitel mehr)
-ADDR_Z1_YT = mm(18)  # name
-ADDR_Z2_YT = mm(23.5)  # street
-ADDR_Z3_YT = mm(29)  # zip + city
-ADDR_Z4_YT = mm(34.5)  # country
+SENDER_X = MARGIN  # linke Inhaltskante (3 mm)
+CALLSIGN_YT = MARGIN  # obere Inhaltskante (3 mm)
+# Adresse direkt unter dem Rufzeichen (kein Untertitel mehr); Zeilenabstand 6 mm
+ADDR_Z1_YT = mm(15.5)  # name
+ADDR_Z2_YT = mm(21.5)  # street
+ADDR_Z3_YT = mm(27.5)  # zip + city
+ADDR_Z4_YT = mm(33.5)  # country
 
 # --------------------------------------------------------------------------- #
 # Kopf rechts: Empfänger + Via (§3)
 # --------------------------------------------------------------------------- #
 
-TO_LABEL_X = mm(88)
-TO_LABEL_YT = mm(8)
+TO_LABEL_X = mm(88.5)
+TO_LABEL_YT = mm(5)
 
-CALL_BOX_X = mm(88)
-CALL_BOX_YT = mm(12)
-CALL_BOX_W = mm(54)  # bis zur rechten Inhaltskante (88+54=142)
+CALL_BOX_X = mm(88.5)
+CALL_BOX_YT = mm(9.5)
+CALL_BOX_W = PAGE_W - MARGIN - CALL_BOX_X  # bis zur rechten Inhaltskante (145)
 CALL_BOX_H = mm(15)
 
-VIA_LABEL_X = mm(88)
-VIA_LABEL_YT = mm(31)
+VIA_LABEL_X = mm(88.5)
+VIA_LABEL_YT = mm(29.5)
 
-VIA_BOX_X = mm(88)
-VIA_BOX_YT = mm(35)
-VIA_BOX_W = mm(54)  # 88+54=142
+VIA_BOX_X = mm(88.5)
+VIA_BOX_YT = mm(34)
+VIA_BOX_W = PAGE_W - MARGIN - VIA_BOX_X  # bis zur rechten Inhaltskante (145)
 VIA_BOX_H = mm(12)
 
 # --------------------------------------------------------------------------- #
@@ -133,19 +137,19 @@ VIA_BOX_H = mm(12)
 # (PORTABLE_M_X=66 + Kästchen/Label-Breite ≈ 80).
 # --------------------------------------------------------------------------- #
 
-CONFIRM_MARK_X = mm(66)  # Zentrum von [52 .. 80]
-CONFIRM_MARK_YT = mm(8)
+CONFIRM_MARK_X = mm(65.5)  # zentriert zwischen eigenem Call und "To Amateur…"
+CONFIRM_MARK_YT = mm(5)
 
 # --------------------------------------------------------------------------- #
 # Stationsblock (§3): rechts neben der Adresse, als Label/Wert-Spalten,
 # vertikal auf Höhe der Adresszeilen.
 # --------------------------------------------------------------------------- #
 
-STATION_LABEL_X = mm(50)  # "Locator:", "DOK:", ...
+STATION_LABEL_X = mm(49)  # "Locator:", "DOK:", ...
 # Werte beginnen alle an derselben x-Position (vertikal bündige Spalte). Muss
 # breiter sein als das längste Label ("CQ-Zone:" ≈ 15 mm bei SIZE_STATION),
 # sonst rückt der Wert zu dicht an das Label heran.
-STATION_VALUE_X = mm(68)
+STATION_VALUE_X = mm(67.5)
 STATION_Z1_YT = ADDR_Z1_YT  # Locator (auf Höhe name)
 STATION_Z2_YT = ADDR_Z2_YT  # DOK
 STATION_Z3_YT = ADDR_Z3_YT  # CQ-Zone (WAZ)
@@ -170,11 +174,11 @@ RADIO_LABEL_RIG = "RIG"  # Transceiver / Empfänger
 RADIO_LABEL_ANT = "ANT"  # Antenne
 RADIO_LABEL_PWR = "PWR"  # Sendeleistung (Watt)
 
-RADIO_TABLE_X0 = SENDER_X  # x=6, linke Kante (bündig unter dem Absenderblock)
-RADIO_TABLE_X1 = mm(85)  # rechte Kante: Lücke vor der Via-Box (x=88) lassen
-RADIO_TABLE_YT_TOP = mm(38.5)  # obere Kante, knapp unter der ITU-Zeile (34.5)
+RADIO_TABLE_X0 = SENDER_X  # x=3, linke Kante (bündig unter dem Absenderblock)
+RADIO_TABLE_X1 = mm(85.5)  # rechte Kante: Lücke vor der Via-Box (x=88.5) lassen
+RADIO_TABLE_YT_TOP = mm(37.5)  # obere Kante, knapp unter der ITU-Zeile (33.5)
 # Unterkante **bündig mit der Via-Box** (deren Unterkante liegt bei
-# VIA_BOX_YT + VIA_BOX_H = 47). Die Beschriftungszeile ist fix hoch, die
+# VIA_BOX_YT + VIA_BOX_H = 46). Die Beschriftungszeile ist fix hoch, die
 # Wertezeile füllt den Rest bis zur Unterkante (siehe layout_back._draw_radio).
 RADIO_TABLE_YT_BOTTOM = VIA_BOX_YT + VIA_BOX_H
 RADIO_HEAD_H = mm(3.4)  # Höhe der Beschriftungszeile (RIG/ANT/PWR)
@@ -184,24 +188,24 @@ RADIO_HEAD_H = mm(3.4)  # Höhe der Beschriftungszeile (RIG/ANT/PWR)
 # Position; jetzt zeigt nur die ausgewählte Option als Text, kein Kästchen).
 # --------------------------------------------------------------------------- #
 
-QSL_MARK_X = mm(6)
-QSL_MARK_YT = mm(44)
+QSL_MARK_X = MARGIN
+QSL_MARK_YT = mm(43.5)
 # Wenn der Funk-Block gezeichnet wird, rutscht die QSL-Markierung unter die
-# Funk-Tabelle (deren Unterkante nun bündig zur Via-Box bei yt=47 liegt).
-QSL_MARK_YT_RADIO = mm(47.7)
+# Funk-Tabelle (deren Unterkante nun bündig zur Via-Box bei yt=46 liegt).
+QSL_MARK_YT_RADIO = mm(47.5)
 
 # --------------------------------------------------------------------------- #
 # QSO-Tabelle (§3)
 # --------------------------------------------------------------------------- #
 
-TABLE_X0 = mm(6)  # linke Kante
-TABLE_X1 = mm(142)  # rechte Kante
-TABLE_WIDTH = mm(136)  # = TABLE_X1 - TABLE_X0
-TABLE_YT_TOP = mm(50)  # obere Kante (von oben)
+TABLE_X0 = MARGIN  # linke Kante (3 mm)
+TABLE_X1 = PAGE_W - MARGIN  # rechte Kante (145 mm)
+TABLE_WIDTH = TABLE_X1 - TABLE_X0  # 142 mm
+TABLE_YT_TOP = mm(49.5)  # obere Kante (von oben)
 # Ist der Funk-Block sichtbar, beginnt die Tabelle etwas tiefer (rutscht mit der
 # QSL-Markierung nach unten). Der Versatz ist klein genug, dass weiterhin
 # MAX_ROWS_PLAIN=6 bzw. MAX_ROWS_WITH_REMARKS=3 Zeilen über den Fuß passen.
-TABLE_YT_TOP_RADIO = mm(52)
+TABLE_YT_TOP_RADIO = mm(51.5)
 
 # Die Tabelle wird **dynamisch** gezeichnet: sie bekommt genau so viele Daten-
 # zeilen, wie die Karte QSOs hat; mehr QSOs einer Station -> Folge-Karte(n)
@@ -225,39 +229,39 @@ HEAD_H = ROW_H
 # Tabelle entsprechend höher (dynamisch, siehe layout_back._draw_table).
 #   * mit Remarks: muss oberhalb des REMARKS-Blocks (REMARKS_LABEL_YT) bleiben.
 #   * ohne Remarks: muss oberhalb des Footers (FOOTER_TEXT_YT) bleiben.
-TABLE_YT_BOTTOM_WITH_REMARKS = TABLE_YT_TOP + HEAD_H + MAX_ROWS_WITH_REMARKS * ROW_H  # = mm(74)
-TABLE_YT_BOTTOM = TABLE_YT_TOP + HEAD_H + MAX_ROWS_PLAIN * ROW_H  # = mm(92)
+TABLE_YT_BOTTOM_WITH_REMARKS = TABLE_YT_TOP + HEAD_H + MAX_ROWS_WITH_REMARKS * ROW_H  # = mm(73.5)
+TABLE_YT_BOTTOM = TABLE_YT_TOP + HEAD_H + MAX_ROWS_PLAIN * ROW_H  # = mm(91.5)
 
-# Spaltenbreiten (Summe = TABLE_WIDTH = 136 mm)
-COL_DATE_W = mm(30)  # Unterspalten D/M/Y
-COL_UTC_W = mm(24)
-COL_FREQ_W = mm(26)
-COL_2WAY_W = mm(26)
-COL_RST_W = mm(30)  # SIGNAL REPORT (ein Wert je Zeile, keine Unterspalten mehr)
+# Spaltenbreiten (Summe = TABLE_WIDTH = 142 mm)
+COL_DATE_W = mm(31.5)  # Unterspalten D/M/Y (durch 3 teilbar)
+COL_UTC_W = mm(25)
+COL_FREQ_W = mm(27.5)
+COL_2WAY_W = mm(27.5)
+COL_RST_W = mm(30.5)  # SIGNAL REPORT (ein Wert je Zeile, keine Unterspalten mehr)
 
 # Reihenfolge der Hauptspalten (links -> rechts)
 COLUMN_WIDTHS = (COL_DATE_W, COL_UTC_W, COL_FREQ_W, COL_2WAY_W, COL_RST_W)
 
 # Unterspaltenbreite nur noch für DATE (D/M/Y). Die Report-Spalte hat keine.
-SUB_DATE_W = mm(10)  # je D, M, Y
+SUB_DATE_W = COL_DATE_W / 3  # je D, M, Y (= mm(10.5))
 
 # --------------------------------------------------------------------------- #
 # Fuß (§3)
 # --------------------------------------------------------------------------- #
 
 # REMARKS-Box über die volle Breite, flach. Das Fuß-Konstrukt sitzt unten mit
-# ~3 mm Abstand zum Rahmen (gleich wie seitlich: Inhalt x=6, Rahmen x=3).
+# dem einheitlichen 3-mm-Rand (Inhalt x=3, wie überall).
 # Label -> Box mit gleichem Abstand wie "Via:" -> Via-Box (4 mm).
-REMARKS_LABEL_X = mm(6)
-REMARKS_LABEL_YT = mm(79)
+REMARKS_LABEL_X = MARGIN
+REMARKS_LABEL_YT = mm(80.5)
 
-REMARKS_BOX_X = mm(6)
-REMARKS_BOX_YT = mm(83)
-REMARKS_BOX_W = mm(136)  # volle Inhaltsbreite (6..142)
+REMARKS_BOX_X = MARGIN
+REMARKS_BOX_YT = mm(84.5)
+REMARKS_BOX_W = TABLE_WIDTH  # volle Inhaltsbreite (3..145)
 REMARKS_BOX_H = mm(10)  # flacher
 REMARKS_TEXT_PAD = mm(2)  # linker Innenabstand des Remarks-Textes in der Box
 
-# Footer-Text unter der REMARKS-Box (Unterkante ~yt 99). PSE/TNX steht jetzt
-# weiter oben (QSL_MARK_X/QSL_MARK_YT), der Footer bleibt frei dafür.
-FOOTER_TEXT_X = mm(6)
-FOOTER_TEXT_YT = mm(96)
+# Footer-Text unter der REMARKS-Box. PSE/TNX steht jetzt weiter oben
+# (QSL_MARK_X/QSL_MARK_YT), der Footer bleibt frei dafür.
+FOOTER_TEXT_X = MARGIN
+FOOTER_TEXT_YT = mm(98.5)
