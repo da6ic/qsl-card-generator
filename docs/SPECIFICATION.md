@@ -86,9 +86,16 @@ Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
    **Oben rechts** ein Button „Neu abrufen" (holt fehlende/abgebrochene Stationen
    nach) sowie eine Lookup-Statuszeile. Die gesamte Oberfläche ist scrollbar; die
    Tabelle zeigt mindestens ~5 Einträge.
-9. **Druckmodus**: Radiobuttons `Duplexdruck (Vorder-/Rückseite abwechselnd)` /
-   `Vorder-/Rückseite getrennt (2 PDFs)` → `generation.print_mode` (`duplex` |
-   `separate`, siehe §7).
+9. **Druckmodus**: Zweispaltig. **Links** die Radiobuttons `Duplexdruck
+   (Vorder-/Rückseite abwechselnd)` / `Vorder-/Rückseite getrennt (2 PDFs)` →
+   `generation.print_mode` (`duplex` | `separate`, siehe §7). **Rechts daneben**
+   die Checkbox `Erweiterte Einstellungen` (`generation.print_margin_enabled`);
+   ist sie gesetzt, erscheint darunter der Block **Seitenrand (mm)** mit vier
+   `ttk.Spinbox` (oben/unten/links/rechts, 0…`PRINT_MARGIN_MAX` = 15 mm, Schritt
+   0,5) → `generation.print_margin_top/bottom/left/right` (siehe §7 „Druckrand").
+   Beide Spalten liegen in **eigenen Containern** in derselben Grid-Zeile, oben
+   verankert und **ohne `rowspan`**: sonst verteilt Tk die Höhe des Randblocks
+   auf die übersprungenen Zeilen und verrückt beim Aufklappen die Radiobuttons.
 10. **Ausgabe**: Zielpfad der PDF, Button `PDF erzeugen` (Primärbutton,
    `Accent.TButton`) und Fortschrittsbalken (`ttk.Progressbar`). Die Statuszeile
    steht **nicht** mehr hier, sondern in der Fußleiste (§2.3). `PDF erzeugen` ist
@@ -213,6 +220,12 @@ class GenerationConfig:
                                        #   -> NUR hier in der Config, kein GUI-Widget
     page_orientation: str = "landscape" # A6, siehe CARD_LAYOUT.md
     print_mode: str = "duplex"         # "duplex" (eine PDF) | "separate" (2 PDFs)
+    # Druckrand (§7): Ränder in mm je Kante, nur wirksam wenn eingeschaltet.
+    print_margin_enabled: bool = False # „Erweiterte Einstellungen" in Abschnitt 9
+    print_margin_top: float = 0.0      # 0 .. PRINT_MARGIN_MAX (15 mm)
+    print_margin_bottom: float = 0.0
+    print_margin_left: float = 0.0
+    print_margin_right: float = 0.0
     static_footer: str = "TNX FR NICE CONTACT, 73"
     remarks: str = ""                  # globaler REMARKS-Text (alle Karten); leer
                                        #   -> kein Kasten. Max. 80 Zeichen (GUI).
@@ -488,12 +501,43 @@ Vorschau **und** Export.
     Drucker ohne beidseitigen Druck: erst alle Vorderseiten drucken, Papier
     umgedreht neu einlegen, dann die Rückseiten. Da **ein** Frontbild für alle
     Karten gilt, sind alle Vorderseiten identisch (keine Umkehrung nötig).
-- **Front** (`layout_front.py`): Frontbild im **Cover-Modus** die ganze Seite
-  füllen (kein weißer Rand), Seitenverhältnis wahren, Überstand am Seitenrand
-  beschneiden (Clip), zentriert. Einmal via Pillow geladen und als ImageReader
+- **Druckrand** (`generation.print_margin_*`, GUI-Abschnitt 9): Viele Drucker
+  drucken nicht bis zur Blattkante und beschneiden sonst den Inhalt. Die vier
+  Werte bedeuten „so viel Rand **muss** frei bleiben". Das Blatt bleibt A6
+  (`setPageSize` wird nie aufgerufen) — nur die Zeichnung rückt ein:
+  1. Rahmen = Blatt minus der vier (geclampten) Ränder → `geometry.content_box`.
+  2. `scale = min(rahmen_b/PAGE_W, rahmen_h/PAGE_H)` — **ein** Faktor für beide
+     Achsen, die Karte wird also nie verzerrt (nur kleiner, Schrift inklusive).
+  3. Weil `scale` nur von einer Achse bestimmt wird, bleibt auf der anderen Platz
+     übrig. Der wird **nicht** als Rand verschenkt, sondern ins Layout gegeben:
+     gezeichnet wird auf einer größeren **virtuellen Seite**
+     `page_w = rahmen_b/scale`, `page_h = rahmen_h/scale` (eine davon ist exakt
+     `PAGE_W`/`PAGE_H`). Nach `translate`+`scale` füllt die Zeichnung den Rahmen
+     exakt → alle vier Ränder stimmen auf den Millimeter.
+  4. Mitwachsend sind die schon immer aus `PAGE_W` abgeleiteten Maße (Call-/Via-
+     Box, `TABLE_X1`, Remarks-Kasten) plus die **anteilig** verteilten
+     Tabellenspalten; der Fußblock (REMARKS + `static_footer`) ist an der
+     **Unterkante** verankert. Links/oben verankerte Blöcke (Absender, Station,
+     Funk) bleiben, wo sie sind.
+
+  Alles davon liefert `geometry.page_layout(config) -> PageLayout`. Ist der
+  Druckrand aus, ist das Ergebnis die Identität (`scale=1`, virtuelle Seite = A6)
+  und die Ausgabe byteweise dieselbe wie ohne das Feature. `MAX_ROWS_*` bleibt
+  unberührt — senkrechter Überschuss vergrößert nur den Abstand zwischen Tabelle
+  und Fuß, die Kartenaufteilung im Builder ändert sich nicht. Ein Deckel
+  (`MAX_STRETCH`) begrenzt den elastischen Überschuss bei absurden Randwerten;
+  der Rest wird dann zentriert (der Rand ist dort größer als eingestellt).
+- **Front** (`layout_front.py`): Frontbild im **Cover-Modus** den ganzen Rahmen
+  füllen (kein weißer Rand innerhalb des Rahmens), Seitenverhältnis wahren,
+  Überstand beschneiden (Clip), zentriert. Der Rahmen ist `geometry.content_box`
+  — ohne Druckrand die volle Seite, sonst derselbe Rahmen wie die Rückseite,
+  damit beide Seiten deckungsgleich liegen. Das Bild wird auch bei ungleichen
+  Rändern **nie verzerrt**. Einmal via Pillow geladen und als ImageReader
   gecacht, für alle Karten wiederverwenden.
 - **Back** (`layout_back.py`): exakt nach `CARD_LAYOUT.md`. Alle Positionen/
-  Größen aus `geometry.py`. Der REMARKS-Block (Label + Kasten + Text) wird nur
+  Größen aus `geometry.py`; die mitwachsenden Maße und die Y-Spiegelung kommen
+  aus dem `PageLayout`, den `draw_back` einmal baut und an alle Helfer
+  weiterreicht. Der REMARKS-Block (Label + Kasten + Text) wird nur
   gezeichnet, wenn `card.remarks` gesetzt ist (dynamisch); der Footer-Text steht
   immer. Der **Funk-Block** (RIG/ANT/PWR-Tabelle) erscheint nur, wenn mindestens
   eins der Felder `receiver`/`antenna`/`power` gefüllt ist; dann rücken QSL-

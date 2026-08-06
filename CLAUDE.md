@@ -250,6 +250,10 @@ def active_via_priority(priority, cut) -> list[str]: ...
   - `"separate"` → **zwei** PDFs (`…_vorderseiten.pdf`, `…_rueckseiten.pdf`) für
     Drucker ohne beidseitigen Druck.
 - Liefert die Liste der erzeugten PDF-Pfade zurück.
+- **Druckrand** (`print_margin_*`): steckt **nicht** im Generator, sondern in den
+  Zeichenmodulen (`geometry.page_layout` / `content_box`) — dadurch wirkt er auch
+  für `scripts/preview_card.py` und direkte API-Aufrufe. Die PDF-Seiten bleiben
+  immer A6 (`setPageSize` wird nie aufgerufen).
 
 ---
 
@@ -296,7 +300,10 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
 - [x] Zustellwege priorisierbar (Liste B/D/Q/L + Trennlinie) und Modus (pro QSO /
       pro Station) wählbar; die Priorität setzt nur die Drucken-Markierung, die
       akzeptierten Wege kommen aus dem Lookup.
-- [x] Druckmodus wählbar (Duplex / getrennte Vorder-/Rückseiten-PDFs).
+- [x] Druckmodus wählbar (Duplex / getrennte Vorder-/Rückseiten-PDFs) inkl.
+      einstellbarem **Druckrand** (4 Kanten in mm, hinter „Erweiterte
+      Einstellungen"): die Karte wird unverzerrt so eingepasst, dass die Ränder
+      exakt frei bleiben.
 - [x] Vorschau-Tabelle zeigt **alle** QSOs mit Via (ausgeschrieben) / Route;
       Lookup-Status sichtbar; bearbeitbare Zellen mit Stift-/Umschalt-Hinweis.
 - [x] „PDF erzeugen" liefert eine PDF mit 2 A6-Seiten pro Karte.
@@ -366,6 +373,13 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
 - Mausrad: X11 meldet ab **Tk 9** `<MouseWheel>` statt `<Button-4/5>` (TIP 474) —
   beides zu binden scrollt doppelt (`scrolling.py` unterscheidet). Scrollbare
   Kinder dürfen das Ereignis nur verschlucken, solange sie selbst scrollen können.
+- **`rowspan` verrückt die Nachbarn.** Ein ein-/ausblendbarer Block, der per
+  `rowspan` über fremde Zeilen greift, lässt Tk seine Höhe auf genau diese Zeilen
+  verteilen — beim Aufklappen springen die Widgets daneben auseinander (so
+  passiert in Abschnitt 9 mit den Druckmodus-Radiobuttons). Lösung: **je einen
+  eigenen Container pro Spalte**, beide in derselben Grid-Zeile mit `sticky="nw"`,
+  ganz ohne `rowspan`. Ein Test vergleicht dafür `winfo_rootx/y` vor und nach dem
+  Umschalten.
 - Ein per `withdraw()` verstecktes Fenster nimmt **keine** synthetischen
   Tastenereignisse an — Testfenster off-screen öffnen (`geometry("+3000+3000")`),
   sonst sieht ein funktionierendes Kürzel wie ein kaputtes aus.
@@ -380,6 +394,12 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   Magic-Faktoren fürs Zentrieren.
 - **DejaVuSans** (regular+bold) liegt gebündelt in `qslcards/assets/fonts/` und wird
   in `geometry.py` registriert (Umlaute); Fallback Helvetica, Registrierung nie fatal.
+- **Druckrand = `PageLayout`, nicht neue Konstanten.** Die Konstanten beschreiben
+  weiter die Karte auf voller A6-Fläche; `geometry.page_layout(config)` leitet
+  daraus den eingerückten Rahmen ab und `draw_back` reicht ihn an **alle** Helfer
+  weiter. Die Y-Spiegelung ist deshalb `page.page_h - yt` (nicht `PAGE_H - yt`) —
+  wer das zurückdreht, bricht den Druckrand still. Ohne Druckrand ist der
+  `PageLayout` die Identität; ein Test vergleicht die Content-Streams byteweise.
 
 **Wichtige, mit dem Nutzer getroffene Entscheidungen (nicht ohne Rückfrage kippen)**
 - **Zeilen je Karte hängen am Remarks-Zustand (dynamisch)**: ohne Remarks
@@ -400,7 +420,21 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
 - **GUI-Abschnitte**: 1 ADIF, 2 Frontbild, 3 Absender (inkl. Funk-Ausrüstung +
   globale Markierungen QSL/Portabel/Bestätigung), 4 Zustellwege (priorisierbare
   Liste + Trennlinie), 5 Kartenmodus, 6 Lookups, **7 Bemerkungen**, 8 Vorschau,
-  9 Druckmodus, 10 Ausgabe.
+  9 Druckmodus (inkl. Druckrand), 10 Ausgabe.
+- **Druckrand: vier Werte, keine Verzerrung, Überschuss ins Layout** (iterativ mit
+  dem Nutzer erarbeitet, alle drei Punkte bewusst so entschieden):
+  * **Vier einzelne Kanten** (oben/unten/links/rechts), nicht ein Wert für alle —
+    Drucker lassen unten oft mehr Rand. Bedeutung: „so viel Rand **muss** sein".
+  * **Nie verzerren.** Ein einziger Faktor für beide Achsen. Die Alternative
+    („exakt in den Rahmen dehnen", ~3–7 % Stauchung) war zwischenzeitlich gewählt
+    und wurde vom Nutzer wieder verworfen.
+  * **Der Überschuss auf der freien Achse fließt ins Layout** (Call-/Via-Box,
+    Tabellenspalten anteilig, Remarks-Kasten; Fuß an der Unterkante verankert),
+    nicht in einen breiteren Rand — die Karte zentriert stehen zu lassen wurde
+    ausdrücklich abgelehnt. Deshalb stimmen alle vier Ränder auf den Millimeter.
+  * **Frontbild rückt mit ein** (deckungsgleich mit der Rückseite), bleibt dabei
+    aber unverzerrt: Cover-Fit **in den Rahmen**, kein Dehnen.
+  * `MAX_ROWS_*` bleibt unberührt — Kartenaufteilung ändert sich nie mit dem Rand.
 - **Absender kommt komplett aus der Config** (Rufzeichen, Locator, DOK, …), nie
   aus dem Log — vom Nutzer bewusst so bestätigt (ein kurzer Versuch, Rufzeichen/
   Locator aus `STATION_CALLSIGN`/`MY_GRIDSQUARE` zu ziehen, wurde zurückgenommen).

@@ -29,6 +29,33 @@ MARGIN = mm(3)
 > **Maßgeblich sind die Konstanten in `pdf/geometry.py`.** Die Zahlen hier sind
 > der Stand des Referenz-Nachbaus; bei Abweichungen gilt der Code.
 
+### Druckrand (elastischer Rahmen)
+
+Alle folgenden Maße beschreiben die Karte auf der **vollen** A6-Fläche. Ist der
+Druckrand aktiv (`generation.print_margin_*`, GUI-Abschnitt 9), wird die Karte
+in einen kleineren Rahmen gesetzt — das Blatt bleibt A6, nur die Zeichnung rückt
+ein. `geometry.page_layout(config)` liefert dafür einen `PageLayout`:
+
+- `dx`/`dy`/`scale` gehören aufs Canvas (`translate` + **gleichmäßiges** `scale`,
+  daher nie verzerrt); `draw_back` klammert damit sein gesamtes Zeichnen.
+- Gezeichnet wird danach im System einer **virtuellen Seite** `page_w × page_h`,
+  die auf einer Achse größer als A6 ist (der Überschuss, der sonst als Leerraum
+  verfiele). Die Y-Spiegelung lautet deshalb `y_pdf = page_h - yt`, nicht
+  `PAGE_H - yt` — alle Helfer bekommen den `PageLayout` übergeben.
+- Mit der virtuellen Breite wachsen: `call_box_w`, `via_box_w`, `table_x1`,
+  `table_width`, `column_widths` (anteilig), `sub_date_w`, `remarks_box_w`.
+- Mit der virtuellen Höhe wandern nach unten: `remarks_label_yt`,
+  `remarks_box_yt`, `footer_text_yt` — der Fußblock hängt an der **Unterkante**
+  (6,5 mm über ihr), nicht an einem festen Abstand von oben.
+- Alles andere (Absender-, Stations-, Funk-Block, QSO-Tabelle oben links) ist
+  links/oben verankert und bleibt unverändert stehen.
+- `MAX_ROWS_*` ändert sich **nicht**: senkrechter Überschuss vergrößert nur den
+  Abstand zwischen Tabelle und Fuß.
+
+Ohne Druckrand ist der `PageLayout` die Identität (`scale = 1`, virtuelle Seite
+= A6, alle Maße = die Konstanten unten) — die Ausgabe ist dann byteweise
+dieselbe wie vor dem Feature.
+
 ---
 
 ## 2. Zonen-Übersicht (Skizze, nicht maßstабsgetreu)
@@ -201,11 +228,15 @@ die Begrenzung sitzt in den Eingabefeldern der GUI (global + je Karte).
 Es gibt **keine** Checkbox-Funktion mehr: alle Markierungen (Portabel, Bestätigung,
 PSE/TNX QSL) werden als reiner **Text** gezeichnet (die Karte wird ohnehin gezielt
 für die gewählte Aussage gedruckt).
-- Text-Helfer `text(c, x, yt, s, font, size, align="left")` mit interner
-  `y_pdf = PAGE_H - yt - ascent`-Umrechnung, damit im Zeichencode nur „von-oben"-mm
-  benutzt werden.
-- `_text_in_band(c, x, yt_top, band_h, s, font, size, align)`: Text vertikal mittig
-  in einem Band (für Box-Inhalte und Tabellenzellen), über `getAscent`/`getDescent`.
+Alle Helfer bekommen als zweites Argument den `PageLayout` der Seite (`page`,
+siehe §1 „Druckrand"); er liefert die Seitenhöhe für die Y-Spiegelung. Ohne
+Druckrand ist `page.page_h == PAGE_H`.
+- Text-Helfer `text(c, page, x, yt, s, font, size, align="left")` mit interner
+  `y_pdf = page.page_h - yt - ascent`-Umrechnung, damit im Zeichencode nur
+  „von-oben"-mm benutzt werden.
+- `_text_in_band(c, page, x, yt_top, band_h, s, font, size, align)`: Text vertikal
+  mittig in einem Band (für Box-Inhalte und Tabellenzellen), über
+  `getAscent`/`getDescent`.
 - `_box`/`_hline`/`_vline`: Rahmen und Linien (Oberkante/Position als `yt`).
 
 ---
