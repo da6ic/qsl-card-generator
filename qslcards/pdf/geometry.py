@@ -13,7 +13,12 @@ Schriftgrößen (bereits in pt) und Linienstärken (in pt).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from qslcards.config import AppConfig
 
 # --------------------------------------------------------------------------- #
 # mm-Helfer und Seitengeometrie (§1)
@@ -265,3 +270,143 @@ REMARKS_TEXT_PAD = mm(2)  # linker Innenabstand des Remarks-Textes in der Box
 # (QSL_MARK_X/QSL_MARK_YT), der Footer bleibt frei dafür.
 FOOTER_TEXT_X = MARGIN
 FOOTER_TEXT_YT = mm(98.5)
+
+# --------------------------------------------------------------------------- #
+# Druckrand: elastischer Seitenrahmen (config.generation.print_margin_*)
+#
+# Viele Drucker drucken nicht bis zur Blattkante. Ist der Druckrand aktiv, soll
+# die Karte innerhalb der eingestellten Ränder Platz finden — **ohne Verzerrung**
+# (ein einziger Faktor für beide Achsen) und **ohne verschenkten Rand**.
+#
+# Rechenweg (docs/CARD_LAYOUT.md §1):
+#   1. Rahmen = Blatt minus der vier Ränder.
+#   2. scale  = min(rahmen_b/PAGE_W, rahmen_h/PAGE_H)  -> proportional, nie verzerrt.
+#   3. Weil `scale` nur von einer Achse bestimmt wird, bleibt auf der anderen
+#      Platz übrig. Statt ihn als Leerraum stehen zu lassen, wird auf einer
+#      **größeren virtuellen Seite** gezeichnet: page_w = rahmen_b/scale,
+#      page_h = rahmen_h/scale. Eine der beiden ist exakt PAGE_W bzw. PAGE_H,
+#      die andere größer. Nach translate+scale füllt die Zeichnung den Rahmen exakt.
+#   4. Die von PAGE_W/PAGE_H abgeleiteten Maße (Call-/Via-Box, Tabelle, Remarks)
+#      wachsen dadurch mit; der Fußblock wird von **unten** verankert. Alle
+#      links/oben verankerten Blöcke (Absender, Station, Funk) bleiben, wo sie sind.
+#
+# MAX_ROWS_* bleibt unberührt: senkrechter Überschuss vergrößert nur den Abstand
+# zwischen Tabelle und Fuß, die Kartenaufteilung im Builder ändert sich nicht.
+# --------------------------------------------------------------------------- #
+
+PRINT_MARGIN_MAX = 15.0  # mm, Obergrenze je Kante (GUI-Spinbox + Clamping)
+# Deckel für den elastischen Überschuss je Achse: bei extremen Randwerten würden
+# Boxen und Spalten sonst absurd breit. Was darüber hinausgeht, wird zentriert
+# (der Rand ist dann größer als eingestellt — nur ein Sicherheitsventil).
+MAX_STRETCH = mm(20)
+
+# Reihenfolge der Ränder überall: oben, unten, links, rechts.
+_MARGIN_FIELDS = (
+    "print_margin_top",
+    "print_margin_bottom",
+    "print_margin_left",
+    "print_margin_right",
+)
+
+
+def clamp_print_margin(value: object) -> float:
+    """Einen Randwert aus der Config auf 0..PRINT_MARGIN_MAX mm begrenzen.
+
+    Robust gegen alles, was in einer handgeschriebenen YAML stehen kann
+    (None, Text, negative Zahlen) — die Config wird bewusst ungeprüft geladen
+    und erst hier beim Konsumenten geclampt."""
+    try:
+        v = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0.0
+    if v != v:  # NaN
+        return 0.0
+    return max(0.0, min(v, PRINT_MARGIN_MAX))
+
+
+def print_margins(config: AppConfig) -> tuple[float, float, float, float]:
+    """Die vier geclampten Druckränder (oben, unten, links, rechts) in Punkten.
+
+    Ist der Druckrand abgeschaltet, sind alle vier 0 -> alles wie bisher."""
+    gen = config.generation
+    if not gen.print_margin_enabled:
+        return (0.0, 0.0, 0.0, 0.0)
+    return tuple(mm(clamp_print_margin(getattr(gen, name, 0.0))) for name in _MARGIN_FIELDS)  # type: ignore[return-value]
+
+
+def content_box(config: AppConfig) -> tuple[float, float, float, float]:
+    """Der bedruckbare Rahmen als (x, y, w, h) in Punkten (Ursprung unten links).
+
+    Ohne Druckrand ist das die volle Seite. Auch von der Vorderseite genutzt,
+    damit Bild und Rückseite exakt denselben Rahmen bekommen."""
+    top, bottom, left, right = print_margins(config)
+    return (left, bottom, PAGE_W - left - right, PAGE_H - top - bottom)
+
+
+@dataclass(frozen=True)
+class PageLayout:
+    """Zeichenrahmen einer Seite: Transformation + die mitwachsenden Maße.
+
+    `dx`/`dy`/`scale` gehören auf das Canvas (translate + gleichmäßiges scale);
+    danach wird im System einer virtuellen Seite `page_w` × `page_h` gezeichnet.
+    Die Felder tragen die Namen der Konstanten, aus denen sie abgeleitet sind —
+    alle übrigen Maße bleiben die festen Konstanten oben."""
+
+    dx: float
+    dy: float
+    scale: float
+    page_w: float
+    page_h: float
+    # rechts angebundene Breiten (wachsen mit page_w)
+    call_box_w: float
+    via_box_w: float
+    table_x1: float
+    table_width: float
+    column_widths: tuple[float, ...]
+    sub_date_w: float
+    remarks_box_w: float
+    # Fußblock: von der Unterkante her verankert (wächst mit page_h nach unten)
+    remarks_label_yt: float
+    remarks_box_yt: float
+    footer_text_yt: float
+
+
+def page_layout(config: AppConfig) -> PageLayout:
+    """Baut den Zeichenrahmen für die Rückseite aus den Druckrändern.
+
+    Ohne Druckrand liefert sie exakt die heutigen Werte (scale=1, keine
+    Verschiebung, virtuelle Seite = A6) — die Ausgabe ändert sich dann nicht."""
+    x, y, w, h = content_box(config)
+    scale = min(w / PAGE_W, h / PAGE_H)
+
+    # Virtuelle Seite (im ungeskalierten System), gedeckelt auf MAX_STRETCH.
+    page_w = min(w / scale, PAGE_W + MAX_STRETCH)
+    page_h = min(h / scale, PAGE_H + MAX_STRETCH)
+    # Was der Deckel übrig lässt, mittig verteilen (sonst ist der Rest 0).
+    dx = x + (w - page_w * scale) / 2
+    dy = y + (h - page_h * scale) / 2
+
+    table_x1 = page_w - MARGIN
+    table_width = table_x1 - TABLE_X0
+    # Spalten anteilig auf die neue Breite verteilen, damit die letzte Spalte
+    # wieder exakt an der rechten Tabellenkante schließt.
+    stretch = table_width / TABLE_WIDTH
+    column_widths = tuple(cw * stretch for cw in COLUMN_WIDTHS)
+
+    return PageLayout(
+        dx=dx,
+        dy=dy,
+        scale=scale,
+        page_w=page_w,
+        page_h=page_h,
+        call_box_w=page_w - MARGIN - CALL_BOX_X,
+        via_box_w=page_w - MARGIN - VIA_BOX_X,
+        table_x1=table_x1,
+        table_width=table_width,
+        column_widths=column_widths,
+        sub_date_w=column_widths[0] / 3,
+        remarks_box_w=table_width,
+        remarks_label_yt=page_h - (PAGE_H - REMARKS_LABEL_YT),
+        remarks_box_yt=page_h - (PAGE_H - REMARKS_BOX_YT),
+        footer_text_yt=page_h - (PAGE_H - FOOTER_TEXT_YT),
+    )

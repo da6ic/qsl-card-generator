@@ -43,6 +43,13 @@ def test_load_example_all_fields():
     assert not hasattr(c.generation, "include_missing_via")
     assert c.generation.default_via == "B"
     assert c.generation.page_orientation == "landscape"
+    assert c.generation.print_mode == "duplex"
+    # Druckrand: standardmäßig aus, alle vier Kanten 0 -> Ausgabe wie ohne.
+    assert c.generation.print_margin_enabled is False
+    assert c.generation.print_margin_top == 0.0
+    assert c.generation.print_margin_bottom == 0.0
+    assert c.generation.print_margin_left == 0.0
+    assert c.generation.print_margin_right == 0.0
     assert c.generation.static_footer == "TNX FR NICE CONTACT, 73"
     assert c.generation.qsl_mark == "none"
     assert c.generation.portable_mark == "none"

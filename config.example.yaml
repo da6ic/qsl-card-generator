@@ -54,6 +54,16 @@ generation:
                                #              beidseitigen Druck – erst Vorderseiten
                                #              drucken, Papier umgedreht neu einlegen,
                                #              dann Rückseiten drucken.
+  # Druckrand („Erweiterte Einstellungen" in GUI-Abschnitt 9): viele Drucker
+  # drucken nicht bis zur Blattkante und beschneiden sonst den Inhalt. Ist der
+  # Schalter aktiv, wird die Karte proportional (nie verzerrt) so verkleinert,
+  # dass die angegebenen Ränder frei bleiben; der dabei auf einer Achse übrige
+  # Platz fließt ins Layout (Call-/Via-Box, Tabelle und Remarks wachsen mit).
+  print_margin_enabled: false
+  print_margin_top: 0.0        # Ränder in mm je Kante, 0 bis 15
+  print_margin_bottom: 0.0
+  print_margin_left: 0.0
+  print_margin_right: 0.0
   static_footer: "TNX FR NICE CONTACT, 73"
   remarks: ""                  # globaler REMARKS-Text für ALLE Karten. Leer =
                                #   kein Remarks-Kasten (dynamisch). Je Karte in

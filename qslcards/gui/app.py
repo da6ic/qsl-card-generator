@@ -37,6 +37,7 @@ from qslcards.lookup import (
     lookup_calls,
 )
 from qslcards.pdf.generator import generate
+from qslcards.pdf.geometry import clamp_print_margin
 
 from . import theme
 from .menu import MenuActions, MenuBar
@@ -56,6 +57,7 @@ from .sections import (
     StatusBar,
     ask_overwrite_manual_remarks,
     confirm,
+    parse_mm,
     project_root,
     show_about_dialog,
 )
@@ -427,6 +429,14 @@ class App(tk.Tk):
             )
             self.mode_section.card_mode.set(config.generation.card_mode)
             self.printmode_section.print_mode.set(config.generation.print_mode)
+            # Druckrand: Umschalter + die vier Randfelder (Feldname in der
+            # Section = Config-Feld ohne das „print_"-Präfix).
+            self.printmode_section.advanced.set(config.generation.print_margin_enabled)
+            for name, var in self.printmode_section.margin_vars.items():
+                value = clamp_print_margin(getattr(config.generation, f"print_{name}"))
+                var.set(f"{value:g}")
+            # Sichtbarkeit des Randblocks an den geladenen Zustand angleichen.
+            self.printmode_section.update_advanced_visibility()
             self.sender_section.qsl_mark.set(
                 QSL_CODE_TO_DISPLAY.get(config.generation.qsl_mark, "Leer lassen")
             )
@@ -465,6 +475,11 @@ class App(tk.Tk):
             default_via=self.base_config.generation.default_via,
             page_orientation=self.base_config.generation.page_orientation,
             print_mode=self.printmode_section.print_mode.get(),
+            print_margin_enabled=self.printmode_section.advanced.get(),
+            **{
+                f"print_{name}": clamp_print_margin(parse_mm(var.get()))
+                for name, var in self.printmode_section.margin_vars.items()
+            },
             static_footer=self.base_config.generation.static_footer,
             remarks=self.remarks_section.remarks.get(),
             qsl_mark=QSL_MARK_TO_CODE.get(self.sender_section.qsl_mark.get(), "none"),
@@ -515,6 +530,8 @@ class App(tk.Tk):
             self.lookup_section.address_export,
             self.mode_section.card_mode,
             self.printmode_section.print_mode,
+            self.printmode_section.advanced,
+            *self.printmode_section.margin_vars.values(),
         ]
         for var in watched:
             var.trace_add("write", self._on_var_change)

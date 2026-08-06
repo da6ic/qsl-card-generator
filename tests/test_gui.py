@@ -15,6 +15,7 @@ import pytest
 from qslcards import config as cfg
 from qslcards.gui import app as appmod
 from qslcards.lookup.base import LookupResult
+from qslcards.pdf.geometry import PRINT_MARGIN_MAX
 
 ADIF = (
     "<call:5>DL1AA<qso_date:8>20240102<time_on:4>1200<band:3>20m"
@@ -402,6 +403,89 @@ def test_autosave_keeps_appearance_and_recent(app, tmp_path):
     assert saved.sender.callsign == "DN5MT"
     assert saved.appearance.theme == "dark"
     assert saved.recent.logs == [str(tmp_path / "log.adi")]
+
+
+def test_print_margin_block_follows_the_toggle(app):
+    """Abschnitt 9: die Randfelder erscheinen erst über „Erweiterte
+    Einstellungen" und verschwinden wieder."""
+    section = app.printmode_section
+    app.update_idletasks()
+    assert not section.margin_frame.winfo_ismapped()
+
+    section.advanced.set(True)
+    section.update_advanced_visibility()
+    app.update_idletasks()
+    assert section.margin_frame.winfo_ismapped()
+
+    section.advanced.set(False)
+    section.update_advanced_visibility()
+    app.update_idletasks()
+    assert not section.margin_frame.winfo_ismapped()
+
+
+def test_print_margin_toggle_does_not_move_the_radios(app):
+    """Der Umschalter sitzt rechts neben den Druckmodi; das Ein-/Ausblenden des
+    Randblocks darf die Radiobuttons nicht verrücken.
+
+    (Ein `rowspan` über die Radio-Zeilen täte genau das: Tk verteilt die Höhe
+    des übergreifenden Widgets auf die übersprungenen Zeilen.)"""
+    section = app.printmode_section
+
+    def positions():
+        app.update_idletasks()
+        return [
+            (w.winfo_rootx(), w.winfo_rooty())
+            for w in (section.radio_duplex, section.radio_separate, section.advanced_check)
+        ]
+
+    closed = positions()
+    # Checkbox steht rechts neben den Radios, auf Höhe der ersten Zeile.
+    assert closed[2][0] > closed[0][0] + section.radio_duplex.winfo_width()
+    assert closed[2][1] == closed[0][1]
+
+    section.advanced.set(True)
+    section.update_advanced_visibility()
+    assert positions() == closed
+
+    section.advanced.set(False)
+    section.update_advanced_visibility()
+    assert positions() == closed
+
+
+def test_print_margins_parsed_and_clamped(app):
+    """Eingaben landen als geclampte mm-Werte in der Config: deutsches Komma,
+    leeres Feld = 0, Übergroßes auf die Obergrenze."""
+    section = app.printmode_section
+    section.advanced.set(True)
+    section.margin_vars["margin_top"].set("3")
+    section.margin_vars["margin_bottom"].set("8,5")  # Komma wie im Deutschen
+    section.margin_vars["margin_left"].set("")  # leer -> 0
+    section.margin_vars["margin_right"].set("99")  # über der Obergrenze
+
+    gen = app._gather_config().generation
+    assert gen.print_margin_enabled is True
+    assert gen.print_margin_top == 3.0
+    assert gen.print_margin_bottom == 8.5
+    assert gen.print_margin_left == 0.0
+    assert gen.print_margin_right == PRINT_MARGIN_MAX
+
+
+def test_print_margins_survive_autosave(app, tmp_path):
+    """Neue Variablen müssen am Auto-Save hängen, sonst gehen sie verloren."""
+    _load(app, tmp_path)
+    app.printmode_section.advanced.set(True)
+    app.printmode_section.margin_vars["margin_bottom"].set("8")
+    app._auto_save()
+
+    saved = cfg.load(appmod.CONFIG_PATH)
+    assert saved.generation.print_margin_enabled is True
+    assert saved.generation.print_margin_bottom == 8.0
+
+    # … und beim Laden stehen sie wieder in den Feldern, inklusive Sichtbarkeit.
+    app._apply_config_to_widgets(saved)
+    app.update_idletasks()
+    assert app.printmode_section.margin_vars["margin_bottom"].get() == "8"
+    assert app.printmode_section.margin_frame.winfo_ismapped()
 
 
 def test_menu_generate_entry_follows_button_state(app, tmp_path):

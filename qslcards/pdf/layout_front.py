@@ -41,25 +41,27 @@ def clear_cache() -> None:
 
 
 def draw_front(c: Canvas, image_path: str, config: AppConfig) -> None:
-    """Zeichnet das Frontbild zentriert und proportional in die Seite.
+    """Zeichnet das Frontbild zentriert und proportional in den Rahmen.
 
-    `config` wird derzeit nicht ausgewertet, gehört aber zur einheitlichen
-    Zeichen-Signatur (analog zu draw_back)."""
+    Der Rahmen ist ohne Druckrand die volle Seite, sonst das Blatt minus der
+    eingestellten Ränder (`geometry.content_box`) — derselbe Rahmen, in den auch
+    die Rückseite gesetzt wird, damit beide Seiten deckungsgleich liegen."""
     reader = _load_image(image_path)
     img_w, img_h = reader.getSize()
+    box_x, box_y, box_w, box_h = g.content_box(config)
 
-    # Cover: Bild füllt die komplette Seite ohne weißen Rand. Skalierung nach der
-    # größeren Achse; Überstand ragt über die Seite hinaus und wird per Clip auf
-    # die Seitenfläche beschnitten. Seitenverhältnis bleibt gewahrt.
-    scale = max(g.PAGE_W / img_w, g.PAGE_H / img_h)
+    # Cover: Bild füllt den kompletten Rahmen ohne weißen Rand. Skalierung nach
+    # der größeren Achse; Überstand ragt über den Rahmen hinaus und wird per Clip
+    # beschnitten. Seitenverhältnis bleibt gewahrt (das Bild wird nie verzerrt).
+    scale = max(box_w / img_w, box_h / img_h)
     draw_w = img_w * scale
     draw_h = img_h * scale
-    x = (g.PAGE_W - draw_w) / 2
-    y = (g.PAGE_H - draw_h) / 2
+    x = box_x + (box_w - draw_w) / 2
+    y = box_y + (box_h - draw_h) / 2
 
     c.saveState()
     clip = c.beginPath()
-    clip.rect(0, 0, g.PAGE_W, g.PAGE_H)
+    clip.rect(box_x, box_y, box_w, box_h)
     c.clipPath(clip, stroke=0, fill=0)
     c.drawImage(reader, x, y, width=draw_w, height=draw_h, mask="auto")
     c.restoreState()

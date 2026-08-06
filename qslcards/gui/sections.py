@@ -14,6 +14,7 @@ from pathlib import Path
 from tkinter import ttk
 
 from qslcards.lookup import VIA_LABELS, normalize_via_priority
+from qslcards.pdf.geometry import PRINT_MARGIN_MAX
 
 from .icon_canvas import icon_canvas
 from .theme import GAP_COL, GAP_ROW, PAD_INNER, Palette
@@ -77,6 +78,36 @@ STATUS_LEVELS = {
 def limit_entry_length(entry: ttk.Entry, max_len: int) -> None:
     """Begrenzt die Eingabelänge eines Entry per Tastatur-Validierung."""
     vcmd = (entry.register(lambda proposed: len(proposed) <= max_len), "%P")
+    entry.config(validate="key", validatecommand=vcmd)
+
+
+def parse_mm(text: str) -> float:
+    """Millimeter-Eingabe aus einem Feld lesen (deutsches Komma erlaubt).
+
+    Leer oder unlesbar -> 0.0; die Obergrenze setzt der Konsument
+    (`geometry.clamp_print_margin`)."""
+    try:
+        return float(text.strip().replace(",", "."))
+    except (AttributeError, ValueError):
+        return 0.0
+
+
+def _valid_mm(proposed: str, max_value: float) -> bool:
+    """Tastatur-Validierung für ein mm-Feld: leerer Zwischenstand ist erlaubt,
+    sonst eine Zahl mit höchstens einem Komma/Punkt innerhalb 0..max_value."""
+    if not proposed:
+        return True
+    text = proposed.replace(",", ".")
+    if text.count(".") > 1 or not all(ch.isdigit() or ch == "." for ch in text):
+        return False
+    if text == ".":
+        return True
+    return float(text) <= max_value
+
+
+def limit_entry_number(entry: ttk.Entry | ttk.Spinbox, max_value: float) -> None:
+    """Lässt in einem Feld nur mm-Zahlen bis `max_value` zu (siehe _valid_mm)."""
+    vcmd = (entry.register(lambda proposed: _valid_mm(proposed, max_value)), "%P")
     entry.config(validate="key", validatecommand=vcmd)
 
 
@@ -534,26 +565,108 @@ class PrintModeSection:
     Wählt, wie die PDF(s) erzeugt werden: „duplex" (eine PDF, Vorder-/Rückseite
     abwechselnd, für Duplexdrucker) oder „separate" (zwei PDFs – erst alle
     Vorderseiten, dann alle Rückseiten – für Drucker ohne beidseitigen Druck).
+
+    Unter „Erweiterte Einstellungen" steht der **Druckrand**: viele Drucker
+    drucken nicht bis zur Blattkante. Die vier Werte (in mm, je Kante) sagen
+    „so viel Rand muss frei bleiben"; die Karte wird dann proportional
+    verkleinert, sodass sie hineinpasst (siehe pdf/geometry.page_layout).
     """
+
+    # Randfelder in Anzeigereihenfolge: (Attributname, Beschriftung, Zeile, Spalte)
+    MARGIN_FIELDS = (
+        ("margin_top", "oben", 0, 0),
+        ("margin_bottom", "unten", 0, 2),
+        ("margin_left", "links", 1, 0),
+        ("margin_right", "rechts", 1, 2),
+    )
 
     def __init__(self, parent: tk.Misc) -> None:
         self.frame = ttk.LabelFrame(parent, text="9. Druckmodus")
         self.print_mode = tk.StringVar(value="duplex")
 
+        # Zwei nebeneinanderliegende Container: links die Druckmodi, rechts der
+        # Umschalter mit dem Randblock. Beide sitzen in Zeile 0 und sind oben
+        # verankert — **kein rowspan**: Tk verteilt die Höhe eines übergreifenden
+        # Widgets sonst auf die übersprungenen Zeilen, wodurch die Radiobuttons
+        # beim Ein-/Ausblenden auseinandergezogen würden.
+        self.modes_frame = ttk.Frame(self.frame)
+        self.modes_frame.grid(row=0, column=0, sticky="nw")
+
         self.radio_duplex = ttk.Radiobutton(
-            self.frame,
+            self.modes_frame,
             text="Duplexdruck (Vorder-/Rückseite abwechselnd)",
             variable=self.print_mode,
             value="duplex",
         )
         self.radio_separate = ttk.Radiobutton(
-            self.frame,
+            self.modes_frame,
             text="Vorder-/Rückseite getrennt (2 PDFs)",
             variable=self.print_mode,
             value="separate",
         )
         self.radio_duplex.grid(row=0, column=0, pady=GAP_ROW, sticky="w")
         self.radio_separate.grid(row=1, column=0, pady=GAP_ROW, sticky="w")
+
+        # Rechte Spalte: Umschalter oben, darunter der ein-/ausblendbare Block.
+        # Ausgeschaltet werden die Werte ignoriert (aber nicht vergessen) ->
+        # Ausgabe wie ohne Druckrand.
+        self.advanced_frame = ttk.Frame(self.frame)
+        self.advanced_frame.grid(row=0, column=1, padx=(PAD_INNER * 3, 0), sticky="nw")
+
+        self.advanced = tk.BooleanVar(value=False)
+        self.advanced_check = ttk.Checkbutton(
+            self.advanced_frame,
+            text="Erweiterte Einstellungen",
+            variable=self.advanced,
+            command=self.update_advanced_visibility,
+        )
+        self.advanced_check.grid(row=0, column=0, pady=GAP_ROW, sticky="w")
+
+        self.margin_frame = ttk.Frame(self.advanced_frame)
+        ttk.Label(self.margin_frame, text="Seitenrand (mm)").grid(
+            row=0, column=0, columnspan=4, pady=(0, GAP_ROW), sticky="w"
+        )
+        self.margin_vars: dict[str, tk.StringVar] = {}
+        for name, label, row, col in self.MARGIN_FIELDS:
+            var = tk.StringVar(value="0")
+            self.margin_vars[name] = var
+            setattr(self, name, var)
+            ttk.Label(self.margin_frame, text=label).grid(
+                row=row + 1, column=col, padx=(0, GAP_COL), pady=GAP_ROW, sticky="w"
+            )
+            spin = ttk.Spinbox(
+                self.margin_frame,
+                textvariable=var,
+                from_=0,
+                to=PRINT_MARGIN_MAX,
+                increment=0.5,
+                width=6,
+            )
+            spin.grid(row=row + 1, column=col + 1, padx=(0, GAP_COL * 2), pady=GAP_ROW, sticky="w")
+            limit_entry_number(spin, PRINT_MARGIN_MAX)
+
+        ttk.Label(
+            self.margin_frame,
+            text=(
+                "Manche Drucker drucken nicht bis zur Blattkante. Die Karte wird "
+                "verkleinert, sodass diese Ränder frei bleiben."
+            ),
+            style="Muted.TLabel",
+            wraplength=300,
+            justify="left",
+        ).grid(row=3, column=0, columnspan=4, pady=(PAD_INNER, 0), sticky="w")
+
+        self.update_advanced_visibility()
+
+    def update_advanced_visibility(self) -> None:
+        """Randblock unter dem Umschalter ein-/ausblenden.
+
+        Er liegt in der rechten Spalte unter der Checkbox — die Druckmodi links
+        bleiben dabei unverändert stehen."""
+        if self.advanced.get():
+            self.margin_frame.grid(row=1, column=0, pady=(PAD_INNER, 0), sticky="w")
+        else:
+            self.margin_frame.grid_remove()
 
 
 class OutputSection:

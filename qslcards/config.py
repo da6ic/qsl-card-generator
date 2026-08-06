@@ -62,6 +62,17 @@ class GenerationConfig:
     #                 ohne beidseitigen Druck: erst Vorderseiten drucken, Papier
     #                 umgedreht neu einlegen, dann Rückseiten drucken.
     print_mode: str = "duplex"  # "duplex" | "separate"
+    # Druckrand („Erweiterte Einstellungen" in GUI-Abschnitt 9): viele Drucker
+    # drucken nicht bis zur Blattkante und beschneiden sonst den Inhalt. Ist
+    # print_margin_enabled aktiv, wird die Karte proportional so verkleinert,
+    # dass diese Ränder (in **mm**, je Kante) frei bleiben; der dabei auf einer
+    # Achse übrige Platz fließt ins Layout (siehe pdf/geometry.page_layout).
+    # Aus -> unverändert randlos wie bisher.
+    print_margin_enabled: bool = False
+    print_margin_top: float = 0.0
+    print_margin_bottom: float = 0.0
+    print_margin_left: float = 0.0
+    print_margin_right: float = 0.0
     static_footer: str = "TNX FR NICE CONTACT, 73"
     remarks: str = ""  # globaler REMARKS-Text (alle Karten); leer -> kein Kasten
     qsl_mark: str = "none"  # "pse" | "tnx" | "none" (global)
