@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from tkinter import font as tkfont
 from tkinter import ttk
 
+from qslcards import paths
+
 # Modi, die `appearance.theme` annehmen darf.
 THEME_MODES = ("system", "light", "dark")
 THEME_LABELS = {"system": "System", "light": "Hell", "dark": "Dunkel"}
@@ -109,6 +111,7 @@ def detect_system_theme() -> str:
                 capture_output=True,
                 text=True,
                 timeout=2,
+                env=paths.subprocess_env(),
             )
             # Im hellen Modus existiert der Schlüssel nicht (returncode != 0).
             return "dark" if "dark" in out.stdout.strip().lower() else "light"
@@ -128,7 +131,9 @@ def detect_system_theme() -> str:
             ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"],
             ["gsettings", "get", "org.gnome.desktop.interface", "gtk-theme"],
         ):
-            out = subprocess.run(args, capture_output=True, text=True, timeout=2)
+            out = subprocess.run(
+                args, capture_output=True, text=True, timeout=2, env=paths.subprocess_env()
+            )
             value = out.stdout.strip().strip("'\"").lower()
             if value and value not in ("default", "prefer-light"):
                 return "dark" if "dark" in value else "light"

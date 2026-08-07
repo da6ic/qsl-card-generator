@@ -14,8 +14,9 @@ Schriftgrößen (bereits in pt) und Linienstärken (in pt).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING
+
+from qslcards import paths
 
 if TYPE_CHECKING:
     from qslcards.config import AppConfig
@@ -47,7 +48,7 @@ LINE_WIDTH = 0.6  # Standard-Rahmenlinienstärke in pt
 # Registrierung darf nie fatal sein -> bei Fehlschlag Fallback auf Helvetica.
 # --------------------------------------------------------------------------- #
 
-_FONT_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
+_FONT_DIR = paths.resource_path("qslcards", "assets", "fonts")
 _DEJAVU_REGULAR = _FONT_DIR / "DejaVuSans.ttf"
 _DEJAVU_BOLD = _FONT_DIR / "DejaVuSans-Bold.ttf"
 

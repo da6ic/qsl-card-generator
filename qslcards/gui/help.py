@@ -25,11 +25,13 @@ from pathlib import Path
 from tkinter import font as tkfont
 from tkinter import ttk
 
+from qslcards import paths
+
 from .scrolling import bind_wheel, wheel_step
 from .theme import PAD_INNER, Palette
 
-# Dateiname des Handbuchs (relativ, wie `app.CONFIG_PATH`).
-HANDBOOK_NAME = "handbuch.md"
+# Dateiname des Handbuchs (der Name steht in `paths`, wie alle anderen auch).
+HANDBOOK_NAME = paths.HANDBOOK_NAME
 
 # Fenstergröße beim Öffnen und Breite der Kapitelliste (Zeichen).
 WINDOW_SIZE = "880x640"
@@ -49,13 +51,23 @@ BULLET_INDENT = 18
 def handbook_candidates() -> list[Path]:
     """Mögliche Orte des Handbuchs, in der Reihenfolge der Suche.
 
-    Zuerst das Arbeitsverzeichnis (dort liegt auch `config.yaml`), dann der
-    Ordner des Programms — damit die Hilfe auch dann etwas anzeigt, wenn die App
-    aus einem anderen Verzeichnis gestartet wurde.
+    Zuerst das Arbeitsverzeichnis, dann der Ordner des Programms — damit die
+    Hilfe auch dann etwas anzeigt, wenn die App aus einem anderen Verzeichnis
+    gestartet wurde. Zuletzt die mitgelieferte Kopie aus dem Bündel.
+
+    Die Reihenfolge ist der eigentliche Vertrag: eine vom Anwender **neben das
+    Programm gelegte** Datei schlägt die mitgelieferte. Damit bleibt es bei einer
+    Wahrheit — wer das Handbuch für sich ergänzt, sieht seine Fassung, alle
+    anderen die ausgelieferte. Ins Benutzerverzeichnis kopiert wird bewusst
+    nichts: diese Kopie wäre beim nächsten Programm-Update veraltet.
     """
-    candidates = [Path(HANDBOOK_NAME)]
-    program_dir = Path(__file__).resolve().parent.parent.parent
-    for folder in (program_dir, Path(sys.argv[0]).resolve().parent):
+    candidates: list[Path] = [Path(HANDBOOK_NAME)]
+    folders = [
+        paths.program_dir(),
+        Path(sys.argv[0]).resolve().parent,
+        paths.resource_dir(),
+    ]
+    for folder in folders:
         candidate = folder / HANDBOOK_NAME
         if candidate not in candidates:
             candidates.append(candidate)

@@ -17,7 +17,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from PIL import Image, ImageTk
 
-from qslcards import __version__
+from qslcards import __version__, paths
 from qslcards import config as cfg
 from qslcards.cards.builder import build_cards, effective_via
 from qslcards.config import (
@@ -66,11 +66,13 @@ from .sections import (
 )
 from .textedit import install_entry_shortcuts
 
-CONFIG_PATH = "config.yaml"
-EXAMPLE_CONFIG_PATH = "config.example.yaml"
+# Aus der Quelle die Projektwurzel, gebündelt der Programm- bzw. Benutzerordner
+# (siehe `paths.data_dir`). Bleiben bewusst Modulattribute: die Tests setzen sie um.
+CONFIG_PATH = str(paths.config_path())
+EXAMPLE_CONFIG_PATH = str(paths.example_config_path())
 
 # Fenster-/Programm-Icon: die von `scripts/make_icon.py` gerenderten PNGs.
-ICON_DIR = Path(__file__).resolve().parent.parent / "assets" / "icons"
+ICON_DIR = paths.resource_path("qslcards", "assets", "icons")
 # GRÖSSTE ZUERST: `wm iconphoto` auf macOS nimmt das erste Bild und skaliert es
 # auf die jeweils gebrauchte Größe. Steht dort ein kleines, wirkt das Dock-Icon
 # verpixelt. Windows/X11 suchen sich aus der Liste die passende Größe.
@@ -82,13 +84,17 @@ def open_file(path: str) -> None:
 
     Plattformübergreifend (Windows, macOS, Linux/Debian). Fehler werden nach
     oben gereicht, damit der Aufrufer bei Bedarf einen Hinweis anzeigen kann.
+
+    `env=paths.subprocess_env()`: im gebündelten Betrieb zeigen `LD_LIBRARY_PATH`
+    bzw. `DYLD_LIBRARY_PATH` in die Anwendung, und ein davon geerbtes `xdg-open`
+    lädt die falschen Bibliotheken.
     """
     if sys.platform.startswith("win"):
         os.startfile(path)  # type: ignore[attr-defined]  # nur unter Windows
     elif sys.platform == "darwin":
-        subprocess.run(["open", path], check=True)
+        subprocess.run(["open", path], check=True, env=paths.subprocess_env())
     else:
-        subprocess.run(["xdg-open", path], check=True)
+        subprocess.run(["xdg-open", path], check=True, env=paths.subprocess_env())
 
 
 def reveal_in_file_manager(path: str) -> None:
@@ -99,14 +105,15 @@ def reveal_in_file_manager(path: str) -> None:
     enthaltende Ordner geöffnet.
     """
     target = Path(path)
+    env = paths.subprocess_env()
     if sys.platform == "darwin":
-        subprocess.run(["open", "-R", str(target)], check=True)
+        subprocess.run(["open", "-R", str(target)], check=True, env=env)
     elif sys.platform.startswith("win"):
         # explorer liefert auch im Erfolgsfall != 0 -> Rückgabewert ignorieren.
-        subprocess.run(["explorer", f"/select,{target}"], check=False)
+        subprocess.run(["explorer", f"/select,{target}"], check=False, env=env)
     else:
         folder = target if target.is_dir() else target.parent
-        subprocess.run(["xdg-open", str(folder)], check=True)
+        subprocess.run(["xdg-open", str(folder)], check=True, env=env)
 
 
 IMAGE_TYPES = [("Bilder", "*.png *.jpg *.jpeg *.webp"), ("Alle Dateien", "*.*")]

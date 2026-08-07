@@ -15,6 +15,7 @@ from pathlib import Path
 from tkinter import ttk
 from typing import TYPE_CHECKING
 
+from qslcards import paths
 from qslcards.cards.builder import (
     effective_via,
     max_rows_for_remarks,
@@ -52,7 +53,7 @@ _VIA_LABEL_TO_CODE = {VIA_LABELS[c]: c for c in _VIA_CHOICES}
 
 # Icons (Editier-Hinweise). Tk 9 rendert SVG nativ; `currentColor` wird durch eine
 # konkrete Farbe ersetzt, sonst bleibt der Strich evtl. unsichtbar.
-_ICON_DIR = Path(__file__).resolve().parent.parent / "assets" / "icons"
+_ICON_DIR = paths.resource_path("qslcards", "assets", "icons")
 _EDIT_ICON_PATH = _ICON_DIR / "edit_icon.svg"  # Stift: Text/Dropdown bearbeiten
 _TOGGLE_ICON_PATH = _ICON_DIR / "toggle_icon.svg"  # Schalter: Drucken Ja/Nein
 _ICON_HEIGHT = 13  # Zielhöhe der (Hover-)Icons in px

@@ -13,6 +13,7 @@ import tkinter as tk
 from collections.abc import Callable, Iterable
 from tkinter import ttk
 
+from qslcards import paths
 from qslcards.lookup import (
     PROVIDER_HAMQTH,
     PROVIDER_QRZ,
@@ -850,12 +851,18 @@ class PrintModeSection:
             self.margin_frame.grid_remove()
 
 
+# Dateiname der vorgeschlagenen Ausgabe-PDF (der Ordner kommt aus `paths`).
+DEFAULT_OUTPUT_NAME = "qsl_karten.pdf"
+
+
 class OutputSection:
     """10. Ausgabe. Der Status steht in der Fußzeile (`StatusBar`)."""
 
     def __init__(self, parent: tk.Misc) -> None:
         self.frame = ttk.LabelFrame(parent, text="10. Ausgabe")
-        self.output_var = tk.StringVar(value="qsl_karten.pdf")
+        # Absoluter Pfad, kein bloßer Dateiname: ein relativer landete beim
+        # gebündelten Programm im Arbeitsverzeichnis des Systems.
+        self.output_var = tk.StringVar(value=str(paths.default_output_dir() / DEFAULT_OUTPUT_NAME))
 
         self.browse_btn = ttk.Button(self.frame, text="Ziel…")
         self.browse_btn.grid(row=0, column=0, pady=GAP_ROW, sticky="w")

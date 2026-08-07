@@ -19,6 +19,7 @@ from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from qslcards import paths
 from qslcards.lookup.base import ChainedLookup, LookupProvider, LookupResult
 from qslcards.lookup.cache import LookupCache
 from qslcards.lookup.hamqth import HamQTHClient
@@ -50,7 +51,9 @@ __all__ = [
     "PROVIDER_QRZ",
 ]
 
-DEFAULT_CACHE_PATH = "lookup_cache.json"
+# Neben der Config (siehe `paths.data_dir`): läuft der Cache von ihr weg, gehört
+# er plötzlich zu einem anderen Konto.
+DEFAULT_CACHE_PATH = str(paths.cache_path())
 
 # Anzeigenamen der Anbieter — sie stehen in Warnungen der GUI und ordnen die
 # Meldung den Feldern in Abschnitt 6 zu (siehe `sections.PROVIDER_FIELDS`).
