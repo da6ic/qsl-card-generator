@@ -165,6 +165,20 @@ def _recent_from_dict(data: Any) -> RecentConfig:
     return RecentConfig(logs=clean(data.get("logs")), images=clean(data.get("images")))
 
 
+# Erste Zeile jeder geschriebenen Config. Sie steht in `save` und nicht bloß in
+# `config.example.yaml`, weil `yaml.safe_dump` die Datei beim Auto-Save komplett
+# neu schreibt: ein nur in der Vorlage stehender Hinweis wäre nach der ersten
+# Änderung im Programm verschwunden — also genau dann, wenn er noch gilt.
+#
+# Vier Werte haben deshalb bewusst gar keinen Weg mehr, geändert zu werden:
+# `default_via`, `page_orientation`, `static_footer` und `program_id` besitzen
+# kein Eingabefeld (siehe `gui/app._gather_config`, das sie aus der geladenen
+# Config übernimmt). Sie gelten als Programmkonstanten, die zufällig hier liegen
+# — vom Nutzer so entschieden. Wer einen davon bedienbar machen will, braucht ein
+# Widget; ihn „einfach in der Datei zu ändern" widerspricht der Zeile darüber.
+CONFIG_HEADER = "# Diese Datei verwaltet das Programm selbst — bitte nicht von Hand bearbeiten.\n"
+
+
 def load(path: str | Path) -> AppConfig:
     """Lädt die YAML-Config und füllt fehlende Felder mit Defaults auf."""
     with open(path, encoding="utf-8") as fh:
@@ -180,8 +194,9 @@ def load(path: str | Path) -> AppConfig:
 
 
 def save(config: AppConfig, path: str | Path) -> None:
-    """Schreibt die Config als YAML."""
+    """Schreibt die Config als YAML, mit der Warnung als erster Zeile."""
     with open(path, "w", encoding="utf-8") as fh:
+        fh.write(CONFIG_HEADER)
         yaml.safe_dump(
             asdict(config),
             fh,

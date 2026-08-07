@@ -1,114 +1,49 @@
-# config.example.yaml
-# Kopiere diese Datei nach "config.yaml" und passe die Werte an.
-# Absenderdaten stehen fest auf der Karte; QSO-Daten kommen aus dem Logbuch
-# (ADIF oder Cabrillo) — auch dann, wenn das Contest-Log ein eigenes Rufzeichen
-# im Kopf nennt.
-
+# Diese Datei verwaltet das Programm selbst — bitte nicht von Hand bearbeiten.
 sender:
-  callsign: "DN5MT"            # großes Rufzeichen oben links
-  name: "Axel Tüner"
-  street: "Wilhelmstr. 76"
-  zip: "72124"
-  city: "Pliezhausen"
-  country: "Deutschland"
-  locator: "JN48OM"            # eigenes Locator (Stationsblock)
-  dok: "P31"
-  waz: "14"
-  itu: "28"
-  # Funk-Ausrüstung: erscheint dynamisch auf der Karte (nur der Wert, ohne
-  # Label), sobald gefüllt – in einer horizontalen Zeile unter dem Stationsblock.
-  # Leer lassen -> nichts wird gedruckt.
-  receiver: ""                 # Empfänger/TRX, z. B. "IC-7300"
-  antenna: ""                  # Antenne, z. B. "Dipol 2×20 m"
-  power: ""                    # Sendeleistung, z. B. "100 W"
-
+  callsign: ''
+  name: ''
+  street: ''
+  zip: ''
+  city: ''
+  country: ''
+  locator: ''
+  dok: ''
+  waz: ''
+  itu: ''
+  receiver: ''
+  antenna: ''
+  power: ''
 lookup:
-  # Der Lookup bestimmt je Station die Versandart (Via), den QSL-Manager und die
-  # Adresse. Er läuft AUTOMATISCH beim Log-Laden im Hintergrund, sobald hier
-  # Credentials stehen. Ohne Credentials: keine Netzcalls, alle Via = default_via.
-  # HamQTH: kostenloses Konto genügt (https://www.hamqth.com/ registrieren)
-  hamqth_user: ""
-  hamqth_pass: ""
-  # QRZ: ohne bezahltes XML-Abo nur eingeschränkte Daten -> optional
-  qrz_user: ""
-  qrz_pass: ""
-  program_id: "qslcards"       # Kennung, die HamQTH als prg-Parameter erwartet
-  address_export: false        # Adress-/Label-CSV für ALLE nachgeschlagenen Stationen
-
+  hamqth_user: ''
+  hamqth_pass: ''
+  qrz_user: ''
+  qrz_pass: ''
+  program_id: qslcards
+  address_export: false
 generation:
-  card_mode: "per_qso"         # "per_qso" oder "per_station"
-  via_priority: ["B", "D", "Q", "L"]  # Zustellwege in Prioritätsreihenfolge
-                               #   (oben = höchste): B=Büro (inkl. Manager),
-                               #   D=Direkt, Q=eQSL, L=LOTW. Je Empfänger wird der
-                               #   höchstpriorisierte akzeptierte Weg gedruckt.
-  via_cut: 2                   # Trennlinie: die ersten `via_cut` Wege sind aktiv
-                               #   (werden gedruckt), der Rest darunter nicht.
-                               #   Default 2 -> Büro+Direkt aktiv, eQSL/LOTW nicht.
-  default_via: "B"             # Fallback für unbekannte Stationen (Lookup leer/
-                               #   "?" oder keine Credentials); nur hier, kein
-                               #   GUI-Feld. Solche Stationen gelten als Büro.
-  page_orientation: "landscape"  # A6 quer (Referenz). Alternativ "portrait"
-  print_mode: "duplex"         # wie die PDF(s) erzeugt werden:
-                               #   duplex   : eine PDF, pro Karte Vorder-/Rückseite
-                               #              abwechselnd (für Duplexdrucker).
-                               #   separate : zwei PDFs (…_vorderseiten.pdf und
-                               #              …_rueckseiten.pdf) für Drucker ohne
-                               #              beidseitigen Druck – erst Vorderseiten
-                               #              drucken, Papier umgedreht neu einlegen,
-                               #              dann Rückseiten drucken.
-  sheet_mode: "single"         # wie viele Karten auf eine PDF-Seite kommen:
-                               #   single : eine Karte je Seite (A6 quer).
-                               #   a4_4up : vier Karten je Seite (A4 quer, 2×2)
-                               #            mit gestrichelten Schnitt-Hilfslinien
-                               #            zwischen den Karten (nur auf den
-                               #            Rückseiten, damit das Frontbild
-                               #            unberührt bleibt). Gilt für beide
-                               #            Druckmodi.
-  # Druckrand („Erweiterte Einstellungen" in GUI-Abschnitt 9): viele Drucker
-  # drucken nicht bis zur Blattkante und beschneiden sonst den Inhalt. Ist der
-  # Schalter aktiv, wird die Karte proportional (nie verzerrt) so verkleinert,
-  # dass die angegebenen Ränder frei bleiben; der dabei auf einer Achse übrige
-  # Platz fließt ins Layout (Call-/Via-Box, Tabelle und Remarks wachsen mit).
-  # Im Bogenmodus („a4_4up") gilt der Rand **je Karte**, also in jeder der vier
-  # Zellen: zwischen zwei Karten steht dann ein doppelt breiter weißer Streifen,
-  # durch dessen Mitte geschnitten wird. So hat jede fertige Karte denselben
-  # Rand ringsum (läge er nur um den Bogen, hätte jede Karte ihn auf zwei
-  # Seiten und der Inhalt säße außermittig).
+  card_mode: per_qso
+  via_priority:
+  - B
+  - D
+  - Q
+  - L
+  via_cut: 2
+  default_via: B
+  page_orientation: landscape
+  print_mode: duplex
+  sheet_mode: single
   print_margin_enabled: false
-  print_margin_top: 0.0        # Ränder in mm je Kante, 0 bis 15
+  print_margin_top: 0.0
   print_margin_bottom: 0.0
   print_margin_left: 0.0
   print_margin_right: 0.0
-  static_footer: "TNX FR NICE CONTACT, 73"
-  remarks: ""                  # globaler REMARKS-Text für ALLE Karten. Leer =
-                               #   kein Remarks-Kasten (dynamisch). Je Karte in
-                               #   der Vorschau überschreibbar. Max. 80 Zeichen.
-                               #   Mit Remarks passen weniger QSO-Zeilen auf eine
-                               #   Karte (Kasten braucht Platz) -> Rest -> Folge-
-                               #   karte.
-  qsl_mark: "none"             # welches Kästchen ankreuzen (global): pse|tnx|none
-                               #   pse : PSE QSL bei allen Karten (Karte anfordern)
-                               #   tnx : TNX QSL bei allen Karten (für Karte danken)
-                               #   none: beide leer (von Hand ankreuzen)
-  portable_mark: "none"        # Portabel-Kennung hinter dem eigenen Rufzeichen
-                               #   (global): none|p|m|t|r
-                               #   p: /p (portabel), m: /m (maritim mobil),
-                               #   t: /t (temporär/Sonderstandort), r: /r (rover),
-                               #   none: keine Kennung
-  confirm_mark: "none"         # Bestätigungs-Markierung (global): none|qso|swl
-                               #   qso: "Confirming QSO", swl: "Confirming SWL-Report",
-                               #   none: keine Markierung
-
+  static_footer: TNX FR NICE CONTACT, 73
+  remarks: ''
+  qsl_mark: none
+  portable_mark: none
+  confirm_mark: none
 appearance:
-  # Farbthema der Oberfläche (NICHT der Karte). Umschaltbar im Menü
-  # „Ansicht > Farbthema"; die App schreibt die Wahl hierher zurück.
-  #   system : folgt der Hell/Dunkel-Einstellung des Betriebssystems
-  #   light  : immer hell
-  #   dark   : immer dunkel
-  theme: "system"
-
+  theme: system
 recent:
-  # Zuletzt geöffnete Dateien für das Menü „Datei" (neueste zuerst, max. 8).
-  # Wird von der App gepflegt – hier normalerweise nichts von Hand eintragen.
   logs: []
   images: []

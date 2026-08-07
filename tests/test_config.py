@@ -14,17 +14,18 @@ EXAMPLE = Path(__file__).resolve().parent.parent / "config.example.yaml"
 def test_load_example_all_fields():
     c = cfg.load(EXAMPLE)
 
-    # Sender
-    assert c.sender.callsign == "DN5MT"
-    assert c.sender.name == "Axel Tüner"
-    assert c.sender.street == "Wilhelmstr. 76"
-    assert c.sender.zip == "72124"
-    assert c.sender.city == "Pliezhausen"
-    assert c.sender.country == "Deutschland"
-    assert c.sender.locator == "JN48OM"
-    assert c.sender.dok == "P31"
-    assert c.sender.waz == "14"
-    assert c.sender.itu == "28"
+    # Sender: die Vorlage ist leer — die Angaben trägt der Anwender im Programm
+    # ein (Abschnitt 3), nicht in der Datei.
+    assert c.sender.callsign == ""
+    assert c.sender.name == ""
+    assert c.sender.street == ""
+    assert c.sender.zip == ""
+    assert c.sender.city == ""
+    assert c.sender.country == ""
+    assert c.sender.locator == ""
+    assert c.sender.dok == ""
+    assert c.sender.waz == ""
+    assert c.sender.itu == ""
 
     # Lookup
     assert c.lookup.hamqth_user == ""
@@ -168,6 +169,46 @@ def test_push_recent_respects_limit():
     pushed = cfg.push_recent(entries, "/neu")
     assert len(pushed) == cfg.MAX_RECENT
     assert pushed[0] == "/neu" and entries[-1] not in pushed
+
+
+# -- Die Vorlage ist genau das, was das Programm schreibt -------------------
+
+
+def test_example_is_exactly_what_the_program_writes(tmp_path: Path):
+    """`config.example.yaml` == `save(AppConfig())`, Byte für Byte.
+
+    Damit kann die Vorlage nicht von den Defaults wegdriften: kommt ein Feld
+    dazu oder ändert sich ein Standardwert, fällt dieser Test um, statt dass ein
+    Anwender eine Vorlage bekommt, die nicht mehr zum Programm passt.
+    """
+    written = tmp_path / "config.yaml"
+    cfg.save(cfg.AppConfig(), written)
+    assert written.read_text(encoding="utf-8") == EXAMPLE.read_text(encoding="utf-8")
+
+
+def test_saved_config_warns_against_editing_by_hand(tmp_path: Path):
+    """Die Warnung steht in `save`, nicht nur in der Vorlage.
+
+    `yaml.safe_dump` schreibt die Datei beim Auto-Save komplett neu — ein nur in
+    der Vorlage stehender Hinweis wäre nach der ersten Änderung im Programm weg.
+    """
+    path = tmp_path / "config.yaml"
+    config = cfg.AppConfig()
+    config.sender.callsign = "DL1ABC"
+    cfg.save(config, path)
+
+    text = path.read_text(encoding="utf-8")
+    assert text.splitlines()[0] == cfg.CONFIG_HEADER.rstrip("\n")
+    assert "nicht von Hand bearbeiten" in text
+    # Der Kommentar stört das Wiedereinlesen nicht.
+    assert cfg.load(path).sender.callsign == "DL1ABC"
+
+
+def test_example_contains_no_personal_sample_data():
+    """Die Vorlage ist leer, nicht mit erfundenen Absenderdaten gefüllt."""
+    c = cfg.load(EXAMPLE)
+    assert c.sender == cfg.SenderConfig()
+    assert c.lookup.hamqth_user == "" and c.lookup.hamqth_pass == ""
 
 
 if __name__ == "__main__":  # pragma: no cover
