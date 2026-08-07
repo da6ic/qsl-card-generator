@@ -836,20 +836,34 @@ class PreviewTable:
             self._begin_edit_cell(iid, col)
         return "break"
 
-    def _on_click(self, event: tk.Event) -> None:
+    def _on_click(self, event: tk.Event) -> str | None:
         # Nur Klicks in die Spalte "Drucken" (Spalte #1) schalten die Zeile um.
         if self.tree.identify("region", event.x, event.y) != "cell":
-            return
+            return None
         if self.tree.identify_column(event.x) != "#1":
-            return
+            return None
         row = self.tree.identify_row(event.y)
         if not row or row not in self._rows:
-            return
+            return None
         self._toggle_print(row)
+        # „break": sonst wählt die Standard-Bindung die Zeile zusätzlich aus und
+        # die Auswahlfarben verdecken das frisch gesetzte Grau (s. _toggle_print).
+        return "break"
 
     def _toggle_print(self, iid: str) -> None:
-        """Schaltet die Drucken-Markierung einer Zeile um (Ja/Nein)."""
+        """Schaltet die Drucken-Markierung einer Zeile um (Ja/Nein).
+
+        Die Zeile wird dabei aus der Auswahl genommen: ttk zeichnet eine
+        ausgewählte Zeile in den Auswahlfarben und überdeckt damit das Grau der
+        „Nein"-Zeilen (der `off`-Tag greift nur bei nicht ausgewählten Zeilen).
+        Das Umschalten wäre sonst erst zu sehen, wenn die Auswahl woanders
+        hinwandert — und Umschalten ist ohnehin kein Auswählen.
+        """
         if iid not in self._rows:
             return
         card, inc = self._rows[iid]
         self.set_row_included(iid, not inc)
+        self.tree.selection_remove(iid)
+        # Das Hover-Icon liegt ggf. noch mit dem Auswahl-Hintergrund auf der Zeile.
+        if self._hover_iid == iid and self._hover_icon is not None:
+            self._hover_icon.configure(style=self._row_icon_style(iid))

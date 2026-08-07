@@ -647,6 +647,27 @@ def test_goto_section_scrolls(app, tmp_path):
     assert app.body.canvas.yview()[0] > 0.0
 
 
+def test_toggling_print_greys_the_row_at_once(app, tmp_path):
+    """Ja -> Nein muss sofort ausgegraut sein. Eine ausgewählte Zeile zeichnet ttk
+    in den Auswahlfarben und verdeckt damit den `off`-Tag — das Umschalten nimmt
+    die Zeile deshalb aus der Auswahl."""
+    _load(app, tmp_path)
+    preview = app.preview
+    iid = _iid_for(app, "DL1AA")
+    preview.tree.selection_set(iid)  # Zeile war vorher ausgewählt
+
+    preview._toggle_print(iid)
+    assert preview.tree.item(iid, "values")[0] == "Nein"
+    assert "off" in preview.tree.item(iid, "tags")
+    assert iid not in preview.tree.selection()
+
+    # Zurück auf Ja: Grau weg, Auswahl weiterhin nicht angetastet.
+    preview._toggle_print(iid)
+    assert preview.tree.item(iid, "values")[0] == "Ja"
+    assert "off" not in preview.tree.item(iid, "tags")
+    assert iid not in preview.tree.selection()
+
+
 def _fill_required(app):
     """Alle Pflichtfelder des Absenders plausibel befüllen."""
     values = {
