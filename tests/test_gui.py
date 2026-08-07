@@ -8,6 +8,7 @@ im Test durchläuft. Braucht ein funktionierendes Tk — sonst wird übersprunge
 from __future__ import annotations
 
 import tkinter as tk
+from tkinter import ttk
 from unittest import mock
 
 import pytest
@@ -979,6 +980,33 @@ def test_generate_runs_once_everything_is_filled(app, tmp_path):
     gen.assert_called_once()
     box.showerror.assert_not_called()
     box.showwarning.assert_not_called()
+
+
+def _descendants(widget):
+    for child in widget.winfo_children():
+        yield child
+        yield from _descendants(child)
+
+
+def test_about_dialog_has_no_close_button(app):
+    """Kein „Schließen": das macht die Fenstersteuerung des Systems (und Escape).
+
+    Dieselbe Entscheidung wie beim Handbuchfenster (`test_help`), damit die
+    beiden Fenster sich nicht unterschiedlich verhalten.
+    """
+    app._show_about()
+    app.update_idletasks()
+    dialog = app.winfo_children()[-1]
+    try:
+        assert isinstance(dialog, tk.Toplevel)
+        assert dialog.title() == "Über QSL-Karten-Generator"
+        widgets = list(_descendants(dialog))
+        # Gegenprobe: der Inhalt ist da — die leere Button-Liste kommt nicht
+        # daher, dass hier das falsche Fenster durchsucht wird.
+        assert any(isinstance(w, ttk.Label) for w in widgets)
+        assert [w for w in widgets if isinstance(w, ttk.Button)] == []
+    finally:
+        dialog.destroy()
 
 
 if __name__ == "__main__":  # pragma: no cover

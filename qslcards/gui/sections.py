@@ -204,6 +204,9 @@ def show_about_dialog(
     Das Icon wird als Vektor auf einen Canvas gezeichnet statt als PNG geladen:
     Tk skaliert Bitmaps auf Retina-Displays sichtbar hoch (siehe
     `gui/icon_canvas.py`).
+
+    **Keine Schaltfläche „Schließen"** — dafür gibt es die Fenstersteuerung des
+    Systems (und Escape). Dieselbe Entscheidung wie beim Handbuchfenster.
     """
     root = parent.winfo_toplevel()
     dialog = tk.Toplevel(parent)
@@ -234,12 +237,6 @@ def show_about_dialog(
         ),
         justify="left",
     ).grid(row=2, column=1, sticky="w")
-
-    btns = ttk.Frame(dialog, padding=(PAD_INNER * 2, 0, PAD_INNER * 2, PAD_INNER * 2))
-    btns.pack(fill="x")
-    ttk.Button(btns, text="Schließen", style="Accent.TButton", command=dialog.destroy).pack(
-        side="right"
-    )
 
     dialog.bind("<Escape>", lambda _e: dialog.destroy())
     _center_over(dialog, root)
