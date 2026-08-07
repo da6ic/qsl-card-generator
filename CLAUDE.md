@@ -723,9 +723,18 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   Vorschautabelle (`gui/preview.py`, `format="svg …"`) brauchen Tk ≥ 9 und fehlen
   sonst **ohne Fehlermeldung** (der `except` daneben schluckt es). Woher Tk kommt,
   ist plattformabhängig — wer daraus eine Python-Hürde macht, sperrt Fedora aus:
-  * Windows/macOS: Tcl/Tk steckt im Python-Installer. **3.14 → 9.0.4**,
-    3.13 → nur 8.6.15 (nachgeprüft in `PCbuild/tcltk.props` bzw.
-    `Mac/BuildScript/build-installer.py` der jeweiligen CPython-Zweige).
+  * Windows/macOS: Tcl/Tk steckt im Python-Installer, und dort zählt die
+    **Punktversion**: **3.14.7 → 9.0.4**, aber 3.14.0–3.14.6 und 3.13 → nur
+    8.6.15 (nachgeprüft in `PCbuild/tcltk.props` an den Tags `v3.14.0` bis
+    `v3.14.7`). Nur „Python 3.14" zu fordern genügt **nicht** — genau daran ist
+    der erste Windows-Bauversuch gescheitert.
+  * **Windows 32-Bit ist gesondert blockiert**: PyYAML liefert für `cp314` kein
+    win32-Wheel mehr (bis `cp313` gab es eines). pip baut es dann aus den
+    Quellen — Compiler nötig, und die Windows-App-Steuerung blockiert dabei die
+    Cython-DLLs im Temp-Ordner. Pillow hat sein win32-Wheel noch, ReportLab und
+    Requests sind reines Python; PyYAML ist der einzige Stolperstein. Es beißt
+    sich also „Tk 9 braucht 3.14.7+" mit „PyYAML gibt es nur bis 3.13". Wege in
+    `packaging/windows/README.md`.
   * Linux: Tk kommt vom System. **Fedora 42+** hat Tcl/Tk 9.0 systemweit, dort
     genügt das mitgelieferte Python 3.13 (3.14 gibt es erst ab F43).
   * **PyInstaller ≥ 6.21** — davor kann es Tcl/Tk 9 mit eingebettetem

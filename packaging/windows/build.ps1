@@ -4,7 +4,9 @@
 #
 # Ohne Angabe nimmt es Python 3.14 (64 Bit) über den Python-Launcher `py`. Der
 # findet den Interpreter unabhängig davon, wohin er installiert wurde — man
-# braucht also keinen Pfad zu kennen. Für die andere Bitbreite:
+# braucht also keinen Pfad zu kennen. **Mindestens 3.14.7**: erst dieser
+# Installer bringt Tcl/Tk 9 mit (siehe README.md daneben). Für die andere
+# Bitbreite:
 #
 #   ... build.ps1 -Python "py -3.14-32" -VenvDir ".venv-build32"   # -> windows-x86
 #   ... build.ps1 -Python "py -3.14"                               # -> windows-x64
@@ -44,14 +46,20 @@ $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
 
 & $VenvPython -m pip install --upgrade pip --quiet
 & $VenvPython -m pip install -e ".[build]" --quiet
+if ($LASTEXITCODE -ne 0) {
+    Write-Error @"
+Die Abhängigkeiten ließen sich nicht installieren.
 
-# Zeigt vor dem Bauen, was wirklich verwendet wird — Bitbreite und Tk-Version
-# sind genau die beiden Dinge, die man dem fertigen Programm nicht mehr ansieht.
-# Einfache Anführungszeichen: sonst ersetzt PowerShell alles mit $ im Python-Code.
-& $VenvPython -c @'
-import struct, sys, tkinter
-bits = struct.calcsize("P") * 8
-print(f"Python {sys.version.split()[0]}  {bits}-bit  Tk {tkinter.TkVersion}")
-'@
+Häufigster Grund auf 32-Bit: für Python 3.14 gibt es kein win32-Wheel von
+PyYAML (für 3.13 und älter schon). pip baut es dann aus den Quellen, wofür ein
+C-Compiler nötig ist — und Windows blockiert dabei gern die Hilfsdateien im
+Temp-Ordner ("Eine Anwendungssteuerungsrichtlinie hat diese Datei blockiert").
+Siehe packaging\windows\README.md, Abschnitt "32-Bit".
+"@
+}
 
+# Kein `python -c` zur Ausgabe der Version: Windows PowerShell 5.1 schluckt beim
+# Aufruf einer nativen .exe die doppelten Anführungszeichen im Argument, der
+# Python-Code kam als Syntaxfehler an. `build_app.py` gibt Python-Version,
+# Tk-Version und Bitbreite (im Plattform-Kürzel) ohnehin selbst aus.
 & $VenvPython scripts\build_app.py --clean

@@ -1053,7 +1053,8 @@ Portable-Modus braucht einen Ordner).
 **Cross-Compile gibt es nicht** — PyInstaller bündelt den Interpreter, unter dem
 es läuft. Die harte Bedingung ist **Tk ≥ 9**: die SVG-Icons der Vorschautabelle
 (§2) fehlen sonst ohne Fehlermeldung. Woher Tk kommt, ist plattformabhängig —
-Windows/macOS aus dem Python-Installer (erst 3.14 bringt 9.0.4 mit), Linux vom
+Windows/macOS aus dem Python-Installer (erst **3.14.7** bringt 9.0.4 mit —
+3.14.0-3.14.6 haben noch 8.6.15), Linux vom
 System (Fedora 42+). PyInstaller muss **≥ 6.21** sein. Das Skript prüft alle drei
 Punkte vorab und bricht mit Klartext ab, statt still etwas Kaputtes zu bauen.
 

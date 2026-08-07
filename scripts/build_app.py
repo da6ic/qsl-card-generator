@@ -97,13 +97,17 @@ def check_prerequisites() -> list[str]:
         )
     elif tk < MIN_TK:
         hint = (
-            "Python 3.14 verwenden — dessen Installer bringt Tcl/Tk 9.0.4 mit, 3.13 nur 8.6."
+            # Nicht „3.14" — die Punktversion zählt: 3.14.0 bis 3.14.6 lieferten
+            # noch Tcl/Tk 8.6.15, erst 3.14.7 bringt 9.0.4 mit.
+            "Python 3.14.7 oder neuer verwenden — erst dieser Installer bringt "
+            "Tcl/Tk 9.0.4 mit (3.14.0–3.14.6 und 3.13 haben 8.6.15)."
             if sys.platform.startswith("win") or sys.platform == "darwin"
             else "Tk kommt hier vom System: Fedora 42+ liefert Tcl/Tk 9."
         )
         problems.append(
-            f"Tk {tk} statt {MIN_TK}+. Die Stift-/Schalter-Icons der Vorschautabelle "
-            f"würden im fertigen Programm fehlen — ohne jede Fehlermeldung. {hint}"
+            f"Tk {tk} statt {MIN_TK}+ (mit Python {platform.python_version()}). Die Stift-/"
+            f"Schalter-Icons der Vorschautabelle würden im fertigen Programm fehlen — "
+            f"ohne jede Fehlermeldung. {hint}"
         )
 
     for needed in (SPEC, ROOT / "handbuch.md", ROOT / "config.example.yaml"):

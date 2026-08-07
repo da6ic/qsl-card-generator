@@ -89,18 +89,23 @@ es läuft. Jedes Ziel braucht sein eigenes Betriebssystem:
 
 | Ziel | Gebaut auf | Python | Ergebnis |
 |---|---|---|---|
-| Windows 64-Bit | Windows (VM genügt) | 3.14 x64 von python.org | `…-windows-x64.zip` |
-| Windows 32-Bit | Windows | 3.14 **x86** von python.org | `…-windows-x86.zip` |
+| Windows 64-Bit | Windows (VM genügt) | **3.14.7+** x64 von python.org | `…-windows-x64.zip` |
+| Windows 32-Bit | Windows | **3.14.7+** x86 — aber siehe Hinweis unten | `…-windows-x86.zip` |
 | Fedora | Fedora 42+ oder der Container in `packaging/linux/` | System-Python 3.13+ | `…-linux-x86_64.tar.gz` |
-| macOS | macOS (Apple Silicon) | Homebrew oder python.org 3.14 | `…-macos-arm64.zip` |
+| macOS | macOS (Apple Silicon) | Homebrew oder python.org **3.14.7+** | `…-macos-arm64.zip` |
 
 **Die entscheidende Größe ist Tk 9, nicht die Python-Version.** Die
 Vorschautabelle zeichnet ihre Stift- und Schaltersymbole aus SVG, was erst Tk 9
 kann; mit Tk 8.6 fehlen sie **ohne Fehlermeldung**. Woher Tk kommt, ist
-plattformabhängig: unter Windows und macOS steckt es im Python-Installer (erst
-**3.14** bringt Tcl/Tk 9.0.4 mit, 3.13 nur 8.6.15), unter Linux kommt es vom
-System (Fedora 42+ hat Tcl/Tk 9.0, dort genügt das mitgelieferte Python 3.13).
+plattformabhängig: unter Windows und macOS steckt es im Python-Installer — und
+dort zählt die **Punktversion**: erst **3.14.7** bringt Tcl/Tk 9.0.4 mit,
+3.14.0–3.14.6 und 3.13 liefern noch 8.6.15. Unter Linux kommt Tk vom System
+(Fedora 42+ hat Tcl/Tk 9.0, dort genügt das mitgelieferte Python 3.13).
 PyInstaller muss **≥ 6.21** sein — davor kann es Tcl/Tk 9 nicht bündeln.
+
+**Windows 32-Bit hat einen Haken**: PyYAML liefert für Python 3.14 kein
+win32-Wheel mehr. Was das bedeutet und welche drei Wege es gibt, steht in
+`packaging/windows/README.md`.
 
 Ausführliche Anleitungen samt Prüfliste nach dem Bauen:
 `packaging/windows/README.md` und `packaging/linux/README.md`.

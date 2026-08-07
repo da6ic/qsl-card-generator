@@ -5,14 +5,22 @@ läuft. Ein Windows-Programm entsteht nur auf Windows — echter Rechner oder VM
 
 ## Python besorgen
 
-**Zwingend Python 3.14.** Grund: Tcl/Tk steckt unter Windows im Python-Installer,
-und erst 3.14 bringt **Tcl/Tk 9.0.4** mit (3.13 nur 8.6.15). Mit Tk 8.6 fehlen
-der Vorschautabelle stillschweigend die Stift- und Schaltersymbole — das Programm
-startet, es sieht nur falsch aus.
+**Zwingend Python 3.14.7 oder neuer** — die Punktversion zählt. Tcl/Tk steckt
+unter Windows im Python-Installer, und der Wechsel auf **Tcl/Tk 9.0.4** kam erst
+mit **3.14.7**; 3.14.0 bis 3.14.6 liefern noch 8.6.15, ebenso 3.13. Mit Tk 8.6
+fehlen der Vorschautabelle stillschweigend die Stift- und Schaltersymbole — das
+Programm startet, es sieht nur falsch aus.
 
-Von <https://www.python.org/downloads/windows/> beide Installer von Python 3.14.x
-herunterladen und ausführen: *Windows installer (64-bit)* **und** *Windows
-installer (32-bit)*.
+Prüfen, was installiert ist:
+
+```powershell
+py -3.14 -VV                       # Punktversion
+py -3.14 -m tkinter                # das Fenster nennt oben die Tk-Version
+```
+
+Von <https://www.python.org/downloads/windows/> die aktuelle 3.14.x holen
+(*Windows installer (64-bit)*, für die zweite Bitbreite *(32-bit)*). Eine
+vorhandene ältere 3.14 wird dabei aktualisiert, nicht danebengelegt.
 
 Beim Installieren **„tcl/tk and IDLE" angehakt lassen** (Standard) — ohne das
 gibt es kein tkinter. Ebenso **„py launcher"** anhaken; damit muss man sich
@@ -45,14 +53,45 @@ powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1 -Python "py
 Fehlt der Launcher, geht auch der vollständige Pfad:
 `-Python "$env:LOCALAPPDATA\Programs\Python\Python314\python.exe"`.
 
-Das Skript gibt vor dem Bauen Bitbreite und Tk-Version aus — genau die beiden
-Angaben, die man dem fertigen Programm nicht mehr ansieht. Steht dort `Tk 8.6`
-oder die falsche Bitbreite: abbrechen statt weiterbauen.
+`build_app.py` nennt vor dem Bauen Python-Version, Tk-Version und Plattform-
+Kürzel (`windows-x64` / `windows-x86`) — genau die Angaben, die man dem fertigen
+Programm nicht mehr ansieht. Steht dort `Tk 8.6` oder die falsche Bitbreite:
+abbrechen statt weiterbauen.
 
 Ergebnis: `dist\QSL-Karten-Generator-<version>-windows-x64.zip` bzw. `-x86.zip`.
 
 **Zwischen den beiden Läufen `dist\` leeren** (oder das erste ZIP wegkopieren) —
 sonst überschreibt der zweite Lauf den Programmordner des ersten.
+
+## 32-Bit: PyYAML hat kein Wheel für Python 3.14
+
+Hier beißen sich zwei Anforderungen, und das lässt sich nicht wegkonfigurieren:
+
+- Für **Tk 9** braucht es Python **3.14.7+**.
+- **PyYAML** liefert für `cp314` **kein win32-Wheel** mehr (für `cp310`–`cp313`
+  gibt es eines, für 3.14 nur noch `win_amd64` und `win_arm64`). Pillow hat sein
+  win32-Wheel weiterhin, ReportLab und Requests sind reines Python — PyYAML ist
+  der einzige Stolperstein.
+
+pip baut PyYAML dann aus den Quellen. Das braucht die MSVC-Build-Tools und
+Cython, und Windows blockiert dabei gern die entpackten Hilfsdateien im
+Temp-Ordner: „Eine Anwendungssteuerungsrichtlinie hat diese Datei blockiert"
+(Smart App Control bzw. AppLocker/WDAC).
+
+Drei Wege, in der Reihenfolge, in der ich sie empfehlen würde:
+
+1. **32-Bit weglassen.** Windows 11 ist ohnehin 64-Bit-only und Windows 10 in
+   32 Bit seit Oktober 2025 ohne Support. Das 64-Bit-Bündel deckt jedes System
+   ab, das noch Updates bekommt.
+2. **32-Bit mit Python 3.13 bauen.** Alle Wheels sind da, der Build läuft glatt
+   durch — aber Tk ist dort 8.6, der Vorschautabelle fehlen also die Stift- und
+   Schaltersymbole. Funktionsfähig, optisch abgespeckt. `build_app.py` meldet
+   das und bricht ab; für diesen bewussten Fall die Tk-Prüfung überspringen
+   (`MIN_TK` in `scripts/build_app.py`) — und den Verzicht dokumentieren.
+3. **PyYAML aus den Quellen bauen.** „Desktop development with C++" aus den
+   [Build Tools für Visual Studio](https://visualstudio.microsoft.com/downloads/)
+   installieren und die App-Steuerungsrichtlinie für den Temp-Ordner lockern.
+   Der meiste Aufwand für das kleinste Publikum.
 
 ## Ausliefern
 
