@@ -112,6 +112,45 @@ def test_required_and_invalid_styles_use_danger(root, mode):
     assert style.lookup("Invalid.Thumb.TLabel", "background") == palette.surface
 
 
+def test_apply_never_overrides_styles_on_existing_widgets(root):
+    """Ein Themenwechsel darf keine Farbe *am Widget* festschreiben.
+
+    `tk_setPalette` tat genau das: es lief über den ganzen Widget-Baum und setzte
+    `-foreground`/`-background` als Instanz-Option — auch auf ttk-Widgets, die
+    diese Optionen kennen. Eine Instanz-Option schlägt den Style, der rote `*`
+    der Pflichtfelder war nach dem ersten Wechsel textfarben und blieb danach auf
+    den Farben des alten Themas stehen.
+    """
+    theme.apply(root, "dark")
+    star = ttk.Label(root, text="*", style="Required.TLabel")
+    entry = ttk.Entry(root)
+    star.pack()
+    entry.pack()
+
+    for mode in ("light", "dark", "light"):
+        theme.apply(root, mode)
+        for widget in (star, entry):
+            for option in ("foreground", "background"):
+                assert (
+                    str(widget.cget(option)) == ""
+                ), f"{mode}: {option} am Widget gesetzt — der Style greift nicht mehr"
+
+
+def test_apply_sets_defaults_for_widgets_created_later(root):
+    """Die Optionsdatenbank bleibt die Vorgabe für später erzeugte tk-Widgets.
+
+    Dialoge und das Handbuch-Fenster entstehen erst nach `apply` und werden von
+    `restyle_tree` nicht mehr erfasst — sie holen ihre Grundfarbe hier.
+    """
+    for mode in ("dark", "light"):
+        palette = theme.apply(root, mode)
+        window = tk.Toplevel(root)
+        try:
+            assert window.cget("background") == palette.bg
+        finally:
+            window.destroy()
+
+
 def test_restyle_tree_colors_classic_widgets(root):
     """Listbox/Canvas sind keine ttk-Widgets: sie werden direkt umgefärbt."""
     listbox = tk.Listbox(root)

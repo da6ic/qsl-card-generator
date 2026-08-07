@@ -172,9 +172,11 @@ def _configure_fonts() -> None:
 def apply(root: tk.Misc, mode: str | None) -> Palette:
     """Wendet das Farbthema auf `root` und alle künftigen Widgets an.
 
-    Gibt die aktive Palette zurück. Nach einem Wechsel zur Laufzeit muss der
-    Aufrufer zusätzlich `restyle_tree(root, palette)` rufen, damit auch die
-    klassischen tk-Widgets (Listbox, Canvas, Menü) die neuen Farben bekommen.
+    Gibt die aktive Palette zurück. Gefärbt werden dabei nur die ttk-Styles und
+    die Optionsdatenbank (Vorgabe für *künftige* klassische Widgets) — **kein**
+    bereits bestehendes Widget. Nach einem Wechsel zur Laufzeit muss der
+    Aufrufer deshalb zusätzlich `restyle_tree(root, palette)` rufen, damit auch
+    die klassischen tk-Widgets (Listbox, Canvas, Menü) die neuen Farben bekommen.
     """
     pal = palette_for(mode)
     style = ttk.Style(root)
@@ -184,11 +186,21 @@ def apply(root: tk.Misc, mode: str | None) -> Palette:
         pass
     _configure_fonts()
 
-    # Fenster + Optionsdatenbank (gilt auch für später erzeugte tk-Widgets).
-    try:
-        root.tk_setPalette(background=pal.bg, foreground=pal.text)
-    except tk.TclError:  # pragma: no cover - je nach Plattform nicht unterstützt
-        pass
+    # Vorgabefarben in der Optionsdatenbank — sie gelten für später erzeugte
+    # klassische tk-Widgets (die Toplevel der Dialoge, Listbox, Canvas, Menü).
+    #
+    # Bewusst NICHT `tk_setPalette`: das setzt nicht nur diese Vorgaben, sondern
+    # läuft zusätzlich über den kompletten Widget-Baum und schreibt
+    # `-foreground`/`-background` als *Instanz*-Option auf jedes Widget, das die
+    # Optionen kennt — und `ttk::label`/`entry`/`combobox`/`spinbox` kennen sie.
+    # Eine Instanz-Option schlägt den ttk-Style: nach dem ersten Themenwechsel
+    # wäre der rote `*` der Pflichtfelder textfarben, der Abschnittstitel nicht
+    # mehr blau und die Statusleiste ohne ihre eigene Fläche. Ab dem zweiten
+    # Wechsel blieben die Widgets sogar auf den Farben des alten Themas stehen
+    # (Tk ersetzt dort nur noch, was dem alten Vorgabewert entspricht).
+    # Die Optionsdatenbank lässt ttk-Widgets in Ruhe und folgt jedem Wechsel.
+    root.option_add("*Background", pal.bg)
+    root.option_add("*Foreground", pal.text)
     root.option_add("*TCombobox*Listbox.background", pal.surface)
     root.option_add("*TCombobox*Listbox.foreground", pal.text)
     root.option_add("*TCombobox*Listbox.selectBackground", pal.accent)

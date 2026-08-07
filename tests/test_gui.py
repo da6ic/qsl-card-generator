@@ -455,6 +455,41 @@ def test_switch_theme_updates_widgets_and_config(app, tmp_path):
     assert saved.appearance.theme == "light"
 
 
+def test_switch_theme_keeps_label_styles(app):
+    """Nach einem Wechsel färben weiter die Styles, nicht das Widget selbst.
+
+    Vorher schrieb `tk_setPalette` die Textfarbe auf jedes Label — der rote `*`
+    der Pflichtfelder, die blauen Abschnittstitel und die Statusleiste verloren
+    dabei ihre Farbe. Deshalb hier über den ganzen Baum: kein `TLabel` darf eine
+    eigene Farbe tragen, sonst kommt der Style nicht mehr durch.
+    """
+    from tkinter import ttk
+
+    from qslcards.gui import theme
+
+    app._set_theme("dark")
+    app._set_theme("light")
+
+    stamped: list[str] = []
+
+    def walk(widget):
+        if widget.winfo_class() == "TLabel":
+            for option in ("foreground", "background"):
+                if str(widget.cget(option)):
+                    stamped.append(f"{widget}: {option}={widget.cget(option)}")
+        for child in widget.winfo_children():
+            walk(child)
+
+    walk(app)
+    assert not stamped, f"Labels mit eigener Farbe: {stamped[:3]}"
+
+    # Und die Styles selbst tragen die Farben des hellen Themas.
+    style = ttk.Style(app)
+    assert style.lookup("Required.TLabel", "foreground") == theme.LIGHT.danger
+    assert style.lookup("SectionTitle.TLabel", "foreground") == theme.LIGHT.accent
+    assert style.lookup("Status.TLabel", "background") == theme.LIGHT.surface_alt
+
+
 def test_status_bar_reports_loaded_log(app, tmp_path):
     _load(app, tmp_path)
     assert "3 QSOs" in app.status.info_var.get()
