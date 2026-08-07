@@ -1,4 +1,4 @@
-# Windows-Bündel bauen (32- und 64-Bit)
+# Windows-Bündel bauen (64-Bit)
 
 Es gibt **kein** Cross-Compile: PyInstaller bündelt den Interpreter, unter dem es
 läuft. Ein Windows-Programm entsteht nur auf Windows — echter Rechner oder VM.
@@ -19,8 +19,8 @@ py -3.14 -m tkinter                # das Fenster nennt oben die Tk-Version
 ```
 
 Von <https://www.python.org/downloads/windows/> die aktuelle 3.14.x holen
-(*Windows installer (64-bit)*, für die zweite Bitbreite *(32-bit)*). Eine
-vorhandene ältere 3.14 wird dabei aktualisiert, nicht danebengelegt.
+(*Windows installer (64-bit)*). Eine vorhandene ältere 3.14 wird dabei
+aktualisiert, nicht danebengelegt.
 
 Beim Installieren **„tcl/tk and IDLE" angehakt lassen** (Standard) — ohne das
 gibt es kein tkinter. Ebenso **„py launcher"** anhaken; damit muss man sich
@@ -71,56 +71,46 @@ git clone git@gitlab.j-homelab.de:side-projects/qsl-karten-generator.git
 cd qsl-karten-generator
 git checkout build/mvp
 
-# 64-Bit
 powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1 -Python "py -3.14"
-
-# 32-Bit
-powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1 -Python "py -3.14-32" -VenvDir ".venv-build32"
 ```
 
-`py -3.14` bzw. `py -3.14-32` wählt der Python-Launcher aus — **kein Pfad nötig**.
-Fehlt der Launcher, geht auch der vollständige Pfad:
+`py -3.14` wählt der Python-Launcher aus — **kein Pfad nötig**. Fehlt der
+Launcher, geht auch der vollständige Pfad:
 `-Python "$env:LOCALAPPDATA\Programs\Python\Python314\python.exe"`.
 
 `build_app.py` nennt vor dem Bauen Python-Version, Tk-Version und Plattform-
-Kürzel (`windows-x64` / `windows-x86`) — genau die Angaben, die man dem fertigen
-Programm nicht mehr ansieht. Steht dort `Tk 8.6` oder die falsche Bitbreite:
-abbrechen statt weiterbauen.
+Kürzel (`windows-x64`) — genau die Angaben, die man dem fertigen Programm nicht
+mehr ansieht. Steht dort `Tk 8.6` oder die falsche Bitbreite: abbrechen statt
+weiterbauen.
 
-Ergebnis: `dist\QSL-Karten-Generator-<version>-windows-x64.zip` bzw. `-x86.zip`.
+Ergebnis: `dist\QSL-Karten-Generator-<version>-windows-x64.zip`.
 
-**Zwischen den beiden Läufen `dist\` leeren** (oder das erste ZIP wegkopieren) —
-sonst überschreibt der zweite Lauf den Programmordner des ersten.
+## Warum es kein 32-Bit-Bündel gibt
 
-## 32-Bit: PyYAML hat kein Wheel für Python 3.14
+Mit dem Nutzer so entschieden, nachdem sich im Bauversuch drei voneinander
+unabhängige Blockaden zeigten. Nicht ohne Rückfrage zurückdrehen — die Punkte 1
+und 2 lassen sich nicht wegkonfigurieren:
 
-Hier beißen sich zwei Anforderungen, und das lässt sich nicht wegkonfigurieren:
-
-- Für **Tk 9** braucht es Python **3.14.7+**.
-- **PyYAML** liefert für `cp314` **kein win32-Wheel** mehr (für `cp310`–`cp313`
-  gibt es eines, für 3.14 nur noch `win_amd64` und `win_arm64`). Pillow hat sein
-  win32-Wheel weiterhin, ReportLab und Requests sind reines Python — PyYAML ist
-  der einzige Stolperstein.
-
-pip baut PyYAML dann aus den Quellen. Das braucht die MSVC-Build-Tools und
-Cython, und Windows blockiert dabei gern die entpackten Hilfsdateien im
-Temp-Ordner: „Eine Anwendungssteuerungsrichtlinie hat diese Datei blockiert"
-(Smart App Control bzw. AppLocker/WDAC).
-
-Drei Wege, in der Reihenfolge, in der ich sie empfehlen würde:
-
-1. **32-Bit weglassen.** Windows 11 ist ohnehin 64-Bit-only und Windows 10 in
+1. **PyYAML hat kein win32-Wheel für Python 3.14** (bis `cp313` gab es eines, ab
+   `cp314` nur noch `win_amd64` und `win_arm64`). pip baut es dann aus den
+   Quellen — das verlangt die MSVC-Build-Tools und Cython, und die
+   Windows-App-Steuerung blockiert dabei die entpackten Hilfsdateien im
+   Temp-Ordner („Eine Anwendungssteuerungsrichtlinie hat diese Datei
+   blockiert"). Pillow hat sein win32-Wheel weiterhin, ReportLab und Requests
+   sind reines Python; PyYAML ist der einzige Stolperstein — er genügt.
+2. **PyInstaller aus `develop` hat keinen vorgebauten 32-Bit-Bootloader.**
+   Im Repository liegen nur Windows-64bit, Linux-64bit und Darwin-64bit. Für
+   32 Bit müsste er selbst kompiliert werden — und die Entwicklungsfassung
+   brauchen wir für Tcl/Tk 9 zwingend (siehe oben).
+3. **Es gibt kaum noch Publikum.** Windows 11 ist 64-Bit-only, Windows 10 in
    32 Bit seit Oktober 2025 ohne Support. Das 64-Bit-Bündel deckt jedes System
    ab, das noch Updates bekommt.
-2. **32-Bit mit Python 3.13 bauen.** Alle Wheels sind da, der Build läuft glatt
-   durch — aber Tk ist dort 8.6, der Vorschautabelle fehlen also die Stift- und
-   Schaltersymbole. Funktionsfähig, optisch abgespeckt. `build_app.py` meldet
-   das und bricht ab; für diesen bewussten Fall die Tk-Prüfung überspringen
-   (`MIN_TK` in `scripts/build_app.py`) — und den Verzicht dokumentieren.
-3. **PyYAML aus den Quellen bauen.** „Desktop development with C++" aus den
-   [Build Tools für Visual Studio](https://visualstudio.microsoft.com/downloads/)
-   installieren und die App-Steuerungsrichtlinie für den Temp-Ordner lockern.
-   Der meiste Aufwand für das kleinste Publikum.
+
+Käme die Anforderung doch zurück, wäre der gangbarste Weg **Python 3.13 in
+32 Bit**: dort sind alle Wheels vorhanden und PyInstaller 6.21.0 genügt, weil
+Tcl/Tk 8.6 seine Daten in Ordnern hält. Preis: Tk 8.6 heißt keine Stift- und
+Schaltersymbole in der Vorschautabelle. Dafür müsste `MIN_TK` in
+`scripts/build_app.py` bewusst übergangen und der Verzicht dokumentiert werden.
 
 ## Ausliefern
 
@@ -154,9 +144,7 @@ und der Anwender fände seine Config nur noch unter `%APPDATA%`.
 5. `Hilfe ▸ Handbuch` zeigt Text.
 6. Nach dem Erzeugen öffnet sich die PDF von selbst; „Aktionen ▸ Ausgabeordner
    anzeigen" öffnet den Explorer.
-7. `%APPDATA%\QSL-Karten-Generator\config.yaml` entsteht **mit Kommentaren** und
-   wird beim Ändern eines Feldes aktualisiert.
+7. `%APPDATA%\QSL-Karten-Generator\config.yaml` entsteht, sobald ein Feld
+   geändert wird, und trägt oben die Zeile „bitte nicht von Hand bearbeiten".
 8. Eine `config.yaml` neben die `.exe` legen → Portable-Modus: Config, Cache und
    `qslcards.log` bleiben im Programmordner.
-9. Nur beim 32-Bit-Bündel: einmal auf einem 64-Bit-Windows starten (läuft dort
-   über WOW64) — das ist der Regelfall beim Empfänger.

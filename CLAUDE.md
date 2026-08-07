@@ -399,9 +399,10 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
       vorher Tk 9 / PyInstaller ≥ 6.21 und verpacken das Ergebnis.
 - [x] **macOS-Bündel gebaut und geprüft** (arm64, ad-hoc signiert, ZIP via
       `ditto`): startet aus dem Archiv, Tk 9 und alle Assets an Bord.
-- [ ] **Windows (32/64) und Fedora**: Skripte, Container-Rezept und Prüflisten
-      liegen bereit (`packaging/*/README.md`), ausgeführt wurden sie noch nicht —
-      dafür braucht es eine Windows-VM bzw. Docker.
+- [ ] **Windows (64-Bit) und Fedora**: Skripte, Container-Rezept und Prüflisten
+      liegen bereit (`packaging/*/README.md`). Windows wurde angefangen und deckte
+      dabei drei Stolperfallen auf (Tk erst ab 3.14.7, eingebettete Tcl-Daten,
+      PowerShell-Zitierung); Fedora steht noch aus. **32-Bit entfällt bewusst.**
 ---
 
 ## 10. Nicht raten — nachschlagen
@@ -728,13 +729,9 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
     8.6.15 (nachgeprüft in `PCbuild/tcltk.props` an den Tags `v3.14.0` bis
     `v3.14.7`). Nur „Python 3.14" zu fordern genügt **nicht** — genau daran ist
     der erste Windows-Bauversuch gescheitert.
-  * **Windows 32-Bit ist gesondert blockiert**: PyYAML liefert für `cp314` kein
-    win32-Wheel mehr (bis `cp313` gab es eines). pip baut es dann aus den
-    Quellen — Compiler nötig, und die Windows-App-Steuerung blockiert dabei die
-    Cython-DLLs im Temp-Ordner. Pillow hat sein win32-Wheel noch, ReportLab und
-    Requests sind reines Python; PyYAML ist der einzige Stolperstein. Es beißt
-    sich also „Tk 9 braucht 3.14.7+" mit „PyYAML gibt es nur bis 3.13". Wege in
-    `packaging/windows/README.md`.
+  * **Windows 32-Bit ist doppelt blockiert** und wird deshalb nicht mehr gebaut
+    (siehe Entscheidungen unten): PyYAML hat für `cp314` kein win32-Wheel mehr,
+    und PyInstallers `develop` bringt keinen vorgebauten 32-Bit-Bootloader mit.
   * Linux: Tk kommt vom System. **Fedora 42+** hat Tcl/Tk 9.0 systemweit, dort
     genügt das mitgelieferte Python 3.13 (3.14 gibt es erst ab F43).
   * **PyInstaller ≥ 6.21** — davor kennt es Tcl/Tk 9 überhaupt nicht.
@@ -789,7 +786,11 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   Konto.
 - **onedir, kein onefile**: schnellerer Start (kein Entpacken bei jedem Lauf),
   weniger Virenscanner-Fehlalarme, und der Portable-Modus braucht einen Ordner.
-- **Windows 32- und 64-Bit**, macOS **arm64 ad-hoc signiert** (nicht notarisiert
+- **Windows nur 64-Bit** (32-Bit vom Nutzer gestrichen, drei unabhängige
+  Blockaden: kein PyYAML-win32-Wheel für `cp314`, kein vorgebauter 32-Bit-
+  Bootloader in PyInstallers `develop`, und Windows 10 in 32 Bit ist seit
+  Oktober 2025 ohne Support — Begründung in `packaging/windows/README.md`),
+  macOS **arm64 ad-hoc signiert** (nicht notarisiert
   — Empfänger brauchen Rechtsklick ▸ Öffnen), Linux **Fedora**. Bewusst außen
   vor: Inno-Setup, RPM, AppImage, Notarisierung, CI, Windows-ARM64.
 - **`config.example.yaml` wird nicht von Hand gepflegt**: sie ist byteweise das,

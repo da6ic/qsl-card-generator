@@ -5,14 +5,11 @@
 # Ohne Angabe nimmt es Python 3.14 (64 Bit) über den Python-Launcher `py`. Der
 # findet den Interpreter unabhängig davon, wohin er installiert wurde — man
 # braucht also keinen Pfad zu kennen. **Mindestens 3.14.7**: erst dieser
-# Installer bringt Tcl/Tk 9 mit (siehe README.md daneben). Für die andere
-# Bitbreite:
-#
-#   ... build.ps1 -Python "py -3.14-32" -VenvDir ".venv-build32"   # -> windows-x86
-#   ... build.ps1 -Python "py -3.14"                               # -> windows-x64
+# Installer bringt Tcl/Tk 9 mit (siehe README.md daneben).
 #
 # Die Bitbreite des Bündels ist die des **bauenden** Interpreters, nicht die von
 # Windows. Welche Interpreter installiert sind und wo sie liegen, zeigt `py -0p`.
+# 32 Bit wird bewusst nicht mehr gebaut — Begründung im README.md daneben.
 #
 # Ein vollständiger Pfad geht genauso, falls der Launcher fehlt:
 #
@@ -50,11 +47,11 @@ if ($LASTEXITCODE -ne 0) {
     Write-Error @"
 Die Abhängigkeiten ließen sich nicht installieren.
 
-Häufigster Grund auf 32-Bit: für Python 3.14 gibt es kein win32-Wheel von
-PyYAML (für 3.13 und älter schon). pip baut es dann aus den Quellen, wofür ein
-C-Compiler nötig ist — und Windows blockiert dabei gern die Hilfsdateien im
+Fehlt fuer ein Paket ein fertiges Wheel, baut pip es aus den Quellen - das
+verlangt einen C-Compiler, und Windows blockiert dabei gern die Hilfsdateien im
 Temp-Ordner ("Eine Anwendungssteuerungsrichtlinie hat diese Datei blockiert").
-Siehe packaging\windows\README.md, Abschnitt "32-Bit".
+Genau daran scheitert ein 32-Bit-Bau (PyYAML); 32 Bit wird deshalb nicht mehr
+unterstuetzt - siehe packaging\windows\README.md.
 "@
 }
 

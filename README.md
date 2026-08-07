@@ -90,7 +90,6 @@ es läuft. Jedes Ziel braucht sein eigenes Betriebssystem:
 | Ziel | Gebaut auf | Python | Ergebnis |
 |---|---|---|---|
 | Windows 64-Bit | Windows (VM genügt) | **3.14.7+** x64 von python.org | `…-windows-x64.zip` |
-| Windows 32-Bit | Windows | **3.14.7+** x86 — aber siehe Hinweis unten | `…-windows-x86.zip` |
 | Fedora | Fedora 42+ oder der Container in `packaging/linux/` | System-Python 3.13+ | `…-linux-x86_64.tar.gz` |
 | macOS | macOS (Apple Silicon) | Homebrew oder python.org **3.14.7+** | `…-macos-arm64.zip` |
 
@@ -108,9 +107,9 @@ Tcl-Bibliothek *in die DLL*, und das kennt erst die noch unveröffentlichte
 Entwicklungsfassung. `build_app.py` erkennt das und nennt den Ausweg; Einzelheiten
 in `packaging/windows/README.md`.
 
-**Windows 32-Bit hat einen Haken**: PyYAML liefert für Python 3.14 kein
-win32-Wheel mehr. Was das bedeutet und welche drei Wege es gibt, steht in
-`packaging/windows/README.md`.
+**Windows 32-Bit wird bewusst nicht gebaut** — die Gründe stehen in
+`packaging/windows/README.md`. Windows 11 ist 64-Bit-only, und Windows 10 in
+32 Bit ist seit Oktober 2025 ohne Support.
 
 Ausführliche Anleitungen samt Prüfliste nach dem Bauen:
 `packaging/windows/README.md` und `packaging/linux/README.md`.

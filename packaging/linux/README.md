@@ -76,7 +76,7 @@ nicht. Es stirbt nichts, es fehlt nur eine Funktion — `install.sh` weist darau
 5. Nach dem Erzeugen öffnet sich die PDF von selbst. Passiert nichts, erbt
    `xdg-open` die Bibliothekspfade des Bündels — siehe `paths.subprocess_env()`.
 6. „Aktionen ▸ Ausgabeordner anzeigen" öffnet den Dateimanager (gleicher Grund).
-7. `~/.config/qsl-karten-generator/config.yaml` entsteht **mit Kommentaren** und
-   wird beim Ändern eines Feldes aktualisiert.
+7. `~/.config/qsl-karten-generator/config.yaml` entsteht, sobald ein Feld
+   geändert wird, und trägt oben die Zeile „bitte nicht von Hand bearbeiten".
 8. Eine `config.yaml` neben `QSL-Karten-Generator` legen → Portable-Modus:
    Config, Cache und `qslcards.log` bleiben im Programmordner.
