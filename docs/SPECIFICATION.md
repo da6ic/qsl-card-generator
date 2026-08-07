@@ -22,14 +22,23 @@ Abschnitten 1–10 und einer **Statusleiste** am Fuß (§2.3). Farben und Abstä
 kommen ausschließlich aus `gui/theme.py` (§2.2) — kein Widget setzt selbst eine
 Farbe, so wie kein Zeichencode eine Layoutzahl setzt (`pdf/geometry.py`).
 
+**Pflichtangaben** (§2.4) tragen einen roten `*`: ADIF-Logbuch (1), Frontbild (2)
+und im Absender (3) Rufzeichen, Name, Locator, DOK, CQ-Zone, ITU. Fehlt davon
+etwas, blockiert „PDF erzeugen" mit **einem** Popup und markiert die Stellen.
+
 Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
 
-1. **ADIF-Logbuch**: `Durchsuchen…`-Button, Pfadanzeige, Button `Log laden`.
-   Nach der Auswahl wird das Log **automatisch geladen** (Hot-Load); der Button
-   dient als manueller Reload. Nach dem Laden: Anzahl gelesener QSOs.
-2. **Frontbild**: `Bild wählen…` (png/jpg/jpeg/webp), kleine Vorschau (Thumbnail).
+1. **ADIF-Logbuch** (Pflicht, `*` im Titel): `Durchsuchen…`-Button, Pfadanzeige,
+   Button `Log laden`. Nach der Auswahl wird das Log **automatisch geladen**
+   (Hot-Load); der Button dient als manueller Reload. Nach dem Laden: Anzahl
+   gelesener QSOs. Ohne geladenes Log wird das Pfadfeld markiert (§2.4).
+2. **Frontbild** (Pflicht, `*` im Titel): `Bild wählen…` (png/jpg/jpeg/webp),
+   kleine Vorschau (Thumbnail). Fehlt das Bild, ist der **Rahmen des
+   Vorschaufeldes** die Markierung — ein Eingabefeld gibt es hier nicht.
 3. **Absender**: Eingabefelder für Call, Name, Straße, PLZ, Ort, Land, Locator,
-   DOK, CQ-Zone (WAZ), ITU. Durch eine Trennlinie abgesetzt die **Funk-Ausrüstung**
+   DOK, CQ-Zone (WAZ), ITU; davon sind **Rufzeichen, Name, Locator, DOK, CQ-Zone
+   und ITU** Pflicht (`*` an der Beschriftung), Adresse und Funk-Ausrüstung nicht.
+   Durch eine Trennlinie abgesetzt die **Funk-Ausrüstung**
    (erscheint dynamisch auf der Karte, sobald gefüllt): `Empfänger` (RIG),
    `Antenne` (ANT), `Leistung` (PWR). Zusätzlich drei globale Dropdowns (gelten für
    **alle** Karten):
@@ -66,7 +75,11 @@ Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
    steht dort „…". Auch bei **nicht** gedruckten Karten wird der (natürliche) Weg
    angezeigt, nie ein „—" — ob gedruckt wird, steht in der Spalte „Drucken".
    Zeilen sind über die Spalte „Drucken" ab-/anwählbar (auch Wege unter der
-   Trennlinie manuell druckbar). **`Via`, `Route/Manager` und `Remarks` sind
+   Trennlinie manuell druckbar). Ein Klick in diese Spalte **wählt die Zeile
+   nicht aus** (`"break"`), und `_toggle_print` nimmt sie aus einer bestehenden
+   Auswahl: ttk zeichnet ausgewählte Zeilen in den Auswahlfarben und überdeckt
+   damit den `off`-Tag — „Ja → Nein" würde sonst erst grau, wenn die Auswahl
+   woanders hinwandert. **`Via`, `Route/Manager` und `Remarks` sind
    editierbar** (Doppelklick oder Klick auf das Hover-Icon; `Via` als Dropdown mit
    den ausgeschriebenen Wegen, die anderen als Textfeld; `Remarks` max. 80
    Zeichen) — so lassen sich Lookup-Fehlklassifizierungen von Hand korrigieren und
@@ -111,7 +124,8 @@ Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
    `Accent.TButton`) und Fortschrittsbalken (`ttk.Progressbar`). Die Statuszeile
    steht **nicht** mehr hier, sondern in der Fußleiste (§2.3). `PDF erzeugen` ist
    **deaktiviert**, solange der Lookup nach dem Log-Laden noch läuft, und wird erst
-   danach wieder aktiv (synchron dazu der Menüeintrag). Nach Erfolg werden die
+   danach wieder aktiv (synchron dazu der Menüeintrag). Fehlende Pflichtangaben
+   sperren den Button **nicht**, sondern werden beim Klick gemeldet (§2.4). Nach Erfolg werden die
    erzeugten PDF(s) direkt in der Standardanwendung geöffnet.
 
 Langlaufende Arbeit (PDF, Lookups) läuft in einem **Worker-Thread**; UI-Updates
@@ -155,6 +169,12 @@ sieht dadurch auf allen Plattformen gleich aus.
 - Achtung `clam`: Radio-/Checkbuttons färbt man über `indicatorbackground`/
   `indicatorforeground`; `indicatorcolor` (die Option der alten tk-Widgets) wird
   ignoriert.
+- Pflichtangaben (§2.4) haben eigene Styles: `Required.TLabel` (der `*`),
+  `Invalid.TEntry` (leeres Pflichtfeld) und `Invalid.Thumb.TLabel` (fehlendes
+  Frontbild) — alle in `danger`. `Invalid.TEntry` braucht eine eigene `map`,
+  sonst zieht die geerbte `TEntry`-Map den Rahmen bei Fokus/Hover wieder auf die
+  Akzentfarbe, ausgerechnet im Feld, das gerade ausgefüllt wird.
+  `SectionTitle.TLabel` ist der Abschnittstitel als eigenes Widget.
 - Die Icon-Overlays in der Vorschautabelle sind transparent und werden gegen den
   Hintergrund ihres **Labels** gemischt. Dafür gibt es je einen Style pro
   möglichem Untergrund (`TreeIconHead`/`Odd`/`Even`/`Selected`), sonst liegt ein
@@ -182,6 +202,31 @@ auf Retina-Displays sichtbar hochskaliert.
   löschen. Ergänzt werden wort- und zeilenweises Löschen (macOS ⌥⌫/⌥⌦/⌘⌫/⌘⌦,
   sonst Strg+Rücktaste/Strg+Entf/Strg+U), gebunden an die Klasse `TEntry` und
   damit auch in den Editoren der Vorschautabelle wirksam.
+
+### 2.4 Pflichtangaben
+
+Ohne diese Angaben ist eine Karte unbrauchbar, deshalb blockieren sie die
+Erzeugung: **ADIF-Logbuch** (1), **Frontbild** (2) sowie im **Absender** (3)
+`Rufzeichen`, `Name`, `Locator`, `DOK`, `CQ-Zone`, `ITU`
+(`sections.REQUIRED_SENDER_FIELDS`). Adresse (Straße/PLZ/Ort/Land) und
+Funk-Ausrüstung sind bewusst optional.
+
+- **Kennzeichnung**: roter `*` — bei 1 und 2 im Abschnittstitel (deshalb baut
+  `required_section()` den Titel als eigenes Widget: ein LabelFrame-Titel ist ein
+  einziger Text und ließe sich nicht zweifarbig setzen), bei 3 an der
+  Beschriftung jedes Pflichtfeldes. Die Fußnote „* Pflichtfeld"
+  (`required_legend()`) steht **ganz unten im Fenster**, außerhalb des
+  scrollbaren Bereichs über der Statusleiste — sie gilt für alle Abschnitte, in
+  Abschnitt 3 sähe sie aus, als beträfe sie nur den Absender.
+- **Prüfung**: `App._check_required()` prüft alles in **einem** Durchgang und
+  liefert die fehlenden Angaben in Abschnittsreihenfolge. `_on_generate` zeigt
+  daraufhin **ein** Popup mit der vollständigen Liste, setzt die Statuszeile auf
+  `error` und scrollt zum **ersten** betroffenen Abschnitt. Erzeugt wird nichts.
+- **Markierung**: leere Pflichtfelder bekommen `Invalid.TEntry` (roter Rahmen),
+  das fehlende Frontbild `Invalid.Thumb.TLabel`. Sie erscheint **erst nach einem
+  Druckversuch** — beim ersten Start wäre sonst das halbe Fenster rot — und
+  verschwindet je Feld wieder, sobald es gefüllt ist (Trace je Variable bzw.
+  `set_missing(False)` beim Bild-/Log-Laden).
 
 ---
 
@@ -614,7 +659,8 @@ Vorschau **und** Export.
 | Lookup ohne Treffer/„?"                | `via_routes = (default_via,)`, Karte trotzdem |
 | Station nur elektronisch (LoTW/eQSL)   | Wege = `Q`/`L`; unter der Trennlinie standardmäßig nicht gedruckt (manuell aktivierbar) |
 | keine Lookup-Credentials               | kein Netzcall, alle `via_routes = (default_via,)` |
-| Frontbild fehlt                        | Erzeugung blockieren + Hinweis              |
+| Frontbild fehlt                        | Erzeugung blockieren, Popup + roter Rahmen ums Vorschaufeld (§2.4) |
+| Pflichtfeld leer / kein Log geladen     | Erzeugung blockieren, **ein** Popup mit allen fehlenden Angaben, Felder rot markiert (§2.4) |
 | Lookup schlägt fehl / kein Konto       | Via = `default_via`, Adressfelder leer, kein Abbruch |
 | zu viele QSOs pro Station für Tabelle  | Folge-Karte(n) anlegen                      |
 | Umlaute/UTF-8 im Namen                 | korrekt kodieren (ReportLab-Font mit Umlauten) |
@@ -652,7 +698,10 @@ in `geometry.py` referenzieren.
   Ränder je Karte, und `single` liefert byteweise die bisherige Ausgabe.
 - `test_gui.py`: Widget-Baum baut headless; Auto-Sync der Config (inkl. Erhalt von
   `appearance`/`recent`); Themenwechsel, Statusleiste, „Zuletzt verwendet",
-  Icon-Reihenfolge, Zebra-/Icon-Hintergründe, Zeichenzähler, Seiten-Scroll.
+  Icon-Reihenfolge, Zebra-/Icon-Hintergründe, Zeichenzähler, Seiten-Scroll;
+  **Pflichtangaben** (§2.4: Popup statt Erzeugung, Markierung an Log/Bild/Feldern,
+  Markierung geht beim Ausfüllen weg, Fußnote unter allen Abschnitten) und dass
+  „Drucken → Nein" die Zeile sofort ausgraut (Auswahl aufgehoben).
 - `test_theme.py`: Paletten vollständig, Modus-Auflösung, `clam` + gesetzte
   Style-Farben, `restyle_tree` für klassische tk-Widgets.
 - `test_menu.py`: Menüstruktur, dynamische Teile („Zuletzt verwendet", Sperre von

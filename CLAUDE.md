@@ -332,6 +332,9 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
       Adresse für alle Stationen; Cache funktioniert; Ausfälle sind nicht fatal.
 - [x] Farbthema (hell/dunkel, folgt dem System) + Programm-Icon; Menüleiste mit
       Datei/Bearbeiten/Aktionen/Ansicht/Hilfe auf macOS, Windows und Linux.
+- [x] **Pflichtangaben** (Logbuch, Frontbild, Rufzeichen/Name/Locator/DOK/
+      CQ-Zone/ITU) mit rotem `*`; fehlen welche, blockiert „PDF erzeugen" mit
+      **einem** Popup und markiert die Stellen rot.
 ---
 
 ## 10. Nicht raten — nachschlagen
@@ -403,6 +406,11 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   eigenen Container pro Spalte**, beide in derselben Grid-Zeile mit `sticky="nw"`,
   ganz ohne `rowspan`. Ein Test vergleicht dafür `winfo_rootx/y` vor und nach dem
   Umschalten.
+- **Ein Tag färbt keine ausgewählte Zeile.** In der Vorschautabelle überdecken die
+  Auswahlfarben (`style.map("Treeview", ...)`) die Tag-Farben — „Drucken: Ja → Nein"
+  blieb deshalb hell, bis die Auswahl woanders hinwanderte. Lösung: der Klick in
+  die Spalte „Drucken" gibt `"break"` zurück (wählt also nicht aus) und
+  `_toggle_print` nimmt die Zeile aus einer bestehenden Auswahl.
 - Ein per `withdraw()` verstecktes Fenster nimmt **keine** synthetischen
   Tastenereignisse an — Testfenster off-screen öffnen (`geometry("+3000+3000")`),
   sonst sieht ein funktionierendes Kürzel wie ein kaputtes aus.
@@ -440,6 +448,26 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   aufeinanderfolgende Karten **ohne** Remarks wieder zusammen. Sicherung pro Karte
   zusätzlich im Generator (`regroup_card_by_remarks`). Vom Nutzer iterativ so
   bestätigt (Split beim Setzen, Merge beim Leeren, Einzel-Remarks möglich).
+- **Pflichtangaben: Stern, ein Popup, Markierung erst nach dem Druckversuch**
+  (Abschnitte 1, 2, 3; mit dem Nutzer so abgestimmt):
+  * Pflicht sind **Logbuch**, **Frontbild** und im Absender **Rufzeichen, Name,
+    Locator, DOK, CQ-Zone, ITU** (`sections.REQUIRED_SENDER_FIELDS`) — Adresse
+    und Funk-Ausrüstung bewusst **nicht**.
+  * Roter `*` (`Required.TLabel`, Farbe `danger`) im Titel von Abschnitt 1/2 und
+    an den Beschriftungen in Abschnitt 3. Die Fußnote „* Pflichtfeld" steht
+    **ganz unten im Fenster** (außerhalb des Scrollbereichs, über der
+    Statusleiste): in Abschnitt 3 sah sie aus, als gälte sie nur dort.
+  * **Ein** Popup listet alles Fehlende auf einmal (Abschnittsreihenfolge) und
+    scrollt zur ersten Fundstelle; die Markierung (`Invalid.TEntry` /
+    `Invalid.Thumb.TLabel`) kommt **erst nach dem Klick** auf „PDF erzeugen" —
+    beim ersten Start wäre sonst das halbe Fenster rot — und geht je Feld weg,
+    sobald es gefüllt ist. Der Button bleibt bedienbar (kein Sperren).
+  * `Invalid.TEntry` braucht eine eigene `style.map`, sonst überschreibt die
+    geerbte `TEntry`-Map den roten Rahmen bei Fokus/Hover.
+- **Keine Erklärtexte in den Abschnitten**: die Hinweiszeilen unter der
+  Prioritätsliste (4) und den Zugangsdaten (6) sowie die Klammern
+  „(optional)"/„(für alle Karten)" in Abschnitt 3 wurden vom Nutzer verworfen —
+  neue Erklärtexte nur auf ausdrücklichen Wunsch.
 - **GUI-Abschnitte**: 1 ADIF, 2 Frontbild, 3 Absender (inkl. Funk-Ausrüstung +
   globale Markierungen QSL/Portabel/Bestätigung), 4 Zustellwege (priorisierbare
   Liste + Trennlinie), 5 Kartenmodus, 6 Lookups, **7 Bemerkungen**, 8 Vorschau,

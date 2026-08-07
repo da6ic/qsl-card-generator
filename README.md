@@ -53,6 +53,11 @@ python -m qslcards.main              # startet die GUI
    (auch reine eQSL-/LOTW-Stationen manuell aktivierbar); bei Bedarf „Neu abrufen".
 6. Druckmodus wählen und „PDF erzeugen".
 
+Mit einem roten `*` markierte Angaben sind **Pflicht**: Logbuch, Frontbild und im
+Absender Rufzeichen, Name, Locator, DOK, CQ-Zone und ITU. Fehlt davon etwas,
+nennt ein Hinweis beim Erzeugen alles Fehlende auf einmal und markiert die
+betroffenen Felder.
+
 Logbuch und Frontbild lassen sich auch über die **Menüleiste** öffnen
 (`Datei ▸ ADIF-Logbuch öffnen…` / `Frontbild wählen…`, samt „Zuletzt
 verwendet"-Listen).
