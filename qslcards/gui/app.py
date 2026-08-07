@@ -384,6 +384,7 @@ class App(tk.Tk):
             open_config=lambda: self._open_path(Path(CONFIG_PATH)),
             reveal_output=self._reveal_output,
             reveal_cache=lambda: self._reveal_path(Path(DEFAULT_CACHE_PATH)),
+            reveal_log=self._reveal_log,
         )
         self.menubar = MenuBar(self, actions, theme_mode=self.base_config.appearance.theme)
         self.menubar.set_recent(self.base_config.recent.logs, self.base_config.recent.images)
@@ -980,6 +981,25 @@ class App(tk.Tk):
             reveal_in_file_manager(str(path))
         except (OSError, subprocess.SubprocessError) as exc:
             self.status.set(f"Anzeigen fehlgeschlagen: {exc}", "error")
+
+    def _reveal_log(self) -> None:
+        """Menü „Hilfe": die Protokolldatei im Dateimanager zeigen.
+
+        Ohne sie wäre das Protokoll unerreichbar: Ein Fensterprogramm hat keine
+        Konsole, und der Ordner liegt je nach System woanders — auf macOS in
+        `~/Library`, das der Finder von Haus aus versteckt.
+
+        Geschrieben wird nur im gebündelten Betrieb (`main._prepare_frozen_runtime`);
+        aus der Quelle gestartet gehen die Meldungen aufs Terminal.
+        """
+        path = paths.log_path()
+        if not path.exists():
+            self.status.set(
+                "Noch kein Protokoll vorhanden (aus der Quelle gestartet: siehe Terminal).",
+                "info",
+            )
+            return
+        self._reveal_path(path)
 
     def _reveal_output(self) -> None:
         """Menü „Hilfe": den Ordner des eingestellten Ausgabeziels zeigen."""

@@ -73,6 +73,7 @@ class MenuActions:
     open_config: Callable[[], None] = _noop
     reveal_output: Callable[[], None] = _noop
     reveal_cache: Callable[[], None] = _noop
+    reveal_log: Callable[[], None] = _noop
 
 
 # Abschnitte für „Ansicht > Gehe zu" (Nummer, Titel) — Reihenfolge wie im Fenster.
@@ -231,6 +232,7 @@ class MenuBar:
             label="Ausgabeordner anzeigen", command=lambda: self.actions.reveal_output()
         )
         menu.add_command(label="Lookup-Cache anzeigen", command=lambda: self.actions.reveal_cache())
+        menu.add_command(label="Protokoll anzeigen", command=lambda: self.actions.reveal_log())
         if not IS_MAC:  # auf macOS steht „Über…" im Programm-Menü
             menu.add_separator()
             menu.add_command(
