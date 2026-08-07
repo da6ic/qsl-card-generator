@@ -10,7 +10,7 @@ Rückseite im DARC-QSL-Layout.
   erkannt, nicht an der Endung. Eigene Parser, kein Fremd-Package.
 - Ein Frontbild (png/jpg/…) für alle Karten.
 - Rückseite exakt nach Referenz-Layout (`docs/CARD_LAYOUT.md`).
-- Absenderdaten aus `config.yaml`.
+- Absenderdaten aus der Config (im Programm eingetragen, nie aus dem Log).
 - QSO-Daten (Datum, UTC, Frequenz, Mode, Rapport) aus dem Log.
 - **Versandart (Via) je Station automatisch per Lookup bestimmt** (steht nicht im
   Log): Der Lookup liefert die **Menge** akzeptierter Zustellwege — **B** Büro
@@ -36,19 +36,23 @@ Rückseite im DARC-QSL-Layout.
   umschaltbar über „Ansicht → Farbthema".
 
 ## Voraussetzungen
-- Python 3.11+
+- Python 3.11+ (zum **Bündeln** siehe unten: dort zählt Tk 9)
 - `pip install -r requirements.txt`
 - Ein Frontbild.
 
 ## Schnellstart
 ```bash
 pip install -r requirements.txt
-cp config.example.yaml config.yaml   # Absenderdaten anpassen
-python -m qslcards.main              # startet die GUI
+python -m qslcards               # startet die GUI
 ```
 
+Absenderdaten, Zugangsdaten und alles Weitere trägt man **im Programmfenster**
+ein; die `config.yaml` entsteht dabei von selbst und wird bei jeder Änderung
+gespeichert. Von Hand bearbeitet wird sie nicht — `config.example.yaml` zeigt
+nur, wie sie aussieht.
+
 ## Ablauf in der GUI
-1. (Einmalig) HamQTH-/QRZ-Konto in der Config eintragen — sonst kann die App die
+1. (Einmalig) HamQTH-/QRZ-Konto in Abschnitt 6 eintragen — sonst kann die App die
    Versandart nicht nachschlagen (alle Karten fallen auf `default_via`).
 2. Logbuch wählen und laden — der Lookup startet automatisch im Hintergrund
    und füllt Via/Manager/Adresse; „PDF erzeugen" ist gesperrt, bis er fertig ist.
@@ -68,6 +72,38 @@ Logbuch und Frontbild lassen sich auch über die **Menüleiste** öffnen
 verwendet"-Listen).
 
 > Der Bereich unten rechts auf der Rückseite (in der Vorlage das Logo) bleibt frei.
+
+## Bauen (auslieferbare Anwendung)
+
+```bash
+pip install -e ".[build]"
+python scripts/build_app.py --clean
+```
+
+Ergebnis in `dist/`: ein Programmordner plus ein Archiv, benannt nach Version und
+Plattform. Das Skript prüft vorher die Voraussetzungen und bricht mit Klartext ab,
+statt still etwas Kaputtes zu bauen.
+
+**Cross-Compile gibt es nicht** — PyInstaller bündelt den Interpreter, unter dem
+es läuft. Jedes Ziel braucht sein eigenes Betriebssystem:
+
+| Ziel | Gebaut auf | Python | Ergebnis |
+|---|---|---|---|
+| Windows 64-Bit | Windows (VM genügt) | 3.14 x64 von python.org | `…-windows-x64.zip` |
+| Windows 32-Bit | Windows | 3.14 **x86** von python.org | `…-windows-x86.zip` |
+| Fedora | Fedora 42+ oder der Container in `packaging/linux/` | System-Python 3.13+ | `…-linux-x86_64.tar.gz` |
+| macOS | macOS (Apple Silicon) | Homebrew oder python.org 3.14 | `…-macos-arm64.zip` |
+
+**Die entscheidende Größe ist Tk 9, nicht die Python-Version.** Die
+Vorschautabelle zeichnet ihre Stift- und Schaltersymbole aus SVG, was erst Tk 9
+kann; mit Tk 8.6 fehlen sie **ohne Fehlermeldung**. Woher Tk kommt, ist
+plattformabhängig: unter Windows und macOS steckt es im Python-Installer (erst
+**3.14** bringt Tcl/Tk 9.0.4 mit, 3.13 nur 8.6.15), unter Linux kommt es vom
+System (Fedora 42+ hat Tcl/Tk 9.0, dort genügt das mitgelieferte Python 3.13).
+PyInstaller muss **≥ 6.21** sein — davor kann es Tcl/Tk 9 nicht bündeln.
+
+Ausführliche Anleitungen samt Prüfliste nach dem Bauen:
+`packaging/windows/README.md` und `packaging/linux/README.md`.
 
 ## Dokumentation
 

@@ -246,8 +246,8 @@ bei Direktversand. Auf der Karte selbst steht die Anschrift des Empfängers
 grundsätzlich nicht, dort erscheint nur sein Rufzeichen.
 
 Ein Hinweis zur Sicherheit: Benutzername und Passwort stehen im Klartext in der
-`config.yaml`. Wenn andere Zugriff auf deinen Rechner haben, ist das zu
-bedenken.
+`config.yaml` (siehe [Wo liegen meine Dateien?](#dateien)). Wenn andere Zugriff
+auf deinen Rechner haben, ist das zu bedenken.
 
 ## 7. Bemerkungen {#abschnitt-7}
 
@@ -337,7 +337,8 @@ die Karte ein zweites Mal und die eingestellten Ränder stimmen nicht mehr.
 ## 10. Ausgabe {#abschnitt-10}
 
 Mit **Ziel…** wählst du, wohin die PDF geschrieben wird; voreingestellt ist
-`qsl_karten.pdf`. Dann **PDF erzeugen** — der Balken zeigt den Fortschritt.
+`qsl_karten.pdf` in deinem Dokumentenordner. Dann **PDF erzeugen** — der Balken
+zeigt den Fortschritt.
 
 Je nach Einstellung entstehen:
 
@@ -385,10 +386,47 @@ Kürzel, das auf deinem Rechner gilt.
 ### Hilfe
 
 - **Handbuch** — Windows/Linux `F1`, macOS `⌘ + ?`. Öffnet dieses Fenster.
-- **config.yaml öffnen**, **Ausgabeordner anzeigen**, **Lookup-Cache anzeigen**
-  — keine Kürzel.
+- **config.yaml öffnen**, **Ausgabeordner anzeigen**, **Lookup-Cache anzeigen**,
+  **Protokoll anzeigen** — keine Kürzel. Wo diese Dateien liegen, steht im
+  Kapitel [Wo liegen meine Dateien?](#dateien).
 - **Über QSL-Karten-Generator** — auf Windows und Linux hier, auf macOS im
   Programmmenü ganz links.
+
+## Wo liegen meine Dateien? {#dateien}
+
+Das Programm legt seine Dateien dort ab, wo dein Betriebssystem sie erwartet.
+Von Hand musst du dort nie etwas ändern — **config.yaml öffnen**,
+**Lookup-Cache anzeigen** und **Protokoll anzeigen** im Menü **Hilfe** bringen
+dich direkt hin ([Menü](#menue)).
+
+- **Windows** — `%APPDATA%\QSL-Karten-Generator\`
+- **macOS** — `~/Library/Application Support/QSL-Karten-Generator/`
+  (der Finder versteckt `Library`; nimm den Menüeintrag)
+- **Linux** — `~/.config/qsl-karten-generator/`
+
+Darin liegen drei Dateien:
+
+- `config.yaml` — alle deine Einstellungen. Das Programm schreibt sie bei jeder
+  Änderung selbst; bearbeite sie nicht von Hand, sonst überschreibt der nächste
+  Klick deine Änderung. Zum Sichern oder Umziehen auf einen neuen Rechner
+  kopierst du einfach diese eine Datei.
+- `lookup_cache.json` — die gemerkten Antworten der Lookups
+  ([Kapitel 6](#abschnitt-6)).
+- `qslcards.log` — das Protokoll. Klemmt etwas, steht hier der Grund.
+
+Die fertigen PDFs landen dort, wo du sie in [Abschnitt 10](#abschnitt-10)
+hinlegst; vorgeschlagen wird dein Dokumentenordner.
+
+### Das Programm mitnehmen
+
+Legst du eine `config.yaml` **direkt neben das Programm**, benutzt es diese und
+lässt den Ordner oben unberührt. Damit läuft alles von einem USB-Stick, und du
+kannst dieselbe Einrichtung an einen anderen Rechner mitnehmen. Wie du an eine
+`config.yaml` kommst: einmal normal starten, etwas eintragen, dann die Datei aus
+dem Ordner oben neben das Programm kopieren.
+
+Das geht nur, wenn der Programmordner beschreibbar ist — unter Windows also
+**nicht** aus `C:\Programme` heraus.
 
 ## Wenn etwas nicht klappt {#probleme}
 
@@ -421,3 +459,7 @@ das Feld „Route/Manager" in der Vorschau, oder leere den Cache und frage neu a
 **Die Ränder im Ausdruck stimmen nicht** — fast immer die Skalierung im
 Druckdialog; sie muss auf 100 % / „keine Anpassung" stehen ([Kapitel
 9](#abschnitt-9)).
+
+**Etwas anderes klemmt** — dann schau ins Protokoll: **Hilfe ▸ Protokoll
+anzeigen** ([Wo liegen meine Dateien?](#dateien)). Dort notiert das Programm,
+was es nicht geschafft hat. Die letzten Zeilen sind die interessanten.

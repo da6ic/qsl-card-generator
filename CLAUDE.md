@@ -42,8 +42,9 @@ Cabrillo) automatisch **QSL-Karten** erzeugt und als **eine große PDF** ausgibt
 | PDF                | **ReportLab**                 | präzise mm-genaue Positionierung, A6, Tabellen |
 | Bilder             | **Pillow**                    | Skalierung/Format des Frontbilds             |
 | HTTP/Lookups       | **requests**                  | HamQTH-/QRZ-XML-API                           |
-| Config             | **PyYAML** (`config.yaml`)    | kommentierbar, gut editierbar                |
+| Config             | **PyYAML** (`config.yaml`)    | lesbar und diff-bar; **vom Programm** gepflegt, nicht von Hand (§11) |
 | Tests              | **pytest**                    | Unit-Tests, v.a. Parser & Kartenlogik        |
+| Bündeln            | **PyInstaller ≥ 6.21**        | einzige Option mit Tcl/Tk 9 + allen drei Zielsystemen |
 
 Bewusst **kein** externes Parser-Package (weder ADIF noch Cabrillo): eigene,
 getestete Parser (Anforderung).
@@ -54,8 +55,10 @@ getestete Parser (Anforderung).
 
 ```
 qslcards/
-  __init__.py
-  main.py                 # Einstiegspunkt: startet die GUI
+  __init__.py             # __version__ (einzige Quelle, pyproject liest sie aus)
+  __main__.py             # `python -m qslcards`
+  main.py                 # Einstiegspunkt: GUI starten (+ Protokoll im Bündel)
+  paths.py                # ALLE Datei-/Verzeichnispfade (Bündel vs. Quelle)
   config.py               # Config-Dataclasses + Laden/Speichern (YAML)
   logbook/
     __init__.py           # Formaterkennung + Dispatcher (die öffentliche API)
@@ -101,11 +104,18 @@ tests/
   test_lookup.py          test_textedit.py
   test_geometry.py        test_gui.py
   test_config.py          test_help.py
-  test_generator.py
+  test_generator.py       test_paths.py
 scripts/
   preview_card.py         # Karten-Preview als PDF (`--4up [RAND_MM]` = A4-Bogen)
   make_icon.py            # app_icon.svg -> PNG (16–1024) + .ico + .icns
-config.example.yaml       # Vorlage -> Nutzer kopiert nach config.yaml
+  build_app.py            # auslieferbare Anwendung bauen + verpacken
+packaging/
+  qslcards.spec           # PyInstaller: eine Spec für alle drei Plattformen
+  linux/                  # .desktop, install.sh, Dockerfile.fedora, README
+  windows/                # build.ps1, README (Python-Beschaffung, SmartScreen)
+config.example.yaml       # Vorlage = genau das, was config.save(AppConfig())
+                          #   schreibt (Test hält das fest). Fällt zurück, solange
+                          #   es noch keine config.yaml gibt.
 handbuch.md               # Anwender-Handbuch (zeigt „Hilfe > Handbuch" an)
 requirements.txt
 README.md
@@ -312,6 +322,9 @@ def active_via_priority(priority, cut) -> list[str]: ...
 - **Keine Geschäftslogik in der GUI** — GUI ruft nur `builder`/`generator`.
 - Alle Layout-Zahlen (Positionen, Schriftgrößen, Spaltenbreiten) **ausschließlich**
   in `pdf/geometry.py` als benannte Konstanten. Kein „magic number" im Zeichen-Code.
+- Alle **Pfade** ausschließlich in `paths.py` (dieselbe Regel). Kein Modul baut
+  sich einen Pfad aus `__file__` oder einem relativen String zusammen — sonst
+  bricht es beim Bündeln, und zwar still (siehe §11).
 - Fehler beim Lookup/Netz dürfen die PDF-Erzeugung **nie** abbrechen: loggen,
   Feld leer lassen, weitermachen.
 - Formatierung: `black` + `ruff`. `python -m pytest` muss grün sein.
@@ -375,6 +388,20 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
 - [x] **Anwender-Handbuch** im Programm (`Hilfe ▸ Handbuch`, F1 / ⌘?) aus
       `handbuch.md`, mit Kapitelliste, klickbaren Verweisen und einem „?" je
       Abschnitt, das ins passende Kapitel springt.
+
+### Darüber hinaus: Auslieferung
+
+- [x] **Alle Pfade in `paths.py`**; Config/Cache/Protokoll im plattformüblichen
+      Benutzerordner, Portable-Modus wenn eine `config.yaml` daneben liegt. Aus
+      der Quelle unverändert die Projektwurzel.
+- [x] **`scripts/build_app.py` + `packaging/qslcards.spec`** bauen die
+      auslieferbare Anwendung für die Plattform, auf der sie laufen, prüfen
+      vorher Tk 9 / PyInstaller ≥ 6.21 und verpacken das Ergebnis.
+- [x] **macOS-Bündel gebaut und geprüft** (arm64, ad-hoc signiert, ZIP via
+      `ditto`): startet aus dem Archiv, Tk 9 und alle Assets an Bord.
+- [ ] **Windows (32/64) und Fedora**: Skripte, Container-Rezept und Prüflisten
+      liegen bereit (`packaging/*/README.md`), ausgeführt wurden sie noch nicht —
+      dafür braucht es eine Windows-VM bzw. Docker.
 ---
 
 ## 10. Nicht raten — nachschlagen
@@ -392,8 +419,12 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
 ## 11. Arbeitsweise & gelernte Fakten (schnelles Wiedereinsteigen)
 
 **Umgebung / Tooling**
-- Python liegt im venv: **`.venv/bin/python`** benutzen (Interpreter ist 3.14).
-  Abhängigkeiten: `.venv/bin/python -m pip install -r requirements.txt`.
+- Python liegt im venv: **`.venv/bin/python`** benutzen (Interpreter ist 3.14,
+  Homebrew, mit **Tk 9.0.4** — deshalb funktionieren die SVG-Icons hier).
+  Abhängigkeiten: `.venv/bin/python -m pip install -r requirements.txt`
+  (das ist `-e .[dev]`); zum Bündeln zusätzlich `pip install -e ".[build]"`.
+- Auslieferbare Anwendung: `.venv/bin/python scripts/build_app.py --clean`
+  → `dist/`. Auf diesem Rechner entsteht nur das macOS-Bündel (siehe §11).
 - Vor jedem Commit: `.venv/bin/python -m black qslcards/ tests/ scripts/` und
   `.venv/bin/python -m ruff check ...` und `.venv/bin/python -m pytest tests/ -q`.
 - `ruff`/`black` schreiben gelegentlich nach dem Write nach (Trailing-Newline,
@@ -686,6 +717,79 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   fällt es nicht ins Gewicht, und das sofortige Schreiben macht den Cache
   absturzsicher (ein abgebrochener Lauf behält jedes geholte Rufzeichen). Beim
   zweiten Laden mit warmem Cache wird gar nicht mehr geschrieben.
+
+**Bündeln (PyInstaller) — teuer erkaufte Fakten**
+- **Tk 9 ist die harte Bedingung, nicht eine Python-Version.** Die SVG-Icons der
+  Vorschautabelle (`gui/preview.py`, `format="svg …"`) brauchen Tk ≥ 9 und fehlen
+  sonst **ohne Fehlermeldung** (der `except` daneben schluckt es). Woher Tk kommt,
+  ist plattformabhängig — wer daraus eine Python-Hürde macht, sperrt Fedora aus:
+  * Windows/macOS: Tcl/Tk steckt im Python-Installer. **3.14 → 9.0.4**,
+    3.13 → nur 8.6.15 (nachgeprüft in `PCbuild/tcltk.props` bzw.
+    `Mac/BuildScript/build-installer.py` der jeweiligen CPython-Zweige).
+  * Linux: Tk kommt vom System. **Fedora 42+** hat Tcl/Tk 9.0 systemweit, dort
+    genügt das mitgelieferte Python 3.13 (3.14 gibt es erst ab F43).
+  * **PyInstaller ≥ 6.21** — davor kann es Tcl/Tk 9 mit eingebettetem
+    Datenarchiv nicht bündeln. `scripts/build_app.py` prüft alle drei Punkte
+    vorab und bricht mit Klartext ab.
+- **Cross-Compile existiert nicht.** PyInstaller bündelt den Interpreter, unter
+  dem es läuft. Windows-Bündel nur auf Windows, Fedora-Bündel nur auf Linux
+  (Container-Rezept in `packaging/linux/Dockerfile.fedora`, Basis `fedora:42`
+  von Docker Hub — die **älteste** unterstützte Version, weil PyInstaller keine
+  glibc mitbringt und das Ergebnis sonst nur auf neueren Systemen läuft).
+- **`ditto`, nicht `zip`, für die `.app`.** Ein gewöhnliches `zip` löst die
+  Symlinks in `Contents/Frameworks` auf und zerstört damit die Signatur; die
+  entpackte Anwendung startet dann gar nicht mehr („is damaged"). Auf arm64 ist
+  eine (ad-hoc genügende) Signatur Pflicht — PyInstaller setzt sie selbst.
+- **`LD_LIBRARY_PATH` vergiftet jeden Kindprozess.** PyInstaller stellt den
+  Bibliothekspfad des Bündels nach vorn; ein davon geerbtes `xdg-open` oder
+  `gsettings` lädt die gebündelten Bibliotheken statt der eigenen und stirbt mit
+  „symbol lookup error". Deshalb bekommt **jeder** `subprocess.run`-Aufruf
+  `env=paths.subprocess_env()` (stellt `…_ORIG` wieder her). Aus der Quelle
+  bleibt die Umgebung unangetastet.
+- **Ein Fensterprogramm hat kein `stderr`** — unter Windows ist es sogar `None`.
+  Ohne Gegenmaßnahme verschwinden alle `logger.warning` spurlos, und Tks
+  `report_callback_exception` läuft bei jeder Ausnahme gegen `None.write()`.
+  `main._prepare_frozen_runtime` ersetzt fehlende Ströme und schreibt ins
+  Protokoll; Menü „Hilfe ▸ Protokoll anzeigen" führt hin.
+- macOS: `sys.executable` liegt in `Name.app/Contents/MacOS/` — „neben dem
+  Programm" heißt für den Anwender aber *neben der `.app`*, also drei Ebenen
+  höher (`paths.program_dir`). Zudem legt PyInstaller neben der `.app` noch den
+  rohen COLLECT-Ordner ab; `build_app.py` räumt ihn weg, sonst läge er genau
+  dort, wo der Portable-Modus nach `config.yaml` sucht.
+- Prüfen ohne GUI-Bedienung: `sys.frozen`/`sys._MEIPASS`/`sys.executable` auf ein
+  echtes Bündel zeigen lassen und die Pfade auflösen — das findet fehlende
+  Assets, ohne dass man klicken muss (`tests/test_paths.py` macht es synthetisch).
+
+**Wichtige Entscheidungen zum Bündeln (nicht ohne Rückfrage kippen)**
+- **Datenablage hybrid**: liegt eine `config.yaml` neben dem Programm, gewinnt
+  sie (Portable-Modus, USB-Stick); sonst der plattformübliche Benutzerordner
+  (`%APPDATA%` / `~/Library/Application Support` / `~/.config`). Aus der Quelle
+  **immer** die Projektwurzel — dadurch ändert sich der Entwickler-Workflow
+  nicht. Config, Cache und Protokoll liegen stets im selben Ordner
+  (`paths.data_dir`): laufen sie auseinander, gehört der Cache zu einem anderen
+  Konto.
+- **onedir, kein onefile**: schnellerer Start (kein Entpacken bei jedem Lauf),
+  weniger Virenscanner-Fehlalarme, und der Portable-Modus braucht einen Ordner.
+- **Windows 32- und 64-Bit**, macOS **arm64 ad-hoc signiert** (nicht notarisiert
+  — Empfänger brauchen Rechtsklick ▸ Öffnen), Linux **Fedora**. Bewusst außen
+  vor: Inno-Setup, RPM, AppImage, Notarisierung, CI, Windows-ARM64.
+- **`config.example.yaml` wird nicht von Hand gepflegt**: sie ist byteweise das,
+  was `config.save(AppConfig())` schreibt — leer, ohne Kommentare, mit
+  `config.CONFIG_HEADER` als erster Zeile („bitte nicht von Hand bearbeiten").
+  Ein Test hält die Gleichheit fest. Die Warnung steht in `save`, nicht bloß in
+  der Vorlage: `yaml.safe_dump` schreibt die Datei beim Auto-Save komplett neu,
+  ein nur dort stehender Hinweis wäre nach der ersten Änderung weg.
+- **Vier Werte haben bewusst kein Eingabefeld** und gelten als Programm-
+  konstanten, die zufällig in der Config liegen: `default_via`,
+  `page_orientation`, `static_footer`, `program_id` (vom Nutzer so entschieden,
+  Alternative „`static_footer` bekommt ein Widget" wurde verworfen). Wer einen
+  bedienbar machen will, braucht ein Widget — „einfach in der Datei ändern"
+  widerspricht der Kopfzeile.
+- **Version nur in `qslcards/__init__.py`**; `pyproject.toml` liest sie über
+  `[tool.setuptools.dynamic]`. `requirements.txt` ist nur noch `-e .[dev]`, die
+  Abhängigkeiten stehen in `pyproject.toml` (Extras `dev` und `build`).
+- **Kein „Schließen" im „Über"-Dialog** — wie beim Handbuchfenster macht das die
+  Fenstersteuerung des Systems (Escape bleibt gebunden).
 
 **Workflow-Konventionen**
 - Branch **`build/mvp`**. **Nicht selbst committen** — erst nach Review; committen,

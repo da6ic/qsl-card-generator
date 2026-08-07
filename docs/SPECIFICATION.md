@@ -386,9 +386,23 @@ class AppConfig:
 gekürzt) — die Listen schreibt zwar die App, sie können aber von Hand editiert
 worden sein. `push_recent(entries, path)` setzt einen Pfad duplikatfrei nach vorn.
 
-> **Achtung beim Auto-Save:** `appearance` und `recent` haben keine Eingabefelder.
-> `App._gather_config()` baut die Config aus den Widgets und muss beide aus der
-> Basis-Config übernehmen, sonst löscht das nächste automatische Speichern sie.
+`save` schreibt `config.CONFIG_HEADER` als erste Zeile („bitte nicht von Hand
+bearbeiten"). Die Warnung steht dort und nicht bloß in `config.example.yaml`,
+weil `yaml.safe_dump` die Datei beim Auto-Save komplett neu schreibt — ein nur in
+der Vorlage stehender Hinweis wäre nach der ersten Änderung im Programm weg.
+`config.example.yaml` ist folgerichtig **byteweise** das, was
+`save(AppConfig())` erzeugt (leer, ohne Beispieldaten); ein Test hält das fest.
+
+> **Achtung beim Auto-Save:** `App._gather_config()` baut die Config aus den
+> Widgets. Sechs Werte haben **keins** und müssen aus der Basis-Config übernommen
+> werden, sonst löscht das nächste automatische Speichern sie:
+> `appearance.theme` und `recent` (beide über das Menü bedient) sowie
+> `generation.default_via`, `generation.page_orientation`,
+> `generation.static_footer` und `lookup.program_id`. Die letzten vier sind
+> bewusst gar nicht bedienbar — sie gelten als Programmkonstanten, die zufällig
+> in der Config liegen (mit dem Nutzer so entschieden). Wer einen davon
+> einstellbar machen will, braucht ein Widget; „einfach in der Datei ändern"
+> widerspricht der Kopfzeile.
 
 ---
 
@@ -966,3 +980,86 @@ in `geometry.py` referenzieren.
 - `test_textedit.py`: Wortgrenzen, Belegung je Plattform, echtes Tastenverhalten.
   **Merke:** ein per `withdraw()` verstecktes Fenster nimmt keine synthetischen
   Tastenereignisse an — Testfenster off-screen öffnen statt verstecken.
+- `test_help.py`: Handbuch-Renderer, Kapitelliste, Sprungziele — jeder Abschnitt
+  hat seinen Anker `{#abschnitt-N}`, jeder interne Verweis trifft ein Ziel.
+- `test_paths.py`: §10 — Quellmodus zeigt in die Projektwurzel (auch aus fremdem
+  Arbeitsverzeichnis), gebündelt Portable- vs. Benutzerordner, macOS-Sonderfall
+  `.app/Contents/MacOS`, Config und Cache im selben Ordner, `subprocess_env`.
+
+---
+
+## 10. Pfade und Auslieferung (`paths.py`, `packaging/`)
+
+### 10.1 Warum es das Modul gibt
+
+Aus der Quelle gestartet ist das Arbeitsverzeichnis üblicherweise der
+Projektordner, und ein relativer Pfad wie `"config.yaml"` trifft. Per Doppelklick
+auf eine gebündelte Anwendung ist es `C:\Windows\System32` bzw. `$HOME` — derselbe
+Pfad zeigt dann irgendwohin. **Alle** Pfade stehen deshalb in `paths.py`, nach
+derselben Regel wie die Layout-Zahlen in `pdf/geometry.py`. Kein anderes Modul
+baut sich einen Pfad aus `__file__` oder einem relativen String zusammen.
+
+Drei Orte werden streng auseinandergehalten:
+
+| Funktion | Bedeutung | gebündelt | aus der Quelle |
+|---|---|---|---|
+| `resource_path(*teile)` | mitgeliefert, **nur lesbar**: Schriften, Icons, `handbuch.md`, `config.example.yaml` | `sys._MEIPASS/…` | Projektwurzel |
+| `program_dir()` | wo das Programm für den Anwender „liegt" | Ordner der Binary (macOS: **über** der `.app`) | Projektwurzel |
+| `user_data_dir()` | plattformüblich, immer beschreibbar | `%APPDATA%` / `~/Library/Application Support` / `$XDG_CONFIG_HOME` | (dito, ungenutzt) |
+
+### 10.2 Datenablage (hybrid)
+
+`data_dir()` entscheidet **einmal** für Config, Lookup-Cache und Protokoll —
+laufen sie auseinander, gehört der Cache zu einem anderen Konto.
+
+- **Nicht gebündelt** → immer `program_dir()` (Projektwurzel). Der
+  Entwickler-Workflow ändert sich durch das Bündeln nicht.
+- **Gebündelt, `config.yaml` liegt daneben** → `program_dir()` (Portable-Modus,
+  USB-Stick).
+- **Sonst** → `user_data_dir()`.
+
+`ensure_data_dir()` legt den Ordner an (mehr nicht: `open(..., "w")` erzeugt kein
+Verzeichnis). Die `config.yaml` entsteht beim ersten Auto-Save; bis dahin liest
+das Programm die mitgelieferte `config.example.yaml`, die inhaltlich identisch
+ist (beide aus denselben Defaults, siehe §3).
+
+Vorgeschlagenes Ausgabeziel: `default_output_dir()/qsl_karten.pdf` — **absolut**,
+sonst landete die PDF im Arbeitsverzeichnis des Systems.
+
+### 10.3 Kindprozesse
+
+PyInstaller stellt seinen Bibliothekspfad an den Anfang von `LD_LIBRARY_PATH`
+(Linux) bzw. `DYLD_LIBRARY_PATH` (macOS) und sichert den alten Wert unter
+`…_ORIG`. Ein davon geerbtes `xdg-open` oder `gsettings` lädt die gebündelten
+Bibliotheken statt der eigenen und stirbt mit „symbol lookup error". **Jeder**
+externe Aufruf bekommt deshalb `env=paths.subprocess_env()`; aus der Quelle
+bleibt die Umgebung unangetastet.
+
+### 10.4 Protokoll
+
+Ein Fensterprogramm hat kein `stderr` (unter Windows ist es `None`). Ohne
+Gegenmaßnahme verschwinden alle `logger.warning` spurlos und Tks
+`report_callback_exception` läuft gegen `None.write()`.
+`main._prepare_frozen_runtime` ersetzt fehlende Ströme durch Attrappen und
+schreibt in `paths.log_path()` (`RotatingFileHandler`, 1 MB, 2 Sicherungen).
+Menü „Hilfe ▸ Protokoll anzeigen" führt hin.
+
+### 10.5 Bauen
+
+`scripts/build_app.py` + `packaging/qslcards.spec`, Modus **onedir** auf allen
+Plattformen (Start ohne Entpacken, weniger Virenscanner-Fehlalarme, und der
+Portable-Modus braucht einen Ordner).
+
+**Cross-Compile gibt es nicht** — PyInstaller bündelt den Interpreter, unter dem
+es läuft. Die harte Bedingung ist **Tk ≥ 9**: die SVG-Icons der Vorschautabelle
+(§2) fehlen sonst ohne Fehlermeldung. Woher Tk kommt, ist plattformabhängig —
+Windows/macOS aus dem Python-Installer (erst 3.14 bringt 9.0.4 mit), Linux vom
+System (Fedora 42+). PyInstaller muss **≥ 6.21** sein. Das Skript prüft alle drei
+Punkte vorab und bricht mit Klartext ab, statt still etwas Kaputtes zu bauen.
+
+Verpackt wird plattformabhängig: Windows/Linux als ZIP bzw. `tar.gz` (letzteres
+erhält die Ausführungsrechte), macOS zwingend mit **`ditto`** — ein gewöhnliches
+`zip` löst die Symlinks in `Contents/Frameworks` auf und zerstört die Signatur.
+
+Anleitungen und Prüflisten: `packaging/windows/README.md`,
+`packaging/linux/README.md`.
