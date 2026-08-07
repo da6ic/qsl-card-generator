@@ -25,6 +25,8 @@ automatisch **QSL-Karten** erzeugt und als **eine große PDF** ausgibt.
 - Modus wählbar: **eine Karte pro QSO** oder **eine Karte pro Station**.
 - Druckmodus wählbar: **Duplex** (eine PDF, Vorder-/Rückseite abwechselnd) oder
   **getrennt** (zwei PDFs: alle Vorderseiten, alle Rückseiten).
+- **Bogendruck** (quer dazu): wahlweise eine Karte je A6-Seite oder **vier Karten
+  auf einem A4-Bogen** (quer, 2×2) mit gestrichelten Schnitt-Hilfslinien.
 
 ---
 
@@ -70,6 +72,7 @@ qslcards/
     geometry.py           # Seitenmaße, mm-Helfer, ALLE Layout-Konstanten
     layout_front.py       # zeichnet die Bild-Vorderseite
     layout_back.py        # zeichnet die Rückseite (Referenz-Layout)
+    layout_sheet.py       # Bogendruck: 4 Karten je A4-Seite + Schnittlinien
     generator.py          # orchestriert die Gesamt-PDF (alle Karten)
   gui/
     __init__.py
@@ -92,7 +95,7 @@ tests/
   test_config.py          test_textedit.py
   test_generator.py       test_gui.py
 scripts/
-  preview_card.py         # Karten-Preview als PDF
+  preview_card.py         # Karten-Preview als PDF (`--4up [RAND_MM]` = A4-Bogen)
   make_icon.py            # app_icon.svg -> PNG (16–1024) + .ico + .icns
 config.example.yaml       # Vorlage -> Nutzer kopiert nach config.yaml
 requirements.txt
@@ -250,10 +253,24 @@ def active_via_priority(priority, cut) -> list[str]: ...
   - `"separate"` → **zwei** PDFs (`…_vorderseiten.pdf`, `…_rueckseiten.pdf`) für
     Drucker ohne beidseitigen Druck.
 - Liefert die Liste der erzeugten PDF-Pfade zurück.
+- `config.generation.sheet_mode` (**quer** zum Druckmodus, beide kombinierbar):
+  - `"single"` → eine Karte je PDF-Seite (A6 quer), wie bisher.
+  - `"a4_4up"` → vier Karten je PDF-Seite (A4 quer). Der Generator arbeitet
+    deshalb **seitenweise** (`layout_sheet.chunk_pages`), nicht kartenweise; der
+    Fortschritt zählt weiter in Karten.
 - **Druckrand** (`print_margin_*`): steckt **nicht** im Generator, sondern in den
   Zeichenmodulen (`geometry.page_layout` / `content_box`) — dadurch wirkt er auch
   für `scripts/preview_card.py` und direkte API-Aufrufe. Die PDF-Seiten bleiben
-  immer A6 (`setPageSize` wird nie aufgerufen).
+  immer A6 bzw. im Bogen A4 (`setPageSize` wird nie aufgerufen, die Größe steht
+  beim Anlegen des Canvas).
+
+### `pdf/layout_sheet.py`
+- `page_size(config)`, `cards_per_page(config)`, `chunk_pages(items, config)`
+- `draw_page(c, config, items, draw_card, *, cut_guides=False)` — verschiebt das
+  Canvas je Karte auf ihre Zelle und ruft `draw_card`; **skaliert selbst nichts**
+  (das macht `page_layout`, dessen „Seite" im Bogen die Zelle ist).
+- `draw_cut_guides(c, layout)` — gestricheltes Schnittkreuz, gezeichnet in
+  Bogenkoordinaten, nur auf den **Rückseiten** (siehe §11).
 
 ---
 
@@ -304,6 +321,9 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
       einstellbarem **Druckrand** (4 Kanten in mm, hinter „Erweiterte
       Einstellungen"): die Karte wird unverzerrt so eingepasst, dass die Ränder
       exakt frei bleiben.
+- [x] **Bogendruck** wählbar: vier A6-Karten auf einem A4-Bogen (quer, 2×2) mit
+      gestrichelten Schnitt-Hilfslinien; der Druckrand gilt dabei je Karte, jede
+      geschnittene Karte hat ihn ringsum.
 - [x] Vorschau-Tabelle zeigt **alle** QSOs mit Via (ausgeschrieben) / Route;
       Lookup-Status sichtbar; bearbeitbare Zellen mit Stift-/Umschalt-Hinweis.
 - [x] „PDF erzeugen" liefert eine PDF mit 2 A6-Seiten pro Karte.
@@ -339,6 +359,9 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
   **`card_preview.pdf`** in den Projekt-Root (gitignored) → mit `open card_preview.pdf`
   zeigen. Beispiel zeigt eine volle 6-Zeilen-Karte ohne Remarks (PA3BRB) und zwei
   Karten mit dynamischem REMARKS-Kasten (3 Karten, 6 Seiten).
+  Mit `--4up [RAND_MM]` denselben Satz als **A4-Bogen** (2 Seiten: Vorder-/
+  Rückseitenbogen, letzte Zelle leer) — so sieht man Raster, Ränder und
+  Schnittlinien in einem Rutsch.
 - PDF-Seite als Bild prüfen (kein Display nötig):
   `qlmanage -t -s 1400 -o <ausgabeordner> datei.pdf` erzeugt `datei.pdf.png`.
   Nur Seite 1; für andere Seiten mit `pypdf` (PdfReader/PdfWriter) einzelne Seiten
@@ -420,7 +443,7 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
 - **GUI-Abschnitte**: 1 ADIF, 2 Frontbild, 3 Absender (inkl. Funk-Ausrüstung +
   globale Markierungen QSL/Portabel/Bestätigung), 4 Zustellwege (priorisierbare
   Liste + Trennlinie), 5 Kartenmodus, 6 Lookups, **7 Bemerkungen**, 8 Vorschau,
-  9 Druckmodus (inkl. Druckrand), 10 Ausgabe.
+  9 Druckmodus (inkl. Bogendruck + Druckrand), 10 Ausgabe.
 - **Druckrand: vier Werte, keine Verzerrung, Überschuss ins Layout** (iterativ mit
   dem Nutzer erarbeitet, alle drei Punkte bewusst so entschieden):
   * **Vier einzelne Kanten** (oben/unten/links/rechts), nicht ein Wert für alle —
@@ -435,6 +458,35 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   * **Frontbild rückt mit ein** (deckungsgleich mit der Rückseite), bleibt dabei
     aber unverzerrt: Cover-Fit **in den Rahmen**, kein Dehnen.
   * `MAX_ROWS_*` bleibt unberührt — Kartenaufteilung ändert sich nie mit dem Rand.
+- **Bogendruck: 4 Karten auf A4, Rand je Karte, Schnittlinien nur hinten**
+  (`sheet_mode`, in zwei Runden mit dem Nutzer korrigiert — die verworfenen
+  Varianten stehen bewusst mit da, sie sehen auf dem Papier plausibel aus):
+  * **Das 2×2-Raster hängt an nichts.** Der Bogen wird immer in vier Zellen à
+    148,5 × 105 mm geteilt (ein Viertel von A4 = das echte ISO-A6-Maß; die Karte
+    selbst ist auf 148 × 105 gebaut, der halbe Millimeter geht ins Layout).
+    Die Zelle tritt an die Stelle der A6-Seite, den Rest macht das gewohnte
+    `content_box`/`page_layout`. `layout_sheet` **verschiebt nur**.
+  * **Der Druckrand gilt je Karte, nicht je Bogen.** Zwischen zwei Karten liegt
+    dadurch der doppelte Rand, die Schnittkante läuft mittig hindurch — so hat
+    jede geschnittene Karte ihn auf allen vier Seiten. *Verworfen:* Rand einmal
+    um den ganzen Bogen (erst so gebaut). Dann hat jede Karte ihn nur auf ihren
+    zwei äußeren Kanten und der Inhalt sitzt außermittig.
+  * *Verworfen (Zwischenstand):* den 2×2-Block als starres A6-Raster skalieren
+    und zentrieren. Weil das Seitenverhältnis des Blocks nicht zum bedruckbaren
+    Bereich passt, wurde der Rand auf einer Achse größer (bei 5 mm Einstellung
+    7,55 mm links/rechts) — genau der Fehler, den die Elastik der Einzelkarte
+    schon löst.
+  * **Schnitt-Hilfslinien nur auf den Rückseitenbogen** (gestrichelt, 0,3 pt,
+    50 % grau, 2/2 mm): dort liegt an der Schnittkante Weißraum, über dem
+    randlosen Frontbild bliebe bei schiefem Schnitt ein Strich stehen. Sie laufen
+    über den ganzen **bedruckbaren** Bereich (nicht nur über den Kartenblock),
+    sonst muss man das letzte Stück schätzen. Auch der angebrochene letzte Bogen
+    bekommt sein Kreuz.
+  * **Front/Rück-Zuordnung ist beim Wenden egal** — projektbedingt gilt *ein*
+    Frontbild für alle Karten, alle vier Vorderseiten eines Bogens sind also
+    identisch. Deshalb **keine** gespiegelte Zellenreihenfolge (gleiche
+    Begründung wie beim Druckmodus „separate"). Leere Zellen auf dem letzten
+    Bogen bleiben leer.
 - **Absender kommt komplett aus der Config** (Rufzeichen, Locator, DOK, …), nie
   aus dem Log — vom Nutzer bewusst so bestätigt (ein kurzer Versuch, Rufzeichen/
   Locator aus `STATION_CALLSIGN`/`MY_GRIDSQUARE` zu ziehen, wurde zurückgenommen).

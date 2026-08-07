@@ -56,6 +56,28 @@ Ohne Druckrand ist der `PageLayout` die Identität (`scale = 1`, virtuelle Seite
 = A6, alle Maße = die Konstanten unten) — die Ausgabe ist dann byteweise
 dieselbe wie vor dem Feature.
 
+### Bogendruck (vier Karten auf A4)
+
+Ist `generation.sheet_mode == "a4_4up"`, liegen vier Karten auf einem A4-Bogen
+(quer). Am Kartenlayout ändert das **nichts** — es wechselt nur, was „die Seite"
+ist:
+
+- Der Bogen wird lückenlos in vier Zellen à **148,5 × 105 mm** geteilt (ein
+  Viertel von A4 = das echte ISO-A6-Maß). Das Raster hängt an keiner Einstellung,
+  die Schnittkanten liegen immer auf der Blattmitte.
+- Eine **Zelle** tritt an die Stelle der A6-Seite: `content_box` liefert die Zelle
+  minus Druckrand, `page_layout` passt die Karte wie gewohnt hinein (ein Faktor,
+  nie verzerrt, Überschuss ins Layout). `pdf/layout_sheet.py` **verschiebt** das
+  Canvas nur auf den Zellen-Ursprung.
+- Weil die Zelle 0,5 mm breiter als `PAGE_W` ist, wächst die virtuelle Seite auch
+  ohne Druckrand minimal — derselbe elastische Mechanismus wie oben.
+- Der **Druckrand gilt je Karte**: zwischen zwei Karten steht der doppelte Rand,
+  dessen Mitte die Schnittkante ist. Jede geschnittene Karte hat ihn damit auf
+  allen vier Seiten (läge er nur um den Bogen, säße der Inhalt außermittig).
+- Zwischen den Karten läuft ein **gestricheltes Schnittkreuz** über den ganzen
+  bedruckbaren Bereich — nur auf den **Rückseitenbogen**, damit über dem
+  randlosen Frontbild kein Strich stehen bleibt.
+
 ---
 
 ## 2. Zonen-Übersicht (Skizze, nicht maßstабsgetreu)

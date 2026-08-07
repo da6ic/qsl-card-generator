@@ -19,6 +19,9 @@ Rückseite im DARC-QSL-Layout.
   ab-/anwählen.
 - Modus wählbar: eine Karte **pro QSO** oder **pro Station**.
 - Druckmodus wählbar: **Duplex** (eine PDF) oder **getrennt** (zwei PDFs).
+- **Bogendruck**: wahlweise eine Karte je A6-Seite oder **vier Karten auf einem
+  A4-Bogen** (quer, 2×2) mit gestrichelten Schnitt-Hilfslinien; der einstellbare
+  Druckrand gilt dabei je Karte, jede geschnittene Karte hat ihn ringsum.
 - Lookup über HamQTH (kostenlos) / QRZ (optional) — **automatisch beim Log-Laden**
   im Hintergrund, gecacht. Liefert Via, QSL-Manager (aufs Feld „Via:") und Adresse
   (nur für optionalen Kuvert-/Label-Export, nicht auf der Karte).

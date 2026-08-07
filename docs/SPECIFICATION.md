@@ -8,9 +8,10 @@ Ausführliche Spezifikation. Ergänzt `CLAUDE.md`. Layout separat in `CARD_LAYOU
 
 Ein Funkamateur (Absender, z.B. DN5MT) hat ein Logbuch im ADIF-Format. Er will
 QSL-Karten für bestätigte QSOs drucken. Das Programm erzeugt eine PDF, in der
-jede Karte aus zwei A6-Seiten besteht (Bild vorne, Daten hinten). Vor der
-Erzeugung wählt er ADIF, Frontbild, Absenderdaten, die Priorität der Zustellwege
-(inkl. Trennlinie), Kartenmodus und Druckmodus.
+jede Karte aus zwei A6-Seiten besteht (Bild vorne, Daten hinten) — wahlweise
+auch zu viert auf einem A4-Bogen. Vor der Erzeugung wählt er ADIF, Frontbild,
+Absenderdaten, die Priorität der Zustellwege (inkl. Trennlinie), Kartenmodus und
+Druckmodus.
 
 ---
 
@@ -88,7 +89,15 @@ Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
    Tabelle zeigt mindestens ~5 Einträge.
 9. **Druckmodus**: Zweispaltig. **Links** die Radiobuttons `Duplexdruck
    (Vorder-/Rückseite abwechselnd)` / `Vorder-/Rückseite getrennt (2 PDFs)` →
-   `generation.print_mode` (`duplex` | `separate`, siehe §7). **Rechts daneben**
+   `generation.print_mode` (`duplex` | `separate`, siehe §7), darunter — durch
+   einen `ttk.Separator` abgesetzt, damit sie nicht wie eine dritte Modus-Option
+   wirkt — die Checkbox `4 A6 QSL-Karten auf einem A4-Bogen` →
+   `generation.sheet_mode` (`single` | `a4_4up`, siehe §7 „Bogendruck"). Sie ist
+   **quer** zum Druckmodus und mit beiden kombinierbar. Die Tk-Variable trägt
+   über `onvalue`/`offvalue` direkt den Config-Wert, `app.py` rechnet nichts um;
+   Unbekanntes aus einer handgeschriebenen `config.yaml` fällt über
+   `geometry.normalize_sheet_mode` auf `single` zurück.
+   **Rechts daneben**
    die Checkbox `Erweiterte Einstellungen` (`generation.print_margin_enabled`);
    ist sie gesetzt, erscheint darunter der Block **Seitenrand (mm)** mit vier
    `ttk.Spinbox` (oben/unten/links/rechts, 0…`PRINT_MARGIN_MAX` = 15 mm, Schritt
@@ -96,6 +105,8 @@ Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
    Beide Spalten liegen in **eigenen Containern** in derselben Grid-Zeile, oben
    verankert und **ohne `rowspan`**: sonst verteilt Tk die Höhe des Randblocks
    auf die übersprungenen Zeilen und verrückt beim Aufklappen die Radiobuttons.
+   Erklärtexte unter Checkbox und Randblock gab es zwischenzeitlich; sie wurden
+   vom Nutzer wieder entfernt.
 10. **Ausgabe**: Zielpfad der PDF, Button `PDF erzeugen` (Primärbutton,
    `Accent.TButton`) und Fortschrittsbalken (`ttk.Progressbar`). Die Statuszeile
    steht **nicht** mehr hier, sondern in der Fußleiste (§2.3). `PDF erzeugen` ist
@@ -220,7 +231,12 @@ class GenerationConfig:
                                        #   -> NUR hier in der Config, kein GUI-Widget
     page_orientation: str = "landscape" # A6, siehe CARD_LAYOUT.md
     print_mode: str = "duplex"         # "duplex" (eine PDF) | "separate" (2 PDFs)
+    # Bogendruck (§7), quer zum Druckmodus:
+    #   "single" -> eine Karte je PDF-Seite (A6 quer)
+    #   "a4_4up" -> vier Karten je PDF-Seite (A4 quer, 2×2) + Schnittlinien
+    sheet_mode: str = "single"
     # Druckrand (§7): Ränder in mm je Kante, nur wirksam wenn eingeschaltet.
+    #   Gilt IMMER je Karte — im Bogen also je Zelle des 2×2-Rasters.
     print_margin_enabled: bool = False # „Erweiterte Einstellungen" in Abschnitt 9
     print_margin_top: float = 0.0      # 0 .. PRINT_MARGIN_MAX (15 mm)
     print_margin_bottom: float = 0.0
@@ -491,8 +507,8 @@ Vorschau **und** Export.
 
 ## 7. PDF-Erzeugung (`pdf/`)
 
-- **Seitengröße**: A6. Querformat (`landscape`) als Default, da die Referenzkarte
-  querformatig ist. In `geometry.py` umschaltbar.
+- **Seitengröße**: A6 quer (bzw. A4 quer im Bogenmodus, siehe unten). Querformat
+  als Default, da die Referenzkarte querformatig ist. In `geometry.py` umschaltbar.
 - **Druckmodus** (`generation.print_mode`), `generate(...) -> list[Path]`:
   - `"duplex"`: **eine** PDF, pro Karte zuerst Vorderseite, dann Rückseite, dann
     `canvas.showPage()`. So entsteht Seite 1=Front(Karte1), 2=Back(Karte1),
@@ -501,11 +517,40 @@ Vorschau **und** Export.
     Drucker ohne beidseitigen Druck: erst alle Vorderseiten drucken, Papier
     umgedreht neu einlegen, dann die Rückseiten. Da **ein** Frontbild für alle
     Karten gilt, sind alle Vorderseiten identisch (keine Umkehrung nötig).
+- **Bogendruck** (`generation.sheet_mode`, GUI-Abschnitt 9, `pdf/layout_sheet.py`):
+  quer zum Druckmodus, beide Modi funktionieren damit unverändert — nur trägt eine
+  „Seite" dann bis zu vier Karten.
+  - `"single"`: eine Karte je PDF-Seite (A6 quer), wie bisher.
+  - `"a4_4up"`: **vier** Karten je PDF-Seite (A4 quer, 297 × 210 mm). Der Bogen
+    wird lückenlos in vier Zellen à **148,5 × 105 mm** geteilt — ein Viertel von
+    A4 und damit das echte ISO-A6-Maß. Eine Zelle tritt an die Stelle der
+    A6-Seite: `content_box`/`page_layout` arbeiten unverändert darin, `layout_
+    sheet` **verschiebt** das Canvas nur auf den Zellen-Ursprung. Gefüllt wird in
+    Lesereihenfolge (oben-links, oben-rechts, unten-links, unten-rechts); der
+    letzte Bogen darf angebrochen bleiben, leere Zellen bleiben leer.
+  - **Schnitt-Hilfslinien**: gestricheltes Kreuz durch die Blattmitte (also exakt
+    auf der Zellengrenze), `CUT_LINE_WIDTH = 0,3 pt`, `CUT_GRAY = 0,5`,
+    `CUT_DASH = 2/2 mm`. Es läuft über den ganzen **bedruckbaren** Bereich
+    (`sheet_printable_box`), nicht nur über die Karten — sonst müsste man das
+    letzte Stück schätzen. Gezeichnet wird es **nur auf den Rückseitenbogen**:
+    dort liegt an der Schnittkante der 3-mm-Weißraum der Karte, während ein
+    Strich über dem randlosen Frontbild bei schiefem Schnitt sichtbar bliebe.
+    Auch angebrochene Bögen bekommen das volle Kreuz.
+  - **Keine gespiegelte Zellenreihenfolge nötig**: projektbedingt gilt *ein*
+    Frontbild für alle Karten, alle vier Vorderseiten eines Bogens sind also
+    identisch — egal um welche Kante der Drucker wendet, hinter jeder Rückseite
+    liegt dieselbe Vorderseite (gleiche Begründung wie bei `"separate"`).
 - **Druckrand** (`generation.print_margin_*`, GUI-Abschnitt 9): Viele Drucker
   drucken nicht bis zur Blattkante und beschneiden sonst den Inhalt. Die vier
-  Werte bedeuten „so viel Rand **muss** frei bleiben". Das Blatt bleibt A6
-  (`setPageSize` wird nie aufgerufen) — nur die Zeichnung rückt ein:
-  1. Rahmen = Blatt minus der vier (geclampten) Ränder → `geometry.content_box`.
+  Werte bedeuten „so viel Rand **muss** frei bleiben", und zwar **je Karte** —
+  im Bogen also in jeder der vier Zellen. Zwischen zwei Karten steht dadurch der
+  doppelte Rand, dessen Mitte die Schnittkante ist; so hat jede geschnittene
+  Karte denselben Rand ringsum. (Läge er nur einmal um den ganzen Bogen, hätte
+  jede Karte ihn nur auf ihren zwei äußeren Kanten und der Inhalt säße
+  außermittig — deshalb wurde diese Variante verworfen.) Das Blatt behält seine
+  Größe (`setPageSize` wird nie aufgerufen) — nur die Zeichnung rückt ein:
+  1. Rahmen = Seite minus der vier (geclampten) Ränder → `geometry.content_box`;
+     „Seite" ist die A6-Seite bzw. im Bogen die Zelle (148,5 × 105 mm).
   2. `scale = min(rahmen_b/PAGE_W, rahmen_h/PAGE_H)` — **ein** Faktor für beide
      Achsen, die Karte wird also nie verzerrt (nur kleiner, Schrift inklusive).
   3. Weil `scale` nur von einer Achse bestimmt wird, bleibt auf der anderen Platz
@@ -521,8 +566,10 @@ Vorschau **und** Export.
      Funk) bleiben, wo sie sind.
 
   Alles davon liefert `geometry.page_layout(config) -> PageLayout`. Ist der
-  Druckrand aus, ist das Ergebnis die Identität (`scale=1`, virtuelle Seite = A6)
-  und die Ausgabe byteweise dieselbe wie ohne das Feature. `MAX_ROWS_*` bleibt
+  Druckrand aus (und kein Bogen), ist das Ergebnis die Identität (`scale=1`,
+  virtuelle Seite = A6) und die Ausgabe byteweise dieselbe wie ohne das Feature.
+  Im Bogen ohne Druckrand ist die Zelle 0,5 mm breiter als A6 — dieser halbe
+  Millimeter fließt über denselben Mechanismus ins Layout. `MAX_ROWS_*` bleibt
   unberührt — senkrechter Überschuss vergrößert nur den Abstand zwischen Tabelle
   und Fuß, die Kartenaufteilung im Builder ändert sich nicht. Ein Deckel
   (`MAX_STRETCH`) begrenzt den elastischen Überschuss bei absurden Randwerten;
@@ -530,8 +577,9 @@ Vorschau **und** Export.
 - **Front** (`layout_front.py`): Frontbild im **Cover-Modus** den ganzen Rahmen
   füllen (kein weißer Rand innerhalb des Rahmens), Seitenverhältnis wahren,
   Überstand beschneiden (Clip), zentriert. Der Rahmen ist `geometry.content_box`
-  — ohne Druckrand die volle Seite, sonst derselbe Rahmen wie die Rückseite,
-  damit beide Seiten deckungsgleich liegen. Das Bild wird auch bei ungleichen
+  — ohne Druckrand die volle Seite (im Bogen: die volle Zelle), sonst derselbe
+  Rahmen wie die Rückseite, damit beide Seiten deckungsgleich liegen. Mit
+  Druckrand hat also auch das Frontbild den weißen Rand ringsum. Das Bild wird auch bei ungleichen
   Rändern **nie verzerrt**. Einmal via Pillow geladen und als ImageReader
   gecacht, für alle Karten wiederverwenden.
 - **Back** (`layout_back.py`): exakt nach `CARD_LAYOUT.md`. Alle Positionen/
@@ -589,11 +637,19 @@ in `geometry.py` referenzieren.
   `extract_manager_callsign`, Parsing der Routing-Felder (HamQTH inkl. lotw/eqsl,
   QRZ-Manager), Enrichment über alle Stationen, Cache, Reauth — HTTP gemockt.
 - `test_config.py`: Laden/Speichern, fehlende Felder → Defaults, `appearance`/
-  `recent` (Roundtrip, defensives Laden, Kappung, `push_recent`).
+  `recent` (Roundtrip, defensives Laden, Kappung, `push_recent`), `sheet_mode`
+  (Default `single`, Roundtrip, alte Config ohne das Feld).
 - `test_geometry.py`: mm-Umrechnung, Seitenmaße, dass alle Konstanten definiert
-  sind und im Blattbereich liegen.
+  sind und im Blattbereich liegen; Druckrand (Clamping, Rahmen, elastisches
+  Layout) und **Bogendruck**: Raster kachelt A4 lückenlos und hängt nicht am
+  Rand, jede der vier Karten hat denselben Rand auf allen vier Seiten, zwischen
+  zwei Karten liegt der doppelte Rand, Schnittlinien bleiben im bedruckbaren
+  Bereich.
 - `test_generator.py`: Smoke-Test beider Druckmodi (läuft ohne Exception; duplex
-  erzeugt eine Datei mit 2 × Kartenanzahl Seiten, separate zwei Dateien).
+  erzeugt eine Datei mit 2 × Kartenanzahl Seiten, separate zwei Dateien). Für den
+  **Bogen** zusätzlich am fertigen PDF: A4-Seitengröße, 4 Karten je Bogen (auch
+  angebrochen), Schnittlinien nur auf den Rückseiten, Fortschritt zählt Karten,
+  Ränder je Karte, und `single` liefert byteweise die bisherige Ausgabe.
 - `test_gui.py`: Widget-Baum baut headless; Auto-Sync der Config (inkl. Erhalt von
   `appearance`/`recent`); Themenwechsel, Statusleiste, „Zuletzt verwendet",
   Icon-Reihenfolge, Zebra-/Icon-Hintergründe, Zeichenzähler, Seiten-Scroll.
