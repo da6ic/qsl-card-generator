@@ -303,11 +303,11 @@ class SenderSection:
 
         # Stationsdaten (Adresse + Locator/DOK/CQ/ITU).
         row = self._add_fields(STATION_FIELDS, 0)
-        row = self._add_separator(row, "Funk-Ausrüstung (optional)")
+        row = self._add_separator(row, "Funk-Ausrüstung")
 
         # Funk-Ausrüstung (Empfänger/Antenne/Leistung): dynamisch auf der Karte.
         row = self._add_fields(RADIO_FIELDS, row)
-        row = self._add_separator(row, "Markierungen (für alle Karten)")
+        row = self._add_separator(row, "Markierungen")
 
         # Globale Markierungen (gelten für alle Karten).
         self.qsl_mark = tk.StringVar(value=QSL_MARK_CHOICES[0])
@@ -390,14 +390,6 @@ class FilterSection:
         self.btn_down = ttk.Button(self.frame, text="▼", width=3, style="Icon.TButton")
         self.btn_up.grid(row=0, column=1, padx=(GAP_COL, 0), pady=(GAP_ROW, 1), sticky="s")
         self.btn_down.grid(row=1, column=1, padx=(GAP_COL, 0), pady=(1, GAP_ROW), sticky="n")
-
-        ttk.Label(
-            self.frame,
-            text="Über der Linie = wird gedruckt (oben = höchste Priorität).",
-            style="Muted.TLabel",
-            wraplength=260,
-            justify="left",
-        ).grid(row=2, column=0, columnspan=2, pady=(GAP_ROW, 0), sticky="w")
 
         self.frame.columnconfigure(0, weight=1)
         self._render(select=0)
@@ -502,13 +494,6 @@ class LookupSection:
             text="Adress-/Label-Export erzeugen",
             variable=self.address_export,
         ).grid(row=4, column=0, columnspan=2, pady=(PAD_INNER, GAP_ROW), sticky="w")
-        ttk.Label(
-            self.frame,
-            text="Ohne Zugangsdaten: kein Netzzugriff, alle Wege = Standard.",
-            style="Muted.TLabel",
-            wraplength=300,
-            justify="left",
-        ).grid(row=5, column=0, columnspan=2, sticky="w")
         self.frame.columnconfigure(1, weight=1)
 
 
