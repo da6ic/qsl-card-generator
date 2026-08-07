@@ -470,6 +470,42 @@ def test_print_margins_parsed_and_clamped(app):
     assert gen.print_margin_right == PRINT_MARGIN_MAX
 
 
+def test_sheet_checkbox_maps_to_the_config_value(app):
+    """Abschnitt 9: die Checkbox trägt den Config-Wert direkt (on/off-value),
+    damit app.py nichts umrechnen muss."""
+    section = app.printmode_section
+    assert section.sheet_mode.get() == "single"
+    assert app._gather_config().generation.sheet_mode == "single"
+
+    section.sheet_check.invoke()
+    assert section.sheet_mode.get() == "a4_4up"
+    assert app._gather_config().generation.sheet_mode == "a4_4up"
+
+    section.sheet_check.invoke()
+    assert app._gather_config().generation.sheet_mode == "single"
+
+
+def test_sheet_mode_survives_autosave(app, tmp_path):
+    _load(app, tmp_path)
+    app.printmode_section.sheet_mode.set("a4_4up")
+    app._auto_save()
+
+    saved = cfg.load(appmod.CONFIG_PATH)
+    assert saved.generation.sheet_mode == "a4_4up"
+
+    app._apply_config_to_widgets(saved)
+    assert app.printmode_section.sheet_mode.get() == "a4_4up"
+
+
+def test_sheet_mode_falls_back_on_broken_config(app, tmp_path):
+    """Handgeschriebene config.yaml darf die Checkbox nicht in einen dritten
+    Zustand bringen — Unbekanntes fällt auf „single" zurück."""
+    broken = cfg.AppConfig()
+    broken.generation.sheet_mode = "vier-pro-blatt"
+    app._apply_config_to_widgets(broken)
+    assert app.printmode_section.sheet_mode.get() == "single"
+
+
 def test_print_margins_survive_autosave(app, tmp_path):
     """Neue Variablen müssen am Auto-Save hängen, sonst gehen sie verloren."""
     _load(app, tmp_path)

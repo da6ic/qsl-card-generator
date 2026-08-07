@@ -44,6 +44,8 @@ def test_load_example_all_fields():
     assert c.generation.default_via == "B"
     assert c.generation.page_orientation == "landscape"
     assert c.generation.print_mode == "duplex"
+    # Bogendruck: standardmäßig eine Karte je Seite (A6).
+    assert c.generation.sheet_mode == "single"
     # Druckrand: standardmäßig aus, alle vier Kanten 0 -> Ausgabe wie ohne.
     assert c.generation.print_margin_enabled is False
     assert c.generation.print_margin_top == 0.0
@@ -80,6 +82,20 @@ def test_missing_fields_use_defaults(tmp_path: Path):
     assert c.generation.via_priority == ["B", "D", "Q", "L"]
     assert c.generation.via_cut == 2
     assert c.lookup.program_id == "qslcards"
+
+
+def test_sheet_mode_defaults_and_roundtrip(tmp_path: Path):
+    # Default: eine Karte je Seite; alte config.yaml ohne das Feld bleibt gültig.
+    assert cfg.AppConfig().generation.sheet_mode == "single"
+
+    path = tmp_path / "c.yaml"
+    path.write_text("generation:\n  sheet_mode: a4_4up\n", encoding="utf-8")
+    assert cfg.load(path).generation.sheet_mode == "a4_4up"
+
+    c = cfg.AppConfig()
+    c.generation.sheet_mode = "a4_4up"
+    cfg.save(c, path)
+    assert cfg.load(path).generation.sheet_mode == "a4_4up"
 
 
 def test_unknown_fields_ignored(tmp_path: Path):

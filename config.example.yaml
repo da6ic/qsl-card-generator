@@ -54,11 +54,24 @@ generation:
                                #              beidseitigen Druck – erst Vorderseiten
                                #              drucken, Papier umgedreht neu einlegen,
                                #              dann Rückseiten drucken.
+  sheet_mode: "single"         # wie viele Karten auf eine PDF-Seite kommen:
+                               #   single : eine Karte je Seite (A6 quer).
+                               #   a4_4up : vier Karten je Seite (A4 quer, 2×2)
+                               #            mit gestrichelten Schnitt-Hilfslinien
+                               #            zwischen den Karten (nur auf den
+                               #            Rückseiten, damit das Frontbild
+                               #            unberührt bleibt). Gilt für beide
+                               #            Druckmodi.
   # Druckrand („Erweiterte Einstellungen" in GUI-Abschnitt 9): viele Drucker
   # drucken nicht bis zur Blattkante und beschneiden sonst den Inhalt. Ist der
   # Schalter aktiv, wird die Karte proportional (nie verzerrt) so verkleinert,
   # dass die angegebenen Ränder frei bleiben; der dabei auf einer Achse übrige
   # Platz fließt ins Layout (Call-/Via-Box, Tabelle und Remarks wachsen mit).
+  # Im Bogenmodus („a4_4up") gilt der Rand **je Karte**, also in jeder der vier
+  # Zellen: zwischen zwei Karten steht dann ein doppelt breiter weißer Streifen,
+  # durch dessen Mitte geschnitten wird. So hat jede fertige Karte denselben
+  # Rand ringsum (läge er nur um den Bogen, hätte jede Karte ihn auf zwei
+  # Seiten und der Inhalt säße außermittig).
   print_margin_enabled: false
   print_margin_top: 0.0        # Ränder in mm je Kante, 0 bis 15
   print_margin_bottom: 0.0

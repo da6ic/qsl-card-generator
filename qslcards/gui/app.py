@@ -37,7 +37,7 @@ from qslcards.lookup import (
     lookup_calls,
 )
 from qslcards.pdf.generator import generate
-from qslcards.pdf.geometry import clamp_print_margin
+from qslcards.pdf.geometry import clamp_print_margin, normalize_sheet_mode
 
 from . import theme
 from .menu import MenuActions, MenuBar
@@ -429,6 +429,9 @@ class App(tk.Tk):
             )
             self.mode_section.card_mode.set(config.generation.card_mode)
             self.printmode_section.print_mode.set(config.generation.print_mode)
+            self.printmode_section.sheet_mode.set(
+                normalize_sheet_mode(config.generation.sheet_mode)
+            )
             # Druckrand: Umschalter + die vier Randfelder (Feldname in der
             # Section = Config-Feld ohne das „print_"-Präfix).
             self.printmode_section.advanced.set(config.generation.print_margin_enabled)
@@ -475,6 +478,7 @@ class App(tk.Tk):
             default_via=self.base_config.generation.default_via,
             page_orientation=self.base_config.generation.page_orientation,
             print_mode=self.printmode_section.print_mode.get(),
+            sheet_mode=normalize_sheet_mode(self.printmode_section.sheet_mode.get()),
             print_margin_enabled=self.printmode_section.advanced.get(),
             **{
                 f"print_{name}": clamp_print_margin(parse_mm(var.get()))
@@ -530,6 +534,7 @@ class App(tk.Tk):
             self.lookup_section.address_export,
             self.mode_section.card_mode,
             self.printmode_section.print_mode,
+            self.printmode_section.sheet_mode,
             self.printmode_section.advanced,
             *self.printmode_section.margin_vars.values(),
         ]

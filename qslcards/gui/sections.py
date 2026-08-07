@@ -14,7 +14,7 @@ from pathlib import Path
 from tkinter import ttk
 
 from qslcards.lookup import VIA_LABELS, normalize_via_priority
-from qslcards.pdf.geometry import PRINT_MARGIN_MAX
+from qslcards.pdf.geometry import PRINT_MARGIN_MAX, SHEET_MODE_A4_4UP, SHEET_MODE_SINGLE
 
 from .icon_canvas import icon_canvas
 from .theme import GAP_COL, GAP_ROW, PAD_INNER, Palette
@@ -566,10 +566,16 @@ class PrintModeSection:
     abwechselnd, für Duplexdrucker) oder „separate" (zwei PDFs – erst alle
     Vorderseiten, dann alle Rückseiten – für Drucker ohne beidseitigen Druck).
 
+    Quer dazu steht der **Bogendruck** (`sheet_mode`): vier Karten auf einem
+    A4-Bogen (quer, 2×2) statt einer je A6-Seite, mit gestrichelten
+    Schnitt-Hilfslinien zwischen den Karten. Er lässt sich mit beiden Druckmodi
+    kombinieren, deshalb eine Checkbox und kein dritter Radiobutton.
+
     Unter „Erweiterte Einstellungen" steht der **Druckrand**: viele Drucker
     drucken nicht bis zur Blattkante. Die vier Werte (in mm, je Kante) sagen
     „so viel Rand muss frei bleiben"; die Karte wird dann proportional
-    verkleinert, sodass sie hineinpasst (siehe pdf/geometry.page_layout).
+    verkleinert, sodass sie hineinpasst (siehe pdf/geometry.page_layout). Im
+    Bogenmodus gilt der Rand für den ganzen Bogen (pdf/geometry.sheet_layout).
     """
 
     # Randfelder in Anzeigereihenfolge: (Attributname, Beschriftung, Zeile, Spalte)
@@ -606,6 +612,23 @@ class PrintModeSection:
         )
         self.radio_duplex.grid(row=0, column=0, pady=GAP_ROW, sticky="w")
         self.radio_separate.grid(row=1, column=0, pady=GAP_ROW, sticky="w")
+
+        # Bogendruck: quer zu den beiden Druckmodi, deshalb durch eine Trennlinie
+        # abgesetzt (sonst läse sich die Checkbox wie eine dritte Modus-Option).
+        # Die Variable trägt direkt den Config-Wert (on/off-value), damit app.py
+        # nichts umrechnen muss.
+        ttk.Separator(self.modes_frame, orient="horizontal").grid(
+            row=2, column=0, pady=(PAD_INNER, GAP_ROW), sticky="we"
+        )
+        self.sheet_mode = tk.StringVar(value=SHEET_MODE_SINGLE)
+        self.sheet_check = ttk.Checkbutton(
+            self.modes_frame,
+            text="4 A6 QSL-Karten auf einem A4-Bogen",
+            variable=self.sheet_mode,
+            onvalue=SHEET_MODE_A4_4UP,
+            offvalue=SHEET_MODE_SINGLE,
+        )
+        self.sheet_check.grid(row=3, column=0, pady=GAP_ROW, sticky="w")
 
         # Rechte Spalte: Umschalter oben, darunter der ein-/ausblendbare Block.
         # Ausgeschaltet werden die Werte ignoriert (aber nicht vergessen) ->
@@ -644,17 +667,6 @@ class PrintModeSection:
             )
             spin.grid(row=row + 1, column=col + 1, padx=(0, GAP_COL * 2), pady=GAP_ROW, sticky="w")
             limit_entry_number(spin, PRINT_MARGIN_MAX)
-
-        ttk.Label(
-            self.margin_frame,
-            text=(
-                "Manche Drucker drucken nicht bis zur Blattkante. Die Karte wird "
-                "verkleinert, sodass diese Ränder frei bleiben."
-            ),
-            style="Muted.TLabel",
-            wraplength=300,
-            justify="left",
-        ).grid(row=3, column=0, columnspan=4, pady=(PAD_INNER, 0), sticky="w")
 
         self.update_advanced_visibility()
 

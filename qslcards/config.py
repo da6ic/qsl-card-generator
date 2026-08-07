@@ -62,12 +62,20 @@ class GenerationConfig:
     #                 ohne beidseitigen Druck: erst Vorderseiten drucken, Papier
     #                 umgedreht neu einlegen, dann Rückseiten drucken.
     print_mode: str = "duplex"  # "duplex" | "separate"
+    # Bogendruck (quer zum Druckmodus, GUI-Abschnitt 9):
+    #   "single" -> eine Karte je PDF-Seite (A6 quer), wie bisher.
+    #   "a4_4up" -> vier Karten je PDF-Seite (A4 quer, 2×2) mit gestrichelten
+    #               Schnitt-Hilfslinien zwischen den Karten (nur auf den
+    #               Rückseiten). Der Druckrand gilt weiterhin **je Karte**.
+    sheet_mode: str = "single"  # "single" | "a4_4up"
     # Druckrand („Erweiterte Einstellungen" in GUI-Abschnitt 9): viele Drucker
     # drucken nicht bis zur Blattkante und beschneiden sonst den Inhalt. Ist
     # print_margin_enabled aktiv, wird die Karte proportional so verkleinert,
     # dass diese Ränder (in **mm**, je Kante) frei bleiben; der dabei auf einer
     # Achse übrige Platz fließt ins Layout (siehe pdf/geometry.page_layout).
-    # Aus -> unverändert randlos wie bisher.
+    # Aus -> unverändert randlos wie bisher. Im Bogenmodus („a4_4up") gelten die
+    # Werte je Karte (also je Zelle des 2×2-Rasters), damit jede geschnittene
+    # Karte denselben Rand ringsum hat.
     print_margin_enabled: bool = False
     print_margin_top: float = 0.0
     print_margin_bottom: float = 0.0

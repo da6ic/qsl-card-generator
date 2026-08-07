@@ -272,6 +272,51 @@ FOOTER_TEXT_X = MARGIN
 FOOTER_TEXT_YT = mm(98.5)
 
 # --------------------------------------------------------------------------- #
+# Bogendruck: vier A6-Karten auf einem A4-Bogen (config.generation.sheet_mode)
+#
+# 2 × A6 quer nebeneinander = 296 mm, 2 × übereinander = 210 mm — das passt in
+# **A4 quer** (297 × 210 mm). Der Bogen wird lückenlos in vier Zellen à
+# 148,5 × 105 mm geteilt (`sheet_cell_size`); jede Zelle tritt an die Stelle
+# einer A6-Seite und wird über das übliche `page_layout` gefüllt — Druckrand
+# inklusive, damit jede geschnittene Karte ringsum denselben Rand hat.
+# Zwischen den Karten laufen gestrichelte Schnitt-Hilfslinien (nur auf den
+# Rückseitenbogen, siehe layout_sheet.py).
+# --------------------------------------------------------------------------- #
+
+SHEET_MODE_SINGLE = "single"  # eine Karte je PDF-Seite (A6) — Default
+SHEET_MODE_A4_4UP = "a4_4up"  # vier Karten je PDF-Seite (A4 quer)
+SHEET_MODES = (SHEET_MODE_SINGLE, SHEET_MODE_A4_4UP)
+
+SHEET_W = mm(297)  # A4 quer: Breite
+SHEET_H = mm(210)  # A4 quer: Höhe
+
+SHEET_COLS = 2  # Karten nebeneinander
+SHEET_ROWS = 2  # Karten übereinander
+CARDS_PER_SHEET = SHEET_COLS * SHEET_ROWS  # 4
+BLOCK_W = SHEET_COLS * PAGE_W  # 296 mm — Breite des 2×2-Blocks
+BLOCK_H = SHEET_ROWS * PAGE_H  # 210 mm — Höhe des 2×2-Blocks
+
+# Gestrichelte Schnitt-Hilfslinien zwischen den Karten (Kreuz durch die
+# Blockmitte, bis an die Kanten des bedruckbaren Bereichs). Bewusst dünn und
+# grau: sie liegen exakt auf der Schnittkante, ein leicht schiefer Schnitt soll
+# keinen kräftigen Strich am Kartenrand hinterlassen.
+CUT_LINE_WIDTH = 0.3  # pt
+CUT_DASH = (mm(2), mm(2))  # Strich/Lücke
+CUT_GRAY = 0.5  # 0 = schwarz, 1 = weiß
+
+
+def normalize_sheet_mode(value: object) -> str:
+    """Bogenmodus aus der Config lesen; alles Unbekannte -> Einzelkarte."""
+    return value if value in SHEET_MODES else SHEET_MODE_SINGLE  # type: ignore[return-value]
+
+
+def is_sheet_mode(config: AppConfig) -> bool:
+    """True, wenn vier Karten auf einen A4-Bogen sollen."""
+    mode = normalize_sheet_mode(getattr(config.generation, "sheet_mode", SHEET_MODE_SINGLE))
+    return mode == SHEET_MODE_A4_4UP
+
+
+# --------------------------------------------------------------------------- #
 # Druckrand: elastischer Seitenrahmen (config.generation.print_margin_*)
 #
 # Viele Drucker drucken nicht bis zur Blattkante. Ist der Druckrand aktiv, soll
@@ -327,6 +372,14 @@ def clamp_print_margin(value: object) -> float:
 def print_margins(config: AppConfig) -> tuple[float, float, float, float]:
     """Die vier geclampten Druckränder (oben, unten, links, rechts) in Punkten.
 
+    Sie gelten **je Karte**, auch im Bogen: dort bekommt jede der vier Zellen den
+    Rand auf allen vier Kanten. Nur so hat jede geschnittene Karte denselben Rand
+    ringsum — läge er einmal um den ganzen Bogen, hätte jede Karte ihn nur auf
+    zwei Seiten und der Inhalt säße außermittig. Zwischen zwei Karten entsteht
+    dadurch ein doppelt breiter weißer Streifen, durch dessen Mitte geschnitten
+    wird; nach außen bleibt der Rand einfach frei (was der Drucker ohnehin
+    braucht).
+
     Ist der Druckrand abgeschaltet, sind alle vier 0 -> alles wie bisher."""
     gen = config.generation
     if not gen.print_margin_enabled:
@@ -335,12 +388,17 @@ def print_margins(config: AppConfig) -> tuple[float, float, float, float]:
 
 
 def content_box(config: AppConfig) -> tuple[float, float, float, float]:
-    """Der bedruckbare Rahmen als (x, y, w, h) in Punkten (Ursprung unten links).
+    """Der Rahmen **einer Karte** als (x, y, w, h) in Punkten.
 
-    Ohne Druckrand ist das die volle Seite. Auch von der Vorderseite genutzt,
+    Ohne Druckrand ist das die volle A6-Seite, mit Druckrand die Seite minus der
+    vier Ränder. Im Bogenmodus tritt die **Zelle** des 2×2-Rasters an die Stelle
+    der Seite (Ursprung ist dann deren untere linke Ecke, denn `layout_sheet`
+    verschiebt das Canvas vorher dorthin) — die Ränder werden genauso abgezogen,
+    also bekommt jede Karte ihren Rand ringsum. Auch von der Vorderseite genutzt,
     damit Bild und Rückseite exakt denselben Rahmen bekommen."""
     top, bottom, left, right = print_margins(config)
-    return (left, bottom, PAGE_W - left - right, PAGE_H - top - bottom)
+    page_w, page_h = sheet_cell_size(config) if is_sheet_mode(config) else (PAGE_W, PAGE_H)
+    return (left, bottom, page_w - left - right, page_h - top - bottom)
 
 
 @dataclass(frozen=True)
@@ -409,4 +467,85 @@ def page_layout(config: AppConfig) -> PageLayout:
         remarks_label_yt=page_h - (PAGE_H - REMARKS_LABEL_YT),
         remarks_box_yt=page_h - (PAGE_H - REMARKS_BOX_YT),
         footer_text_yt=page_h - (PAGE_H - FOOTER_TEXT_YT),
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Bogen-Layout (4 Karten auf A4 quer)
+# --------------------------------------------------------------------------- #
+
+
+def sheet_cell_size(config: AppConfig) -> tuple[float, float]:
+    """Größe einer Zelle des 2×2-Rasters in Punkten: 148,5 × 105 mm.
+
+    Die vier Zellen kacheln den Bogen **restlos** — eine Zelle ist exakt ein
+    Viertel von A4 und damit das echte ISO-A6-Maß (die Karte selbst ist auf
+    148 × 105 ausgelegt, der halbe Millimeter Überschuss fließt über
+    `page_layout` ins Layout). Der Druckrand steckt **in** der Zelle, nicht
+    zwischen Zelle und Blattkante: geschnitten wird auf der Zellengrenze, und
+    jede Karte behält ihren Rand ringsum (siehe `print_margins`).
+
+    `config` wird noch nicht ausgewertet, gehört aber zur Signatur: die
+    Zellengröße ist die Antwort auf „wie groß ist eine Seite in diesem Modus".
+    """
+    del config  # das Raster hängt (anders als der Rand) an keiner Einstellung
+    return (SHEET_W / SHEET_COLS, SHEET_H / SHEET_ROWS)
+
+
+def sheet_printable_box(config: AppConfig) -> tuple[float, float, float, float]:
+    """Der Bereich des Bogens, in den überhaupt gedruckt wird, als (x, y, w, h).
+
+    Das ist der Bogen minus des Druckrands — nur so weit dürfen die
+    Schnitt-Hilfslinien laufen (weiter außen kann der Drucker nicht). Für die
+    Platzierung der Karten ist er **nicht** zuständig, die sitzen im Raster aus
+    `sheet_cell_size`."""
+    top, bottom, left, right = print_margins(config)
+    return (left, bottom, SHEET_W - left - right, SHEET_H - top - bottom)
+
+
+@dataclass(frozen=True)
+class SheetLayout:
+    """Platzierung der vier Karten auf einem A4-Bogen.
+
+    `cells` sind die Zellen-Ursprünge (unten links) in **Bogenkoordinaten**, in
+    Lesereihenfolge: oben-links, oben-rechts, unten-links, unten-rechts. Das
+    Canvas wird nur dorthin verschoben — eingepasst wird die Karte nicht hier,
+    sondern in `page_layout` (deren Rahmen ist `content_box` = die Zelle minus
+    Druckrand).
+
+    `cut_x`/`cut_y` ist der Kreuzungspunkt der Schnittlinien (Blattmitte, also
+    exakt die Zellengrenze), `printable` der bedruckbare Bereich des Bogens."""
+
+    printable: tuple[float, float, float, float]
+    cell_w: float
+    cell_h: float
+    cells: tuple[tuple[float, float], ...]
+    cut_x: float
+    cut_y: float
+
+
+def sheet_layout(config: AppConfig) -> SheetLayout:
+    """Baut die Bogen-Aufteilung: 2×2 Zellen à 148,5 × 105 mm, die den Bogen
+    lückenlos kacheln.
+
+    Der Druckrand verändert das Raster **nicht** — er wird innerhalb jeder Zelle
+    abgezogen (`content_box`). Dadurch liegt zwischen zwei Karten ein doppelt
+    breiter weißer Streifen, dessen Mitte die Schnittkante ist: jede Karte hat
+    hinterher denselben Rand auf allen vier Seiten."""
+    cell_w, cell_h = sheet_cell_size(config)
+
+    # Lesereihenfolge (oben-links zuerst); ReportLab zählt y von unten.
+    cells = tuple(
+        (col * cell_w, (SHEET_ROWS - 1 - row) * cell_h)
+        for row in range(SHEET_ROWS)
+        for col in range(SHEET_COLS)
+    )
+
+    return SheetLayout(
+        printable=sheet_printable_box(config),
+        cell_w=cell_w,
+        cell_h=cell_h,
+        cells=cells,
+        cut_x=SHEET_W / 2,
+        cut_y=SHEET_H / 2,
     )

@@ -11,6 +11,11 @@ Zwei Druckmodi (config.generation.print_mode):
   einlegen, dann die Rückseiten drucken. Weil projektbedingt **ein** Frontbild
   für alle Karten gilt, sind alle Vorderseiten identisch; die Blattzuordnung ist
   daher egal (keine Umkehrung der Rückseiten-Reihenfolge nötig).
+
+Quer dazu steht der **Bogenmodus** (config.generation.sheet_mode): mit
+``"a4_4up"`` liegen vier Karten auf einem A4-Bogen (quer) statt einer je A6-Seite.
+Beide Druckmodi funktionieren damit unverändert — nur trägt eine „Seite" dann
+bis zu vier Karten. Die Aufteilung selbst steht in `layout_sheet.py`.
 """
 
 from __future__ import annotations
@@ -25,9 +30,9 @@ from reportlab.pdfgen import canvas
 from qslcards.cards.builder import effective_via, regroup_card_by_remarks
 from qslcards.lookup import active_via_priority
 
-from .geometry import PAGE_H, PAGE_W
 from .layout_back import draw_back
 from .layout_front import draw_front
+from .layout_sheet import chunk_pages, draw_page, page_size
 
 if TYPE_CHECKING:
     from qslcards.cards.models import Card
@@ -71,6 +76,29 @@ def generate(
     return outputs
 
 
+def _draw_front_page(
+    c: canvas.Canvas,
+    config: AppConfig,
+    page: list[Card],
+    front_image_path: str | Path,
+) -> None:
+    """Eine Vorderseiten-Seite: ohne Bogenmodus eine A6-Seite, sonst ein A4-Bogen
+    mit bis zu vier (identischen) Frontbildern.
+
+    Schnittlinien stehen bewusst **nur** auf den Rückseiten: das Frontbild füllt
+    seine Zelle randlos, ein Strich darüber bliebe bei einem leicht schiefen
+    Schnitt am Bildrand sichtbar (die Rückseite hat dort ihren 3-mm-Weißrand).
+    """
+    draw_page(c, config, page, lambda _card: draw_front(c, str(front_image_path), config))
+    c.showPage()
+
+
+def _draw_back_page(c: canvas.Canvas, config: AppConfig, page: list[Card]) -> None:
+    """Eine Rückseiten-Seite (im Bogenmodus samt Schnitt-Hilfslinien)."""
+    draw_page(c, config, page, lambda card: draw_back(c, card, config), cut_guides=True)
+    c.showPage()
+
+
 def _generate_duplex(
     cards: list[Card],
     config: AppConfig,
@@ -78,15 +106,19 @@ def _generate_duplex(
     output_path: str | Path,
     progress_cb: ProgressCb | None,
 ) -> list[Path]:
-    """Eine PDF, pro Karte Vorder- dann Rückseite (Duplexdruck)."""
-    total = len(cards)
-    c = canvas.Canvas(str(output_path), pagesize=(PAGE_W, PAGE_H))
+    """Eine PDF, abwechselnd Vorder- und Rückseite (Duplexdruck).
 
-    for done, card in enumerate(cards, start=1):
-        draw_front(c, str(front_image_path), config)
-        c.showPage()
-        draw_back(c, card, config)
-        c.showPage()
+    Im Bogenmodus wird abwechselnd ein Bogen mit vier Vorderseiten und ein Bogen
+    mit den zugehörigen vier Rückseiten geschrieben.
+    """
+    total = len(cards)
+    done = 0
+    c = canvas.Canvas(str(output_path), pagesize=page_size(config))
+
+    for page in chunk_pages(cards, config):
+        _draw_front_page(c, config, page, front_image_path)
+        _draw_back_page(c, config, page)
+        done += len(page)
         if progress_cb is not None:
             progress_cb(done, total)
 
@@ -108,23 +140,24 @@ def _generate_separate(
     out = Path(output_path)
     front_path = out.with_name(f"{out.stem}_vorderseiten{out.suffix}")
     back_path = out.with_name(f"{out.stem}_rueckseiten{out.suffix}")
+    pages = chunk_pages(cards, config)
     total = 2 * len(cards)
+    done = 0
 
-    cf = canvas.Canvas(str(front_path), pagesize=(PAGE_W, PAGE_H))
-    for done, _card in enumerate(cards, start=1):
-        draw_front(cf, str(front_image_path), config)
-        cf.showPage()
+    cf = canvas.Canvas(str(front_path), pagesize=page_size(config))
+    for page in pages:
+        _draw_front_page(cf, config, page, front_image_path)
+        done += len(page)
         if progress_cb is not None:
             progress_cb(done, total)
     cf.save()
 
-    offset = len(cards)
-    cb = canvas.Canvas(str(back_path), pagesize=(PAGE_W, PAGE_H))
-    for done, card in enumerate(cards, start=1):
-        draw_back(cb, card, config)
-        cb.showPage()
+    cb = canvas.Canvas(str(back_path), pagesize=page_size(config))
+    for page in pages:
+        _draw_back_page(cb, config, page)
+        done += len(page)
         if progress_cb is not None:
-            progress_cb(offset + done, total)
+            progress_cb(done, total)
     cb.save()
 
     return [front_path, back_path]

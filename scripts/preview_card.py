@@ -12,12 +12,18 @@ Die Absenderdaten (Rufzeichen, Name, Adresse, Locator, DOK, CQ-Zone, ITU) kommen
 wie gewohnt komplett aus der Config, nicht aus dem Log.
 
 Aufruf:
-    python scripts/preview_card.py [AUSGABE.pdf] [FRONTBILD]
+    python scripts/preview_card.py [AUSGABE.pdf] [FRONTBILD] [--4up [RAND_MM]]
+
+Mit `--4up` wird der Bogenmodus gerendert: vier Karten auf einem A4-Bogen (quer)
+samt gestrichelter Schnittlinien auf den Rückseiten. Ein optionaler Zahlenwert
+dahinter setzt den Druckrand in mm (gilt dann für den **Bogen**).
 """
 
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
+from math import ceil
 from pathlib import Path
 
 # Projektwurzel in den Importpfad.
@@ -28,6 +34,7 @@ from qslcards.adif.models import QSO  # noqa: E402
 from qslcards.cards.builder import build_cards  # noqa: E402
 from qslcards.config import AppConfig, GenerationConfig, SenderConfig  # noqa: E402
 from qslcards.pdf.generator import generate  # noqa: E402
+from qslcards.pdf.geometry import SHEET_MODE_A4_4UP, SHEET_MODE_SINGLE  # noqa: E402
 
 DEFAULT_IMAGE = ROOT / "Bild.jpg"
 
@@ -92,25 +99,57 @@ SAMPLE_CONFIG = AppConfig(
 )
 
 
+def _parse_sheet_option(argv: list[str]) -> tuple[list[str], bool, float]:
+    """Zieht `--4up [RAND_MM]` aus den Argumenten (Rest bleibt positionsgleich)."""
+    if "--4up" not in argv:
+        return argv, False, 0.0
+    index = argv.index("--4up")
+    rest = argv[index + 1 :]
+    margin = 0.0
+    if rest and not rest[0].startswith("-"):
+        try:
+            margin = float(rest[0].replace(",", "."))
+            rest = rest[1:]
+        except ValueError:
+            pass
+    return [*argv[:index], *rest], True, margin
+
+
 def main(argv: list[str]) -> int:
+    argv, four_up, margin = _parse_sheet_option(argv)
     out = Path(argv[1]) if len(argv) > 1 else ROOT / "card_preview.pdf"
     image = Path(argv[2]) if len(argv) > 2 else DEFAULT_IMAGE
 
     if not image.exists():
         print(f"Warnung: Frontbild fehlt ({image}).")
 
-    cards = build_cards(SAMPLE_QSOS, SAMPLE_CONFIG)
+    config = replace(
+        SAMPLE_CONFIG,
+        generation=replace(
+            SAMPLE_CONFIG.generation,
+            sheet_mode=SHEET_MODE_A4_4UP if four_up else SHEET_MODE_SINGLE,
+            print_margin_enabled=margin > 0,
+            print_margin_top=margin,
+            print_margin_bottom=margin,
+            print_margin_left=margin,
+            print_margin_right=margin,
+        ),
+    )
+
+    cards = build_cards(SAMPLE_QSOS, config)
     # Remarks je Karte setzen (Demo für den dynamischen Kasten).
     for card in cards:
         if card.recipient_call in SAMPLE_REMARKS:
             card.remarks = SAMPLE_REMARKS[card.recipient_call]
 
-    generate(cards, SAMPLE_CONFIG, str(image), str(out))
-    pages = 2 * len(cards)
+    generate(cards, config, str(image), str(out))
+    per_page = 4 if four_up else 1
+    pages = 2 * ceil(len(cards) / per_page)
     rows = [len(c.rows) for c in cards]
+    sheet = f", A4-Bogen (Rand {margin:g} mm)" if four_up else ""
     print(
         f"geschrieben: {out} ({len(cards)} Karten, Zeilen/Karte={rows}, "
-        f"{pages} Seiten, Front={image.name})"
+        f"{pages} Seiten, Front={image.name}{sheet})"
     )
     return 0
 

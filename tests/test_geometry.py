@@ -337,3 +337,167 @@ def test_page_layout_caps_extreme_stretch():
     assert page.page_h <= g.PAGE_H + g.MAX_STRETCH
     # Zentriert: oben und unten bleibt gleich viel übrig.
     assert page.dy == pytest.approx((g.PAGE_H - page.page_h * page.scale) / 2)
+
+
+# --- Bogendruck: vier A6-Karten auf einem A4-Bogen ------------------------
+
+
+def _sheet(top=0.0, bottom=0.0, left=0.0, right=0.0, enabled=True) -> AppConfig:
+    config = _config(top, bottom, left, right, enabled)
+    config.generation.sheet_mode = g.SHEET_MODE_A4_4UP
+    return config
+
+
+def test_a4_holds_exactly_four_a6_cards():
+    """Die Rechnung hinter dem Feature: 2×2 A6 quer = 296 × 210 mm ≈ A4 quer."""
+    assert (g.SHEET_W, g.SHEET_H) == (g.mm(297), g.mm(210))
+    assert g.CARDS_PER_SHEET == 4
+    assert g.BLOCK_W == pytest.approx(2 * g.PAGE_W)
+    assert g.BLOCK_H == pytest.approx(2 * g.PAGE_H)
+    assert g.BLOCK_W <= g.SHEET_W
+    assert g.BLOCK_H <= g.SHEET_H
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("single", "single"),
+        ("a4_4up", "a4_4up"),
+        ("", "single"),  # alte/leere Config
+        (None, "single"),  # YAML kann alles enthalten -> nie fatal
+        ("4up", "single"),  # Tippfehler fällt auf den Default zurück
+    ],
+)
+def test_normalize_sheet_mode(value, expected):
+    assert g.normalize_sheet_mode(value) == expected
+
+
+def test_sheet_mode_is_off_by_default():
+    assert not g.is_sheet_mode(AppConfig())
+    assert g.is_sheet_mode(_sheet())
+
+
+def test_sheet_cells_tile_the_whole_sheet_in_reading_order():
+    """Das Raster hängt an nichts: vier Zellen à 148,5 × 105 mm kacheln A4 quer
+    lückenlos — ein Viertel von A4 ist das echte ISO-A6-Maß."""
+    layout = g.sheet_layout(_sheet(top=5, bottom=5, left=5, right=5))
+    assert layout.cell_w == pytest.approx(g.mm(148.5))
+    assert layout.cell_h == pytest.approx(g.mm(105))
+    # oben-links, oben-rechts, unten-links, unten-rechts (ReportLab: y von unten)
+    assert layout.cells == (
+        (0.0, layout.cell_h),
+        (layout.cell_w, layout.cell_h),
+        (0.0, 0.0),
+        (layout.cell_w, 0.0),
+    )
+    assert layout.cut_x == pytest.approx(g.SHEET_W / 2)
+    assert layout.cut_y == pytest.approx(g.SHEET_H / 2)
+
+
+def _drawn_boxes(config: AppConfig) -> list[tuple[float, float, float, float]]:
+    """Die vier bedruckten Flächen auf dem Bogen als (x0, y0, x1, y1)."""
+    layout = g.sheet_layout(config)
+    page = g.page_layout(config)
+    w, h = page.page_w * page.scale, page.page_h * page.scale
+    return [(x + page.dx, y + page.dy, x + page.dx + w, y + page.dy + h) for x, y in layout.cells]
+
+
+@pytest.mark.parametrize(
+    ("top", "bottom", "left", "right"),
+    [(5, 5, 5, 5), (3, 8, 3, 3), (0, 6, 2, 9), (15, 15, 15, 15)],
+)
+def test_sheet_gives_every_card_the_same_margin_on_all_four_sides(top, bottom, left, right):
+    """Der Kern der Korrektur: der Rand steckt in **jeder** Zelle, nicht einmal um
+    den Bogen. Nach dem Schnitt auf der Zellengrenze hat jede der vier Karten
+    denselben Rand ringsum — sonst säße ihr Inhalt außermittig."""
+    config = _sheet(top, bottom, left, right)
+    layout = g.sheet_layout(config)
+
+    for (cell_x, cell_y), (x0, y0, x1, y1) in zip(layout.cells, _drawn_boxes(config), strict=True):
+        assert x0 - cell_x == pytest.approx(g.mm(left))
+        assert cell_x + layout.cell_w - x1 == pytest.approx(g.mm(right))
+        assert y0 - cell_y == pytest.approx(g.mm(bottom))
+        assert cell_y + layout.cell_h - y1 == pytest.approx(g.mm(top))
+
+
+@pytest.mark.parametrize(
+    ("top", "bottom", "left", "right"),
+    [(5, 5, 5, 5), (3, 8, 3, 3), (0, 6, 2, 9)],
+)
+def test_sheet_gap_between_two_cards_is_twice_the_margin(top, bottom, left, right):
+    """Zwischen zwei Karten liegen zwei Ränder; die Schnittkante läuft genau
+    durch die Mitte dieses weißen Streifens. Nach außen bleibt der Rand einfach —
+    das ist der Bereich, den der Drucker ohnehin nicht bedrucken kann."""
+    config = _sheet(top, bottom, left, right)
+    tl, tr, bl, _br = _drawn_boxes(config)
+
+    assert tr[0] - tl[2] == pytest.approx(g.mm(left + right))  # senkrechte Naht
+    assert tl[1] - bl[3] == pytest.approx(g.mm(top + bottom))  # waagerechte Naht
+    # Nach außen: genau ein Rand.
+    assert tl[0] == pytest.approx(g.mm(left))
+    assert g.SHEET_H - tl[3] == pytest.approx(g.mm(top))
+
+
+@pytest.mark.parametrize(
+    ("top", "bottom", "left", "right"),
+    [(5, 5, 5, 5), (3, 8, 3, 3), (0, 6, 2, 9), (0, 0, 0, 0)],
+)
+def test_sheet_card_fills_its_cell_without_distortion(top, bottom, left, right):
+    """Die Karte wird in ihre Zelle eingepasst wie sonst in die Seite: ein Faktor
+    für beide Achsen, der Überschuss auf der freien Achse fließt ins Layout."""
+    config = _sheet(top, bottom, left, right)
+    cell_w, cell_h = g.sheet_cell_size(config)
+    page = g.page_layout(config)
+
+    assert 0 < page.scale <= 1
+    assert (page.dx, page.dy) == (pytest.approx(g.mm(left)), pytest.approx(g.mm(bottom)))
+    assert page.page_w * page.scale == pytest.approx(cell_w - g.mm(left + right))
+    assert page.page_h * page.scale == pytest.approx(cell_h - g.mm(top + bottom))
+    # Eine Achse bleibt A6, die andere trägt den Überschuss.
+    assert page.page_w >= g.PAGE_W and page.page_h >= g.PAGE_H
+    assert page.page_w == pytest.approx(g.PAGE_W) or page.page_h == pytest.approx(g.PAGE_H)
+    # Die Tabelle schließt weiterhin sauber an der rechten Kante ab.
+    assert sum(page.column_widths) == pytest.approx(page.table_width)
+
+
+def test_sheet_cut_guides_stay_inside_the_printable_area():
+    """Die Hilfslinien laufen nur so weit, wie der Drucker kann."""
+    config = _sheet(top=3, bottom=8, left=4, right=7)
+    x, y, w, h = g.sheet_layout(config).printable
+    assert (x, y) == (pytest.approx(g.mm(4)), pytest.approx(g.mm(8)))
+    assert w == pytest.approx(g.SHEET_W - g.mm(11))
+    assert h == pytest.approx(g.SHEET_H - g.mm(11))
+
+
+def test_sheet_content_box_is_the_cell_minus_the_margins():
+    """Der Rahmen einer Karte ist im Bogen ihre Zelle, abzüglich derselben
+    Ränder wie beim Einzeldruck — nur die Seitengröße wechselt."""
+    config = _sheet(top=6, bottom=6, left=6, right=6)
+    cell_w, cell_h = g.sheet_cell_size(config)
+
+    assert g.print_margins(config) == pytest.approx((g.mm(6),) * 4)
+    x, y, w, h = g.content_box(config)
+    assert (x, y) == (pytest.approx(g.mm(6)), pytest.approx(g.mm(6)))
+    assert w == pytest.approx(cell_w - g.mm(12))
+    assert h == pytest.approx(cell_h - g.mm(12))
+
+
+def test_sheet_grid_does_not_move_with_the_margin():
+    """Das 2×2-Raster hängt nicht am Druckrand: die Schnittkanten liegen immer
+    auf der Blattmitte, egal wie groß der Rand ist."""
+    for margin in (0, 5, 15):
+        layout = g.sheet_layout(_sheet(margin, margin, margin, margin))
+        assert layout.cell_w == pytest.approx(g.SHEET_W / 2)
+        assert layout.cell_h == pytest.approx(g.SHEET_H / 2)
+        assert (layout.cut_x, layout.cut_y) == (
+            pytest.approx(g.SHEET_W / 2),
+            pytest.approx(g.SHEET_H / 2),
+        )
+
+
+def test_single_mode_card_margins_are_untouched():
+    """Regressionsschutz: ohne Bogenmodus wirkt der Rand weiter auf die Karte."""
+    config = _config(top=6, bottom=6, left=6, right=6)
+    assert g.print_margins(config) != (0.0, 0.0, 0.0, 0.0)
+    assert g.page_layout(config).scale < 1
+    assert g.content_box(config)[2] == pytest.approx(g.PAGE_W - g.mm(12))

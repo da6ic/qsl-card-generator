@@ -203,6 +203,148 @@ def test_disabled_print_margin_draws_like_before(tmp_path: Path):
         assert page_a.get_contents().get_data() == page_b.get_contents().get_data()
 
 
+# --- Bogendruck: vier Karten auf einem A4-Bogen ---------------------------
+
+# ReportLab schreibt setDash als "[strich lücke] phase d" — nur die
+# Schnitt-Hilfslinien sind gestrichelt, daher taugt das als Nachweis.
+DASH_RE = re.compile(r"\[[\d. ]+\] \d+ d")
+
+
+def _sheet_config(**kwargs) -> AppConfig:
+    return AppConfig(generation=GenerationConfig(sheet_mode=g.SHEET_MODE_A4_4UP, **kwargs))
+
+
+def _content(page) -> str:
+    return page.get_contents().get_data().decode("latin-1")
+
+
+def test_sheet_mode_puts_four_cards_on_one_a4_page(tmp_path: Path):
+    out = tmp_path / "cards.pdf"
+    generate(_dummy_cards(8), _sheet_config(), str(_front_image(tmp_path)), str(out))
+
+    reader = PdfReader(str(out))
+    assert len(reader.pages) == 4  # 2 Bögen × (Vorder- + Rückseite)
+    for page in reader.pages:
+        assert float(page.mediabox.width) == pytest.approx(g.SHEET_W)
+        assert float(page.mediabox.height) == pytest.approx(g.SHEET_H)
+
+
+def test_sheet_mode_last_sheet_may_stay_partial(tmp_path: Path):
+    """5 Karten -> ein voller Bogen + ein Bogen mit einer Karte (3 Zellen leer)."""
+    out = tmp_path / "cards.pdf"
+    generate(_dummy_cards(5), _sheet_config(), str(_front_image(tmp_path)), str(out))
+    pages = PdfReader(str(out)).pages
+    assert len(pages) == 4
+    # Auch der angebrochene Bogen bekommt sein Schnittkreuz — sonst müsste man
+    # den letzten Bogen anders schneiden als alle davor.
+    assert DASH_RE.search(_content(pages[3]))
+
+
+def test_sheet_cut_guides_only_on_the_backs(tmp_path: Path):
+    """Mit dem Nutzer so entschieden: die Striche liegen auf der Rückseite (dort
+    ist an der Schnittkante Weißraum), nicht über dem randlosen Frontbild."""
+    out = tmp_path / "cards.pdf"
+    generate(_dummy_cards(4), _sheet_config(), str(_front_image(tmp_path)), str(out))
+    front, back = PdfReader(str(out)).pages[0], PdfReader(str(out)).pages[1]
+    assert not DASH_RE.search(_content(front))
+    assert DASH_RE.search(_content(back))
+
+
+def test_sheet_mode_progress_counts_cards(tmp_path: Path):
+    calls: list[tuple[int, int]] = []
+    generate(
+        _dummy_cards(6),
+        _sheet_config(),
+        str(_front_image(tmp_path)),
+        str(tmp_path / "cards.pdf"),
+        progress_cb=lambda done, total: calls.append((done, total)),
+    )
+    # Ein Aufruf je fertigem Bogen (4 + 2 Karten), gezählt wird in Karten.
+    assert calls == [(4, 6), (6, 6)]
+
+
+def test_sheet_mode_works_with_separate_print_mode(tmp_path: Path):
+    outputs = generate(
+        _dummy_cards(5),
+        _sheet_config(print_mode="separate"),
+        str(_front_image(tmp_path)),
+        str(tmp_path / "cards.pdf"),
+    )
+    front, back = outputs
+    assert len(PdfReader(str(front)).pages) == 2  # zwei Vorderseiten-Bögen
+    assert len(PdfReader(str(back)).pages) == 2  # zwei Rückseiten-Bögen
+    assert not DASH_RE.search(_content(PdfReader(str(front)).pages[0]))
+    assert DASH_RE.search(_content(PdfReader(str(back)).pages[0]))
+
+
+@pytest.mark.parametrize("margin", [5, 6, 12])
+def test_sheet_margin_is_identical_on_all_four_edges_of_every_card(tmp_path: Path, margin):
+    """Zwei Fehler, die nacheinander auffielen: erst stand horizontal mehr Rand
+    als vertikal, dann hatte jede geschnittene Karte den Rand nur auf zwei
+    Seiten. Beides prüft dieser Test am fertigen PDF."""
+    cfg = _sheet_config(
+        print_margin_enabled=True,
+        print_margin_top=margin,
+        print_margin_bottom=margin,
+        print_margin_left=margin,
+        print_margin_right=margin,
+    )
+    out = tmp_path / "cards.pdf"
+    generate(_dummy_cards(4), cfg, str(_front_image(tmp_path)), str(out))
+
+    layout = g.sheet_layout(cfg)
+    page = g.page_layout(cfg)
+    drawn_w, drawn_h = page.page_w * page.scale, page.page_h * page.scale
+    for cell_x, cell_y in layout.cells:  # jede Karte einzeln, nicht nur der Bogen
+        assert page.dx == pytest.approx(g.mm(margin))
+        assert layout.cell_w - (page.dx + drawn_w) == pytest.approx(g.mm(margin))
+        assert page.dy == pytest.approx(g.mm(margin))
+        assert layout.cell_h - (page.dy + drawn_h) == pytest.approx(g.mm(margin))
+        # … und die Karte bleibt innerhalb ihrer Zelle.
+        assert cell_x + page.dx + drawn_w <= cell_x + layout.cell_w + 1e-9
+        assert cell_y + page.dy + drawn_h <= cell_y + layout.cell_h + 1e-9
+
+    back = _content(PdfReader(str(out)).pages[1])
+    matrices = [
+        [float(v) for v in m]
+        for m in re.findall(r"([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) cm", back)
+    ]
+    # Identitäten überspringen (ReportLab schreibt eine an den Seitenanfang).
+    moves = [m for m in matrices if m != [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]]
+
+    # Zuerst wird nur auf die Zelle verschoben (erste Zelle: oben links) …
+    cell = moves[0]
+    assert cell[:4] == [1.0, 0.0, 0.0, 1.0]
+    assert cell[4] == pytest.approx(layout.cells[0][0], abs=1e-4)
+    assert cell[5] == pytest.approx(layout.cells[0][1], abs=1e-4)
+
+    # … dann rückt das gewohnte page_layout die Karte um den Rand ein.
+    card = moves[1]
+    assert card[0] == pytest.approx(page.scale, abs=1e-5)
+    assert card[0] == pytest.approx(card[3])  # ein Faktor -> keine Verzerrung
+    assert (card[1], card[2]) == (0.0, 0.0)  # keine Scherung/Drehung
+    assert card[4] == pytest.approx(g.mm(margin), abs=1e-4)
+    assert card[5] == pytest.approx(g.mm(margin), abs=1e-4)
+
+
+def test_sheet_mode_off_leaves_output_untouched(tmp_path: Path):
+    """Regressionsschutz: „single" ist byteweise die bisherige Ausgabe."""
+    img = _front_image(tmp_path)
+    plain = tmp_path / "plain.pdf"
+    single = tmp_path / "single.pdf"
+    generate(_dummy_cards(2), AppConfig(), str(img), str(plain))
+    generate(
+        _dummy_cards(2),
+        AppConfig(generation=GenerationConfig(sheet_mode="single")),
+        str(img),
+        str(single),
+    )
+    for page_a, page_b in zip(
+        PdfReader(str(plain)).pages, PdfReader(str(single)).pages, strict=True
+    ):
+        assert page_a.get_contents().get_data() == page_b.get_contents().get_data()
+
+
 def test_address_export_only_when_enabled(tmp_path: Path):
     img = _front_image(tmp_path)
     cards = _dummy_cards(2, with_address=True)
