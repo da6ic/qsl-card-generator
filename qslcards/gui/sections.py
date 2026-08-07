@@ -768,13 +768,28 @@ class PrintModeSection:
             spin.grid(row=row + 1, column=col + 1, padx=(0, GAP_COL * 2), pady=GAP_ROW, sticky="w")
             limit_entry_number(spin, PRINT_MARGIN_MAX)
 
+        self._reserve_margin_space()
         self.update_advanced_visibility()
+
+    def _reserve_margin_space(self) -> None:
+        """Hält den Platz des Randblocks dauerhaft frei.
+
+        Sonst wächst der Abschnitt beim Aufklappen und schiebt alles darunter
+        (Ausgabe, Fortschritt) nach unten — das Fenster „springt", nur weil
+        Optionen sichtbar werden. Die Höhe wird einmal am eingeblendeten Block
+        gemessen; `update_idletasks` ist nötig, weil `grid` die angeforderte
+        Größe erst im Leerlauf berechnet.
+        """
+        self.margin_frame.grid(row=1, column=0, pady=(PAD_INNER, 0), sticky="w")
+        self.frame.update_idletasks()
+        self.advanced_frame.rowconfigure(1, minsize=self.margin_frame.winfo_reqheight() + PAD_INNER)
 
     def update_advanced_visibility(self) -> None:
         """Randblock unter dem Umschalter ein-/ausblenden.
 
-        Er liegt in der rechten Spalte unter der Checkbox — die Druckmodi links
-        bleiben dabei unverändert stehen."""
+        Er liegt in der rechten Spalte unter der Checkbox; sein Platz bleibt in
+        beiden Zuständen reserviert (`_reserve_margin_space`), damit nichts
+        verrutscht."""
         if self.advanced.get():
             self.margin_frame.grid(row=1, column=0, pady=(PAD_INNER, 0), sticky="w")
         else:

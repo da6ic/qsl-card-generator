@@ -452,6 +452,25 @@ def test_print_margin_toggle_does_not_move_the_radios(app):
     assert positions() == closed
 
 
+def test_print_margin_toggle_keeps_the_section_height(app):
+    """Der Platz des Randblocks ist immer reserviert: Abschnitt 9 behält seine
+    Höhe und schiebt die Ausgabe darunter beim Auf-/Zuklappen nicht weg."""
+    section = app.printmode_section
+
+    def geometry():
+        app.update_idletasks()
+        return section.frame.winfo_reqheight(), app.output_section.frame.winfo_rooty()
+
+    closed = geometry()
+    section.advanced.set(True)
+    section.update_advanced_visibility()
+    assert geometry() == closed
+
+    section.advanced.set(False)
+    section.update_advanced_visibility()
+    assert geometry() == closed
+
+
 def test_print_margins_parsed_and_clamped(app):
     """Eingaben landen als geclampte mm-Werte in der Config: deutsches Komma,
     leeres Feld = 0, Übergroßes auf die Obergrenze."""

@@ -406,6 +406,11 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   eigenen Container pro Spalte**, beide in derselben Grid-Zeile mit `sticky="nw"`,
   ganz ohne `rowspan`. Ein Test vergleicht dafür `winfo_rootx/y` vor und nach dem
   Umschalten.
+- **Ein-/ausblendbare Blöcke halten ihren Platz frei.** Sonst wächst der Abschnitt
+  beim Aufklappen und schiebt alles darunter weg — das Fenster springt, nur weil
+  Optionen sichtbar werden. `PrintModeSection._reserve_margin_space` misst den
+  Randblock einmal (`update_idletasks`, weil `grid` die angeforderte Größe erst im
+  Leerlauf berechnet) und setzt ihn als `minsize` der Grid-Zeile.
 - **Ein Tag färbt keine ausgewählte Zeile.** In der Vorschautabelle überdecken die
   Auswahlfarben (`style.map("Treeview", ...)`) die Tag-Farben — „Drucken: Ja → Nein"
   blieb deshalb hell, bis die Auswahl woanders hinwanderte. Lösung: der Klick in

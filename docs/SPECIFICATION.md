@@ -118,6 +118,10 @@ Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
    Beide Spalten liegen in **eigenen Containern** in derselben Grid-Zeile, oben
    verankert und **ohne `rowspan`**: sonst verteilt Tk die Höhe des Randblocks
    auf die übersprungenen Zeilen und verrückt beim Aufklappen die Radiobuttons.
+   Der **Platz des Randblocks bleibt immer reserviert**
+   (`_reserve_margin_space` misst ihn einmal und setzt ihn als `minsize` der
+   Zeile): der Abschnitt behält so in beiden Zuständen seine Höhe, und das
+   Ein-/Ausblenden schiebt die Abschnitte darunter nicht weg.
    Erklärtexte unter Checkbox und Randblock gab es zwischenzeitlich; sie wurden
    vom Nutzer wieder entfernt.
 10. **Ausgabe**: Zielpfad der PDF, Button `PDF erzeugen` (Primärbutton,
