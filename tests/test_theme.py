@@ -95,6 +95,23 @@ def test_apply_switches_back_to_light(root):
     assert style.lookup("Accent.TButton", "background") == theme.LIGHT.accent
 
 
+@pytest.mark.parametrize("mode", ["light", "dark"])
+def test_required_and_invalid_styles_use_danger(root, mode):
+    """Pflichtfeld-Stern und die Markierung leerer Pflichtangaben sind rot —
+    in beiden Themen und auch, während das Feld den Fokus hat (sonst wäre die
+    Markierung genau im Feld weg, das ausgefüllt werden soll)."""
+    palette = theme.apply(root, mode)
+    style = ttk.Style(root)
+
+    assert style.lookup("Required.TLabel", "foreground") == palette.danger
+    assert style.lookup("Invalid.TEntry", "bordercolor") == palette.danger
+    assert style.lookup("Invalid.Thumb.TLabel", "bordercolor") == palette.danger
+    for state in ("focus", "hover"):
+        assert style.lookup("Invalid.TEntry", "bordercolor", [state]) == palette.danger
+    # Erbt sonst alles von Thumb.TLabel (Fläche, Rahmenbreite, Polsterung).
+    assert style.lookup("Invalid.Thumb.TLabel", "background") == palette.surface
+
+
 def test_restyle_tree_colors_classic_widgets(root):
     """Listbox/Canvas sind keine ttk-Widgets: sie werden direkt umgefärbt."""
     listbox = tk.Listbox(root)

@@ -647,5 +647,133 @@ def test_goto_section_scrolls(app, tmp_path):
     assert app.body.canvas.yview()[0] > 0.0
 
 
+def _fill_required(app):
+    """Alle Pflichtfelder des Absenders plausibel befüllen."""
+    values = {
+        "callsign": "DN5MT",
+        "name": "Axel Tüner",
+        "locator": "JN48OM",
+        "dok": "P31",
+        "waz": "14",
+        "itu": "28",
+    }
+    for field, value in values.items():
+        app.sender_section.vars[field].set(value)
+
+
+def _set_front_image(app, tmp_path):
+    image = tmp_path / "front.png"
+    image.write_bytes(b"")  # Inhalt egal: nur die Existenz wird geprüft
+    with mock.patch.object(appmod, "push_recent", side_effect=lambda items, p: items):
+        app._set_image(str(image))
+    return image
+
+
+def test_generate_blocked_while_required_fields_are_empty(app, tmp_path):
+    """Leere Pflichtfelder: ein Popup mit allen fehlenden Angaben, rote Rahmen
+    an genau diesen Feldern — und nichts wird erzeugt."""
+    _load(app, tmp_path)
+    _set_front_image(app, tmp_path)
+    _fill_required(app)
+    app.sender_section.vars["callsign"].set("")
+    app.sender_section.vars["dok"].set("")
+
+    with (
+        mock.patch.object(appmod, "messagebox") as box,
+        mock.patch.object(appmod.threading, "Thread", side_effect=AssertionError("gestartet")),
+    ):
+        app._on_generate()
+
+    box.showerror.assert_called_once()
+    message = box.showerror.call_args[0][1]
+    assert "Rufzeichen" in message and "DOK" in message
+    assert "Name" not in message  # gefüllte Pflichtfelder tauchen nicht auf
+    entries = app.sender_section.entries
+    assert str(entries["callsign"].cget("style")) == "Invalid.TEntry"
+    assert str(entries["dok"].cget("style")) == "Invalid.TEntry"
+    assert str(entries["name"].cget("style")) in ("", "TEntry")
+
+
+def test_missing_log_is_a_required_field(app, tmp_path):
+    """Ohne geladenes Logbuch: Popup nennt es zuerst, das Pfadfeld wird rot —
+    und nach dem Laden ist die Markierung wieder weg."""
+    _fill_required(app)
+    _set_front_image(app, tmp_path)
+
+    with (
+        mock.patch.object(appmod, "messagebox") as box,
+        mock.patch.object(appmod.threading, "Thread", side_effect=AssertionError("gestartet")),
+    ):
+        app._on_generate()
+
+    message = box.showerror.call_args[0][1]
+    assert "ADIF-Logbuch" in message
+    assert str(app.file_section.path_entry.cget("style")) == "Invalid.TEntry"
+
+    _load(app, tmp_path)
+    assert str(app.file_section.path_entry.cget("style")) == "TEntry"
+
+
+def test_required_legend_sits_below_the_sections(app, tmp_path):
+    """Die Fußnote gilt fürs ganze Fenster: sie liegt außerhalb des scrollbaren
+    Bereichs und unter allen Abschnitten, aber über der Statusleiste."""
+    _load(app, tmp_path)
+    app.update_idletasks()
+    star, text = app.required_legend.winfo_children()
+    assert str(star.cget("style")) == "Required.TLabel"  # gleiche Farbe wie an den Feldern
+    assert "Pflichtfeld" in text.cget("text")
+    assert app.required_legend.master is app  # nicht im Scrollbereich
+    assert app.required_legend.winfo_rooty() > app.body.outer.winfo_rooty()
+    assert app.required_legend.winfo_rooty() < app.status.frame.winfo_rooty()
+
+
+def test_required_mark_disappears_when_the_field_is_filled(app, tmp_path):
+    _load(app, tmp_path)
+    app.sender_section.mark_missing(["callsign"])
+    assert str(app.sender_section.entries["callsign"].cget("style")) == "Invalid.TEntry"
+
+    app.sender_section.vars["callsign"].set("DN5MT")
+    assert str(app.sender_section.entries["callsign"].cget("style")) == "TEntry"
+
+
+def test_missing_front_image_colors_the_preview_frame(app, tmp_path):
+    """Beim Frontbild ist der Rahmen des Vorschaufeldes die Markierung."""
+    _load(app, tmp_path)
+    _fill_required(app)
+
+    with (
+        mock.patch.object(appmod, "messagebox") as box,
+        mock.patch.object(appmod.threading, "Thread", side_effect=AssertionError("gestartet")),
+    ):
+        app._on_generate()
+
+    assert "Frontbild" in box.showerror.call_args[0][1]
+    assert str(app.image_section.thumb_label.cget("style")) == "Invalid.Thumb.TLabel"
+
+    _set_front_image(app, tmp_path)
+    assert str(app.image_section.thumb_label.cget("style")) == "Thumb.TLabel"
+
+
+def test_generate_runs_once_everything_is_filled(app, tmp_path):
+    """Gegenprobe: mit allen Pflichtangaben kommt kein Popup, die Erzeugung läuft."""
+    _load(app, tmp_path)
+    _fill_required(app)
+    _set_front_image(app, tmp_path)
+    app.output_section.output_var.set(str(tmp_path / "karten.pdf"))
+
+    with (
+        mock.patch.object(appmod, "messagebox") as box,
+        mock.patch.object(appmod.threading, "Thread", _SyncThread),
+        mock.patch.object(appmod, "generate", return_value=[tmp_path / "karten.pdf"]) as gen,
+        mock.patch.object(appmod, "open_file"),
+    ):
+        app._on_generate()
+        app.update()
+
+    gen.assert_called_once()
+    box.showerror.assert_not_called()
+    box.showwarning.assert_not_called()
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

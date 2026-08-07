@@ -49,6 +49,17 @@ RADIO_FIELDS: list[tuple[str, str]] = [
 # laufen über self.vars, das beide Gruppen enthält).
 SENDER_FIELDS: list[tuple[str, str]] = STATION_FIELDS + RADIO_FIELDS
 
+# Feld -> Beschriftung (für Meldungen, z.B. das Pflichtfeld-Popup).
+SENDER_LABELS: dict[str, str] = dict(SENDER_FIELDS)
+
+# Pflichtfelder: ohne diese Angaben ist die Karte unbrauchbar, deshalb tragen sie
+# in der Oberfläche ein `*` und blockieren leer die PDF-Erzeugung (app._on_generate).
+# Adresse (Straße/PLZ/Ort/Land) und Funk-Ausrüstung sind bewusst optional.
+REQUIRED_SENDER_FIELDS: tuple[str, ...] = ("callsign", "name", "locator", "dok", "waz", "itu")
+
+# Zeichen hinter der Beschriftung eines Pflichtfeldes.
+REQUIRED_MARK = " *"
+
 # Sentinel-Token für die Trennlinie in der Prioritätsliste (Abschnitt 4).
 # Alles oberhalb wird gedruckt (in Reihenfolge = Priorität), alles darunter nicht.
 VIA_DIVIDER = "\x00divider"
@@ -250,19 +261,49 @@ def confirm(parent: tk.Misc, title: str, message: str, ok_label: str = "OK") -> 
     return result["ok"]
 
 
+def required_section(parent: tk.Misc, caption: str) -> ttk.LabelFrame:
+    """LabelFrame eines Pflicht-Abschnitts: Titel mit rotem `*`.
+
+    Der Titel wird als eigenes Widget gesetzt (`labelwidget`), weil ein
+    LabelFrame-Titel ein einziger Text ist und sich nicht zweifarbig setzen
+    ließe — der Stern soll dieselbe Farbe haben wie in Abschnitt 3.
+    """
+    frame = ttk.LabelFrame(parent)
+    title = ttk.Frame(frame)
+    ttk.Label(title, text=caption, style="SectionTitle.TLabel").pack(side="left")
+    ttk.Label(title, text=REQUIRED_MARK, style="Required.TLabel").pack(side="left")
+    frame.configure(labelwidget=title)
+    return frame
+
+
+def required_legend(parent: tk.Misc) -> ttk.Frame:
+    """Fußnote „* Pflichtfeld" für das ganze Fenster (unter allen Abschnitten).
+
+    Der Stern trägt dieselbe Signalfarbe wie an den Feldern selbst (der Text
+    daneben bleibt Sekundärtext) — deshalb zwei Labels statt einem.
+    """
+    holder = ttk.Frame(parent)
+    ttk.Label(holder, text=REQUIRED_MARK.strip(), style="Required.TLabel").pack(side="left")
+    ttk.Label(holder, text=" Pflichtfeld", style="Muted.TLabel").pack(side="left")
+    return holder
+
+
 class FileSection:
-    """1. ADIF-Logbuch."""
+    """1. ADIF-Logbuch (Pflichtangabe).
+
+    Ohne geladenes Log gibt es nichts zu drucken; `set_missing(True)` umrandet
+    dann das Pfadfeld rot (wie die Pflichtfelder in Abschnitt 3).
+    """
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="1. ADIF-Logbuch")
+        self.frame = required_section(parent, "1. ADIF-Logbuch")
         self.path_var = tk.StringVar()
         self.count_var = tk.StringVar(value="Keine Datei geladen")
 
         self.browse_btn = ttk.Button(self.frame, text="Durchsuchen…")
         self.browse_btn.grid(row=0, column=0, pady=GAP_ROW, sticky="w")
-        ttk.Entry(self.frame, textvariable=self.path_var, width=40).grid(
-            row=0, column=1, padx=GAP_COL, pady=GAP_ROW, sticky="we"
-        )
+        self.path_entry = ttk.Entry(self.frame, textvariable=self.path_var, width=40)
+        self.path_entry.grid(row=0, column=1, padx=GAP_COL, pady=GAP_ROW, sticky="we")
         self.load_btn = ttk.Button(self.frame, text="Log laden")
         self.load_btn.grid(row=0, column=2, pady=GAP_ROW)
         ttk.Label(self.frame, textvariable=self.count_var, style="Muted.TLabel").grid(
@@ -270,13 +311,23 @@ class FileSection:
         )
         self.frame.columnconfigure(1, weight=1)
 
+    def set_missing(self, missing: bool) -> None:
+        """Markiert das fehlende Logbuch (roter Rahmen ums Pfadfeld)."""
+        self.path_entry.configure(style="Invalid.TEntry" if missing else "TEntry")
+
 
 class ImageSection:
-    """2. Frontbild. Das Vorschaufeld dehnt sich (bündig mit Abschnitt 3),
-    das Thumbnail selbst hat eine feste Maximalgröße und ist zentriert."""
+    """2. Frontbild (Pflichtangabe). Das Vorschaufeld dehnt sich (bündig mit
+    Abschnitt 3), das Thumbnail selbst hat eine feste Maximalgröße und ist
+    zentriert.
+
+    Fehlt das Bild beim Druckversuch, färbt `set_missing(True)` den Rahmen des
+    Vorschaufeldes — das ist hier die Markierung (ein Eingabefeld, das man rot
+    umranden könnte, gibt es nicht).
+    """
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="2. Frontbild")
+        self.frame = required_section(parent, "2. Frontbild")
         self.path_var = tk.StringVar()
 
         self.choose_btn = ttk.Button(self.frame, text="Bild wählen…")
@@ -293,16 +344,32 @@ class ImageSection:
         self.frame.columnconfigure(1, weight=1)
         self.frame.rowconfigure(1, weight=1)
 
+    def set_missing(self, missing: bool) -> None:
+        """Markiert das fehlende Frontbild (roter Rahmen) bzw. hebt sie auf."""
+        self.thumb_label.configure(style="Invalid.Thumb.TLabel" if missing else "Thumb.TLabel")
+
 
 class SenderSection:
-    """3. Absender (Config) inkl. globaler Markierungen (QSL/Portabel)."""
+    """3. Absender (Config) inkl. globaler Markierungen (QSL/Portabel).
+
+    Die Pflichtfelder (`REQUIRED_SENDER_FIELDS`) tragen ein rotes `*`. Bleiben sie
+    leer, blockieren sie die PDF-Erzeugung; `mark_missing` umrandet sie dann rot.
+    Die Markierung erscheint bewusst erst nach dem Druckversuch — beim ersten
+    Start wäre sonst der halbe Abschnitt rot — und verschwindet je Feld wieder,
+    sobald etwas darin steht.
+    """
 
     def __init__(self, parent: tk.Misc) -> None:
         self.frame = ttk.LabelFrame(parent, text="3. Absender")
         self.vars: dict[str, tk.StringVar] = {}
+        self.entries: dict[str, ttk.Entry] = {}
+        self._marked: set[str] = set()
 
         # Stationsdaten (Adresse + Locator/DOK/CQ/ITU).
         row = self._add_fields(STATION_FIELDS, 0)
+        # Die Fußnote „* Pflichtfeld" steht bewusst NICHT hier, sondern ganz
+        # unten im Fenster (app._build_ui): der Stern kommt auch in den
+        # Abschnitten 1 und 2 vor, die Erklärung gilt also für das ganze Fenster.
         row = self._add_separator(row, "Funk-Ausrüstung")
 
         # Funk-Ausrüstung (Empfänger/Antenne/Leistung): dynamisch auf der Karte.
@@ -329,14 +396,62 @@ class SenderSection:
         """Legt Label+Entry je Feld an (dynamisch dehnbar) und liefert die
         nächste freie Zeile zurück. Die Variablen landen in self.vars."""
         for field, label in fields:
-            ttk.Label(self.frame, text=label).grid(row=row, column=0, pady=GAP_ROW, sticky="w")
+            self._add_label(field, label).grid(row=row, column=0, pady=GAP_ROW, sticky="w")
             var = tk.StringVar()
             self.vars[field] = var
-            ttk.Entry(self.frame, textvariable=var, width=SENDER_FIELD_WIDTH).grid(
-                row=row, column=1, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="we"
-            )
+            entry = ttk.Entry(self.frame, textvariable=var, width=SENDER_FIELD_WIDTH)
+            entry.grid(row=row, column=1, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="we")
+            self.entries[field] = entry
+            if field in REQUIRED_SENDER_FIELDS:
+                # Sobald etwas im Feld steht, ist die Markierung erledigt.
+                var.trace_add("write", lambda *_a, name=field: self._clear_if_filled(name))
             row += 1
         return row
+
+    def _add_label(self, field: str, label: str) -> ttk.Widget:
+        """Beschriftung eines Feldes; Pflichtfelder bekommen einen roten `*`.
+
+        Für den zweifarbigen Text braucht es zwei Labels in einem Frame — ein
+        einzelnes Label kann nur eine Vordergrundfarbe.
+        """
+        if field not in REQUIRED_SENDER_FIELDS:
+            return ttk.Label(self.frame, text=label)
+        holder = ttk.Frame(self.frame)
+        ttk.Label(holder, text=label).pack(side="left")
+        ttk.Label(holder, text=REQUIRED_MARK, style="Required.TLabel").pack(side="left")
+        return holder
+
+    # -- Pflichtfelder (Prüfung + Markierung) ------------------------------
+    def missing_required(self) -> list[str]:
+        """Leere Pflichtfelder in Anzeigereihenfolge (Feldnamen)."""
+        return [
+            f
+            for f, _ in STATION_FIELDS
+            if f in REQUIRED_SENDER_FIELDS and not self.vars[f].get().strip()
+        ]
+
+    def mark_missing(self, fields: list[str]) -> None:
+        """Markiert genau `fields` rot und hebt alle anderen Markierungen auf."""
+        self.clear_marks()
+        for field in fields:
+            entry = self.entries.get(field)
+            if entry is not None:
+                entry.configure(style="Invalid.TEntry")
+                self._marked.add(field)
+
+    def clear_marks(self) -> None:
+        for field in list(self._marked):
+            self._unmark(field)
+
+    def _clear_if_filled(self, field: str) -> None:
+        if field in self._marked and self.vars[field].get().strip():
+            self._unmark(field)
+
+    def _unmark(self, field: str) -> None:
+        self._marked.discard(field)
+        entry = self.entries.get(field)
+        if entry is not None:
+            entry.configure(style="TEntry")
 
     def _add_separator(self, row: int, caption: str) -> int:
         """Trennlinie mit Beschriftung; gliedert den langen Absender-Block."""

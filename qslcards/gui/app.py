@@ -45,6 +45,7 @@ from .preview import PreviewTable
 from .scrolling import bind_wheel, wheel_step
 from .sections import (
     SENDER_FIELDS,
+    SENDER_LABELS,
     FileSection,
     FilterSection,
     ImageSection,
@@ -59,6 +60,7 @@ from .sections import (
     confirm,
     parse_mm,
     project_root,
+    required_legend,
     show_about_dialog,
 )
 from .textedit import install_entry_shortcuts
@@ -248,6 +250,13 @@ class App(tk.Tk):
         self.status = StatusBar(self)
         self.status.frame.pack(side="bottom", fill="x")
         ttk.Separator(self, orient="horizontal").pack(side="bottom", fill="x")
+        # Fußnote zum Stern: sie steht außerhalb des scrollbaren Bereichs, weil
+        # sie für das ganze Fenster gilt (Abschnitte 1, 2 und 3) — in Abschnitt 3
+        # sah sie aus, als beträfe sie nur den Absender.
+        self.required_legend = required_legend(self)
+        self.required_legend.pack(
+            side="bottom", anchor="w", padx=theme.PAD_SECTION, pady=(0, theme.GAP_ROW)
+        )
 
         # Gesamte Oberfläche in einen scrollbaren Container -> bei kleinem
         # Fenster ist alles per Scrollbar/Mausrad erreichbar (Export zuletzt).
@@ -633,6 +642,7 @@ class App(tk.Tk):
             messagebox.showerror("Fehler", f"Logbuch nicht lesbar:\n{exc}")
             self.status.set(f"Logbuch nicht lesbar: {exc}", "error")
             return
+        self.file_section.set_missing(False)  # Markierung eines Druckversuchs weg
         self.file_section.count_var.set(f"{len(self.qsos)} QSOs geladen")
         self.status.set_info(f"{len(self.qsos)} QSOs · {Path(path).name}")
         self._remember_recent("logs", path)
@@ -654,6 +664,7 @@ class App(tk.Tk):
     def _set_image(self, path: str) -> None:
         self.image_section.path_var.set(path)
         self._update_thumbnail(path)
+        self.image_section.set_missing(False)  # Markierung eines Druckversuchs weg
         self._remember_recent("images", path)
 
     def _update_thumbnail(self, path: str) -> None:
@@ -901,19 +912,54 @@ class App(tk.Tk):
         self._reveal_path(path if path.exists() else path.parent)
 
     # ---------------------------------------------------- PDF-Erzeugung
+    def _check_required(self) -> tuple[list[str], int]:
+        """Prüft alle Pflichtangaben und markiert die fehlenden in der Oberfläche.
+
+        Geprüft werden Logbuch (1), Frontbild (2) und die Pflichtfelder des
+        Absenders (3) — in einem Durchgang, damit der Nutzer nicht mehrmals auf
+        denselben Fehler klickt. Liefert (Beschriftungen der fehlenden Angaben,
+        Nummer des ersten betroffenen Abschnitts).
+        """
+        log = self.file_section.path_var.get().strip()
+        log_missing = not self.qsos or not log or not Path(log).exists()
+        self.file_section.set_missing(log_missing)
+
+        front = self.image_section.path_var.get().strip()
+        front_missing = not front or not Path(front).exists()
+        self.image_section.set_missing(front_missing)
+
+        missing_fields = self.sender_section.missing_required()
+        self.sender_section.mark_missing(missing_fields)
+
+        labels: list[str] = []
+        if log_missing:
+            labels.append("ADIF-Logbuch")
+        if front_missing:
+            labels.append("Frontbild")
+        labels += [SENDER_LABELS[f] for f in missing_fields]
+        first_section = 1 if log_missing else 2 if front_missing else 3
+        return labels, first_section
+
     def _on_generate(self) -> None:
         if self._lookup_running:
             messagebox.showinfo(
                 "Lookup läuft", "Bitte warten, bis die Stationen nachgeschlagen sind."
             )
             return
+        missing, first_section = self._check_required()
+        if missing:
+            listed = "\n".join(f"• {label}" for label in missing)
+            messagebox.showerror(
+                "Pflichtangaben fehlen",
+                f"Ohne diese Angaben lassen sich keine Karten drucken:\n\n{listed}",
+            )
+            self.status.set("Pflichtangaben fehlen – nichts erzeugt.", "error")
+            self._goto_section(first_section)  # zur ersten betroffenen Stelle
+            return
+        front = self.image_section.path_var.get().strip()
         cards = self.preview.included_cards()
         if not cards:
             messagebox.showwarning("Keine Karten", "Es sind keine Karten zum Erzeugen ausgewählt.")
-            return
-        front = self.image_section.path_var.get().strip()
-        if not front or not Path(front).exists():
-            messagebox.showerror("Frontbild fehlt", "Bitte ein gültiges Frontbild wählen.")
             return
         output = self.output_section.output_var.get().strip()
         if not output:

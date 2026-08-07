@@ -220,6 +220,11 @@ def _configure_styles(style: ttk.Style, pal: Palette) -> None:
     style.configure("TLabel", background=pal.bg, foreground=pal.text)
     style.configure("Muted.TLabel", foreground=pal.text_muted)
     style.configure("Heading.TLabel", foreground=pal.text, font="TkHeadingFont")
+    # Titel eines Abschnitts als eigenes Widget (LabelFrame mit `labelwidget`,
+    # siehe ImageSection) — sieht aus wie „TLabelframe.Label".
+    style.configure("SectionTitle.TLabel", foreground=pal.accent, font="TkHeadingFont")
+    # Der `*` an Pflichtfeldern (Abschnitte 2 und 3).
+    style.configure("Required.TLabel", foreground=pal.danger)
     for role, color in (
         ("Success", pal.success),
         ("Warning", pal.warning),
@@ -317,6 +322,23 @@ def _configure_styles(style: ttk.Style, pal: Palette) -> None:
         "TCombobox",
         selectbackground=[("readonly", pal.surface)],
         selectforeground=[("readonly", pal.text)],
+    )
+
+    # Leer gebliebenes Pflichtfeld (nach einem Druckversuch, siehe sections.py):
+    # roter Rahmen. Die `map` muss sein — ohne sie zieht die geerbte TEntry-Map
+    # den Rahmen bei Fokus/Hover wieder auf die Akzentfarbe, und ausgerechnet im
+    # Feld, das der Nutzer gerade ausfüllen soll, wäre die Markierung weg.
+    style.configure(
+        "Invalid.TEntry",
+        bordercolor=pal.danger,
+        lightcolor=pal.danger,
+        darkcolor=pal.danger,
+    )
+    style.map(
+        "Invalid.TEntry",
+        bordercolor=[("focus", pal.danger), ("hover", pal.danger)],
+        lightcolor=[("focus", pal.danger)],
+        darkcolor=[("focus", pal.danger)],
     )
 
     # Achtung: `clam` kennt KEIN `indicatorcolor` (das ist die Option der
@@ -441,6 +463,14 @@ def _configure_styles(style: ttk.Style, pal: Palette) -> None:
         borderwidth=1,
         anchor="center",
         padding=6,
+    )
+    # Fehlendes Frontbild: derselbe Rahmen in Rot. Der Name erbt über ttk die
+    # übrigen Optionen von `Thumb.TLabel` — nur die Rahmenfarbe wird ersetzt.
+    style.configure(
+        "Invalid.Thumb.TLabel",
+        bordercolor=pal.danger,
+        lightcolor=pal.danger,
+        darkcolor=pal.danger,
     )
 
 
