@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from qslcards.adif.parser import parse_file, parse_text
+from qslcards.logbook.adif import parse_file, parse_text
 
 SAMPLE_LOG = Path(__file__).resolve().parent.parent / "Log.adi"
 

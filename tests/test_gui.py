@@ -60,8 +60,8 @@ def app(tmp_path, monkeypatch):
     application.destroy()
 
 
-def _load(app, tmp_path, log=ADIF):
-    path = tmp_path / "log.adi"
+def _load(app, tmp_path, log=ADIF, name="log.adi"):
+    path = tmp_path / name
     path.write_text(log, encoding="utf-8")
     app.file_section.path_var.set(str(path))
     with (
@@ -95,6 +95,43 @@ def _iid_for(app, call):
         if app.preview.tree.item(iid, "values")[1] == call:
             return iid
     raise AssertionError(f"Zeile {call} nicht gefunden")
+
+
+CABRILLO = (
+    "START-OF-LOG: 3.0\n"
+    "CALLSIGN: DL0MT\n"
+    "QSO: 14000 CW 2024-01-02 1200 DL0MT 599 14 DL1AA 599 35\n"
+    "QSO:  7000 CW 2024-01-02 1230 DL0MT 599 14 DL2BB 599 35\n"
+    "END-OF-LOG:\n"
+)
+
+
+def test_loads_a_cabrillo_log(app, tmp_path):
+    """Contest-Logs kommen als Cabrillo — das Format wird am Inhalt erkannt."""
+    _load(app, tmp_path, log=CABRILLO, name="contest.cbr")
+
+    assert [q.call for q in app.qsos] == ["DL1AA", "DL2BB"]
+    assert app.file_section.count_var.get() == "2 QSOs geladen"
+    assert set(_row_map(app)) == {"DL1AA", "DL2BB"}
+
+
+def test_unreadable_format_reports_and_keeps_the_old_log(app, tmp_path):
+    """Fremdinhalt: Fehlermeldung statt „0 QSOs" — und kein Lookup-Lauf."""
+    _load(app, tmp_path)
+    before = list(app.qsos)
+
+    path = tmp_path / "einkaufsliste.txt"
+    path.write_text("Milch\nBrot\n", encoding="utf-8")
+    app.file_section.path_var.set(str(path))
+    with (
+        mock.patch.object(appmod.threading, "Thread", side_effect=AssertionError("gestartet")),
+        mock.patch.object(appmod, "messagebox") as box,
+    ):
+        app._load_log()
+
+    box.showerror.assert_called_once()
+    assert "nicht verwertbar" in box.showerror.call_args[0][1]
+    assert app.qsos == before
 
 
 def test_auto_lookup_fills_via_and_manager(app, tmp_path):
@@ -841,7 +878,7 @@ def test_missing_log_is_a_required_field(app, tmp_path):
         app._on_generate()
 
     message = box.showerror.call_args[0][1]
-    assert "ADIF-Logbuch" in message
+    assert "Logbuch" in message
     assert str(app.file_section.path_entry.cget("style")) == "Invalid.TEntry"
 
     _load(app, tmp_path)

@@ -1,6 +1,8 @@
 # config.example.yaml
 # Kopiere diese Datei nach "config.yaml" und passe die Werte an.
-# Absenderdaten stehen fest auf der Karte; QSO-Daten kommen aus dem ADIF-Log.
+# Absenderdaten stehen fest auf der Karte; QSO-Daten kommen aus dem Logbuch
+# (ADIF oder Cabrillo) — auch dann, wenn das Contest-Log ein eigenes Rufzeichen
+# im Kopf nennt.
 
 sender:
   callsign: "DN5MT"            # großes Rufzeichen oben links

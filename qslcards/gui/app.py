@@ -19,7 +19,6 @@ from PIL import Image, ImageTk
 
 from qslcards import __version__
 from qslcards import config as cfg
-from qslcards.adif.parser import parse_file
 from qslcards.cards.builder import build_cards, effective_via
 from qslcards.config import (
     AppConfig,
@@ -30,6 +29,7 @@ from qslcards.config import (
     SenderConfig,
     push_recent,
 )
+from qslcards.logbook import LogFormatError, parse_file
 from qslcards.lookup import (
     DEFAULT_CACHE_PATH,
     active_via_priority,
@@ -110,7 +110,12 @@ def reveal_in_file_manager(path: str) -> None:
 
 
 IMAGE_TYPES = [("Bilder", "*.png *.jpg *.jpeg *.webp"), ("Alle Dateien", "*.*")]
-ADIF_TYPES = [("ADIF-Logbuch", "*.adi *.adif"), ("Alle Dateien", "*.*")]
+LOG_TYPES = [
+    ("Logbuch (ADIF/Cabrillo)", "*.adi *.adif *.cbr *.log"),
+    ("ADIF", "*.adi *.adif"),
+    ("Cabrillo", "*.cbr *.log"),
+    ("Alle Dateien", "*.*"),
+]
 
 # Display <-> Code-Mappings der Dropdowns.
 QSL_MARK_TO_CODE = {"Leer lassen": "none", "PSE QSL": "pse", "TNX QSL": "tnx"}
@@ -628,9 +633,9 @@ class App(tk.Tk):
         self._write_config()
         self.status.set("Liste „zuletzt verwendet“ geleert", "ok")
 
-    # ------------------------------------------------------------- ADIF
+    # ---------------------------------------------------------- Logbuch
     def _browse_log(self) -> None:
-        path = filedialog.askopenfilename(title="ADIF-Logbuch wählen", filetypes=ADIF_TYPES)
+        path = filedialog.askopenfilename(title="Logbuch wählen", filetypes=LOG_TYPES)
         if path:
             self.file_section.path_var.set(path)
             self._load_log()  # Hot-Load: direkt nach Auswahl laden
@@ -643,14 +648,22 @@ class App(tk.Tk):
     def _load_log(self) -> None:
         path = self.file_section.path_var.get().strip()
         if not path:
-            messagebox.showwarning("Kein Pfad", "Bitte zuerst eine ADIF-Datei wählen.")
+            messagebox.showwarning("Kein Pfad", "Bitte zuerst eine Logdatei wählen.")
             return
         try:
-            self.qsos = parse_file(path)
+            qsos = parse_file(path)
         except OSError as exc:
             messagebox.showerror("Fehler", f"Logbuch nicht lesbar:\n{exc}")
             self.status.set(f"Logbuch nicht lesbar: {exc}", "error")
             return
+        except LogFormatError as exc:
+            # Getrennt von OSError: „Datei fehlt/keine Rechte" und „Inhalt passt
+            # nicht" sind für den Anwender verschiedene Probleme. Die bisher
+            # geladenen QSOs bleiben stehen, es startet kein neuer Lookup.
+            messagebox.showerror("Fehler", f"Logbuch nicht verwertbar:\n{exc}")
+            self.status.set(f"Logbuch nicht verwertbar: {exc}", "error")
+            return
+        self.qsos = qsos
         self.file_section.set_missing(False)  # Markierung eines Druckversuchs weg
         self.file_section.count_var.set(f"{len(self.qsos)} QSOs geladen")
         self.status.set_info(f"{len(self.qsos)} QSOs · {Path(path).name}")
@@ -992,7 +1005,7 @@ class App(tk.Tk):
 
         labels: list[str] = []
         if log_missing:
-            labels.append("ADIF-Logbuch")
+            labels.append("Logbuch")
         if front_missing:
             labels.append("Frontbild")
         labels += [SENDER_LABELS[f] for f in missing_fields]

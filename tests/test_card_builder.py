@@ -7,7 +7,6 @@ Lookup-Map `CALL -> LookupResult`; ohne Eintrag gilt `default_via`.
 
 from __future__ import annotations
 
-from qslcards.adif.models import QSO
 from qslcards.cards.builder import (
     build_cards,
     effective_via,
@@ -16,6 +15,7 @@ from qslcards.cards.builder import (
 )
 from qslcards.cards.models import Card, CardRow
 from qslcards.config import AppConfig, GenerationConfig
+from qslcards.logbook import QSO
 from qslcards.lookup.base import LookupResult
 from qslcards.pdf.geometry import MAX_ROWS, MAX_ROWS_PLAIN, MAX_ROWS_WITH_REMARKS
 

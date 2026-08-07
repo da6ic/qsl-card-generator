@@ -1,4 +1,4 @@
-"""QSL-Karten-Generator: ADIF-Logbuch -> QSL-Karten als PDF."""
+"""QSL-Karten-Generator: Logbuch (ADIF/Cabrillo) -> QSL-Karten als PDF."""
 
 from __future__ import annotations
 

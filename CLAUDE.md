@@ -8,15 +8,18 @@ Details stehen in `docs/SPECIFICATION.md` und `docs/CARD_LAYOUT.md`.
 
 ## 1. Ziel des Projekts
 
-Ein Desktop-Programm (Python + Tkinter), das aus einem **ADIF-Logbuch**
-automatisch **QSL-Karten** erzeugt und als **eine große PDF** ausgibt.
+Ein Desktop-Programm (Python + Tkinter), das aus einem **Logbuch** (ADIF oder
+Cabrillo) automatisch **QSL-Karten** erzeugt und als **eine große PDF** ausgibt.
 
 - Jede Karte = **2 A6-Seiten**: Vorderseite (Bild) + Rückseite (QSL-Layout).
 - Die Rückseite folgt **exakt** dem Referenz-Layout aus `docs/CARD_LAYOUT.md`
   (Vorlage: DARC-QSL-Karte, Rückseite von DN5MT).
 - Ein **einziges Frontbild** wird für **alle** Karten verwendet.
-- Absenderdaten kommen aus der **Config**, QSO-Daten aus dem **ADIF-Log**,
+- Absenderdaten kommen aus der **Config**, QSO-Daten aus dem **Log**,
   Empfänger-/Routing-Daten aus **HamQTH** (primär) bzw. **QRZ** (optional).
+- **Zwei Logformate, ein Datenmodell**: ADIF (Alltags-Logbuch) und Cabrillo
+  (Contest). Das Format wird am **Inhalt** erkannt; alles hinter `logbook/`
+  kennt den Unterschied nicht mehr.
 - Die **Versandart (Via)** steht **nicht** im Log — der Lookup liefert je Station
   die **Menge akzeptierter Zustellwege** (B=Büro inkl. Manager, D=Direkt, Q=eQSL,
   L=LOTW, siehe §5). In der GUI **priorisiert** der Nutzer diese Wege und zieht
@@ -42,7 +45,8 @@ automatisch **QSL-Karten** erzeugt und als **eine große PDF** ausgibt.
 | Config             | **PyYAML** (`config.yaml`)    | kommentierbar, gut editierbar                |
 | Tests              | **pytest**                    | Unit-Tests, v.a. Parser & Kartenlogik        |
 
-Bewusst **kein** externes ADIF-Package: eigener, getesteter Parser (Anforderung).
+Bewusst **kein** externes Parser-Package (weder ADIF noch Cabrillo): eigene,
+getestete Parser (Anforderung).
 
 ---
 
@@ -53,10 +57,11 @@ qslcards/
   __init__.py
   main.py                 # Einstiegspunkt: startet die GUI
   config.py               # Config-Dataclasses + Laden/Speichern (YAML)
-  adif/
-    __init__.py
-    parser.py             # ADIF-Tokenizer + Record-Parser
-    models.py             # QSO-Dataclass
+  logbook/
+    __init__.py           # Formaterkennung + Dispatcher (die öffentliche API)
+    models.py             # QSO-Dataclass (für BEIDE Formate)
+    adif.py               # ADIF-Tokenizer + Record-Parser
+    cabrillo.py           # Cabrillo-Parser (Contest-Logs)
   lookup/
     __init__.py
     base.py               # LookupProvider-Interface + Ergebnis-Dataclass
@@ -90,12 +95,13 @@ qslcards/
     icons/                # Tabellen-Icons + app_icon.svg und dessen Renderings
 tests/
   test_adif_parser.py     test_theme.py
-  test_card_builder.py    test_menu.py
-  test_lookup.py          test_icon_canvas.py
-  test_geometry.py        test_scrolling.py
-  test_config.py          test_textedit.py
-  test_generator.py       test_gui.py
-  test_help.py
+  test_cabrillo_parser.py test_menu.py
+  test_logbook.py         test_icon_canvas.py
+  test_card_builder.py    test_scrolling.py
+  test_lookup.py          test_textedit.py
+  test_geometry.py        test_gui.py
+  test_config.py          test_help.py
+  test_generator.py
 scripts/
   preview_card.py         # Karten-Preview als PDF (`--4up [RAND_MM]` = A4-Bogen)
   make_icon.py            # app_icon.svg -> PNG (16–1024) + .ico + .icns
@@ -113,7 +119,7 @@ docs/
 ## 4. Datenfluss (Big Picture)
 
 ```
-ADIF-Datei ──parser──> [QSO, QSO, ...]
+Logdatei ──logbook (erkennt ADIF|Cabrillo)──> [QSO, QSO, ...]
                             │
 HamQTH/QRZ (auto beim Laden, alle Stationen, gecacht)
    └─> je CALL: akzeptierte Wege {B,D,Q,L} + Manager + Adresse
@@ -172,7 +178,7 @@ Jede `Card` erzeugt genau zwei Seiten: `layout_front` + `layout_back`.
 
 ## 6. Modul-Verträge (Contracts)
 
-### `adif/models.py`
+### `logbook/models.py`
 ```python
 @dataclass
 class QSO:
@@ -193,12 +199,33 @@ class QSO:
     raw: dict[str, str]        # alle Felder roh, kleingeschrieben
 ```
 
-### `adif/parser.py`
+### `logbook/adif.py`
 - `parse_file(path) -> list[QSO]`
 - `parse_text(text) -> list[QSO]`
-- Algorithmus in `docs/SPECIFICATION.md` §ADIF-Parser. Robust gegen: fehlenden
+- Algorithmus in `docs/SPECIFICATION.md` §4.1–4.4. Robust gegen: fehlenden
   Header, gemischte Groß/Kleinschreibung, Typ-Suffixe (`<FREQ:5:N>`), `<EOH>`,
   `<EOR>`, Zeilenumbrüche innerhalb von Werten.
+
+### `logbook/cabrillo.py`
+- gleiche API (`parse_file`/`parse_text`), Algorithmus in §4.5.
+- Zerlegt die `QSO:`-Zeile **tokenweise** (die Spaltenpositionen der Cabrillo-
+  Spezifikation sind ausdrücklich unverbindlich): Datum als Anker,
+  Transmitter-ID nur bei ungerader Feldzahl abtrennen, Trennstelle per Score,
+  Rapport streng validiert (`[1-5][1-9][1-9]?` — so fallen Seriennummern wie
+  `001`/`101` durch). Kein Rapport im Log → Feld bleibt leer, **nie** raten.
+- Normalisiert nach `QSO`: Datum `yyyy-mm-dd`→`YYYYMMDD`, Frequenz (kHz bzw.
+  Bandbezeichner)→MHz-String, Band aus der Frequenz, Modus `PH`→`SSB`/`RY`→
+  `RTTY`/`DG`→`DIGI`. Ohne das rechnen `builder._split_date`/`_format_freq` falsch.
+- `CALLSIGN:`/`GRID-LOCATOR:` aus dem Kopf sind **Absender**daten: nur intern
+  zum Zerlegen bzw. informativ in `raw` — nie in `qso.gridsquare` (§5.3).
+
+### `logbook/__init__.py`
+- `detect_format(text) -> "adif" | "cabrillo" | None` — am **Inhalt**, nicht an
+  der Dateiendung (`.log`/`.txt` sind mehrdeutig).
+- `parse_file(path)`/`parse_text(text)` — erkennt und delegiert.
+- `LogFormatError` — unbekanntes Format **oder** kein einziges QSO. Die
+  Format-Parser werfen **nie**; nur der Dispatcher weiß, dass ein Anwender eine
+  Datei ausgewählt hat, und nur dort ist „leer" ein Fehler (§4.6).
 
 ### `lookup/base.py`
 ```python
@@ -296,8 +323,10 @@ def active_via_priority(priority, cut) -> list[str]: ...
 Baue in dieser Reihenfolge, jeweils mit Tests, bevor es weitergeht:
 
 1. **`config.py` + `config.example.yaml`** — Datenmodell steht damit fest.
-2. **`adif/parser.py` + `adif/models.py`** — mit `tests/test_adif_parser.py`
-   (Beispiel-ADIF in Test einbetten; Kantenfälle abdecken).
+2. **`logbook/`** — `models.py`, dann `adif.py`, `cabrillo.py` und die
+   Formaterkennung im `__init__.py`; mit `tests/test_adif_parser.py`,
+   `test_cabrillo_parser.py`, `test_logbook.py` (Beispiel-Logs in den Tests
+   einbetten; Kantenfälle abdecken).
 3. **`cards/builder.py`** — Filter + Gruppierung, `tests/test_card_builder.py`.
 4. **`pdf/geometry.py`** — Seitenmaße + Layout-Konstanten (Startwerte aus
    `CARD_LAYOUT.md`).
@@ -314,7 +343,9 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
 
 ## 9. Definition of Done (MVP)
 
-- [x] ADIF-Datei wählbar, Parser liefert korrekte QSO-Liste (Tests grün).
+- [x] Logdatei wählbar (**ADIF oder Cabrillo**, am Inhalt erkannt), Parser
+      liefert korrekte QSO-Liste (Tests grün). Unbrauchbare Datei → Meldung
+      statt „0 QSOs".
 - [x] Frontbild wählbar + Vorschau.
 - [x] Absender-Config editierbar, wird gespeichert/geladen.
 - [x] Zustellwege priorisierbar (Liste B/D/Q/L + Trennlinie) und Modus (pro QSO /
@@ -348,7 +379,10 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
 
 ## 10. Nicht raten — nachschlagen
 
-- ADIF-Feldnamen/Enums: `docs/SPECIFICATION.md` §ADIF-Felder.
+- ADIF-Feldnamen/Enums: `docs/SPECIFICATION.md` §4.3.
+- Cabrillo-Zeilenformat, Modus-Codes, Bandbezeichner: `docs/SPECIFICATION.md`
+  §4.5. Vor Änderungen gegen die WWROF-Spezifikation gegenprüfen — vor allem die
+  Notiz, dass die Spaltenpositionen **nicht** verbindlich sind.
 - Exakte Layout-Koordinaten: `docs/CARD_LAYOUT.md`.
 - API-Endpunkte/Session-Flow: `docs/SPECIFICATION.md` §Lookups. Vor Implementierung
   gegen die **aktuelle** HamQTH-/QRZ-Doku gegenprüfen (APIs können sich ändern).
@@ -517,7 +551,7 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   Prioritätsliste (4) und den Zugangsdaten (6) sowie die Klammern
   „(optional)"/„(für alle Karten)" in Abschnitt 3 wurden vom Nutzer verworfen —
   neue Erklärtexte nur auf ausdrücklichen Wunsch.
-- **GUI-Abschnitte**: 1 ADIF, 2 Frontbild, 3 Absender (inkl. Funk-Ausrüstung +
+- **GUI-Abschnitte**: 1 Logbuch (ADIF/Cabrillo), 2 Frontbild, 3 Absender (inkl. Funk-Ausrüstung +
   globale Markierungen QSL/Portabel/Bestätigung), 4 Zustellwege (priorisierbare
   Liste + Trennlinie), 5 Kartenmodus, 6 Lookups, **7 Bemerkungen**, 8 Vorschau,
   9 Druckmodus (inkl. Bogendruck + Druckrand), 10 Ausgabe.
@@ -591,6 +625,25 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
 - **Keine Entwicklerdokumente im Hilfe-Menü.** README/Spezifikation/Karten-Layout
   standen dort einmal und wurden vom Nutzer ausdrücklich entfernt: das Menü
   „Hilfe" gehört dem Anwender, dafür gibt es das Handbuch. Nicht zurückholen.
+- **Cabrillo-Import** (alle vier Punkte vorab mit dem Nutzer abgestimmt):
+  * **Paket `logbook/` statt `adif/`** — ein Zuhause für `QSO`. Ein
+    Cabrillo-Parser, der sein Modell aus dem *ADIF*-Paket holt, wäre ein
+    schiefer Vertrag. Kein Kompatibilitäts-Shim: zwei Importwege wären zwei
+    Wahrheiten. Der Dispatcher liegt im `__init__.py` — dieselbe Form wie
+    `lookup/__init__.py` (Teile in Modulen, Fassade im Paket-Kopf).
+  * **Beschriftung „Logbuch (ADIF/Cabrillo)"** in Abschnitt 1, im Sprungmenü und
+    im Handbuch; der Menüeintrag heißt kurz „Logbuch öffnen…" (die Formatliste
+    gehört in den Dateidialog, nicht in einen Verb-Eintrag).
+  * **`X-QSO:` wird mitimportiert**, nicht übersprungen — vom Nutzer so
+    entschieden: das QSO hat stattgefunden, gestrichen wird meist wegen eines
+    Regelverstoßes auf der *eigenen* Seite, die Gegenstation bekommt ihre Karte.
+    Markiert in `raw["cabrillo_x_qso"]`; abwählbar über die Spalte „Drucken".
+  * **Modus-Kurzcodes werden übersetzt** (PH→SSB, RY→RTTY, DG→DIGI); der Rohcode
+    bleibt in `raw["cabrillo_mode"]`. Auf der Karte soll „SSB" stehen, nicht „PH".
+- **Leeres/unlesbares Logbuch ist ein Fehler, keine Antwort.** Bis dahin zeigte
+  ein leeres ADIF „0 QSOs geladen"; jetzt kommt für beide Formate eine Meldung
+  (`LogFormatError`, getrennt von `OSError`) und die bisher geladenen QSOs
+  bleiben stehen. `SPECIFICATION.md` §8 forderte das ohnehin schon.
 
 **Realität der Testdaten (`Log.adi`)**
 - Enthält **kein** `QSL_SENT_VIA` (und keine Via-Info) — das ist der **Normalfall**:
@@ -599,6 +652,12 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   je Station die akzeptierten Wege {B,D,Q,L}. Jede Station kommt nur 1× vor.
 - FT8-QSOs haben dB-Rapporte (z. B. `-07`), die **bewusst** nicht sinnvoll ins
   R/S/T-Raster passen (so vom Nutzer akzeptiert).
+- Für Cabrillo gibt es **kein** Beispiel-Log im Repo: die Testfälle stehen inline
+  in `tests/test_cabrillo_parser.py`, je einer pro Contest-Template. Zum
+  Ausprobieren ein gemischtes Log im Scratchpad anlegen, nicht im Projekt-Root.
+- **Ein Contest-Log ist groß** (500–5000 QSOs) — entsprechend viele Lookups beim
+  Laden und potenziell tausende Karten. Ob Vorschautabelle und `generate` in der
+  Größenordnung angenehm bleiben, ist **noch nicht gemessen**.
 
 **Workflow-Konventionen**
 - Branch **`build/mvp`**. **Nicht selbst committen** — erst nach Review; committen,

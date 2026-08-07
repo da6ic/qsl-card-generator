@@ -77,7 +77,7 @@ class MenuActions:
 
 # Abschnitte für „Ansicht > Gehe zu" (Nummer, Titel) — Reihenfolge wie im Fenster.
 SECTIONS: list[tuple[int, str]] = [
-    (1, "ADIF-Logbuch"),
+    (1, "Logbuch (ADIF/Cabrillo)"),
     (2, "Frontbild"),
     (3, "Absender"),
     (4, "Zustellwege"),
@@ -144,7 +144,7 @@ class MenuBar:
 
     def _build_file_menu(self) -> None:
         menu = tk.Menu(self.menubar, tearoff=0)
-        self._command(menu, "ADIF-Logbuch öffnen…", self.actions.open_log, key="o")
+        self._command(menu, "Logbuch öffnen…", self.actions.open_log, key="o")
         self.recent_logs_menu = tk.Menu(menu, tearoff=0)
         menu.add_cascade(label="Zuletzt verwendete Logs", menu=self.recent_logs_menu)
         menu.add_separator()

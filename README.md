@@ -1,11 +1,13 @@
 # QSL-Karten-Generator
 
-Erzeugt aus einem ADIF-Logbuch eine PDF mit QSL-Karten. Jede Karte besteht aus
+Erzeugt aus einem Logbuch eine PDF mit QSL-Karten. Jede Karte besteht aus
 zwei A6-Seiten: einer Bild-Vorderseite (ein Bild für alle Karten) und einer
 Rückseite im DARC-QSL-Layout.
 
 ## Features
-- Eigener ADIF-Parser (kein Fremd-Package).
+- **Zwei Logformate**: ADIF (`.adi`, `.adif`) aus dem Log-Programm und
+  **Cabrillo** (`.cbr`, `.log`) aus dem Contest. Das Format wird am Inhalt
+  erkannt, nicht an der Endung. Eigene Parser, kein Fremd-Package.
 - Ein Frontbild (png/jpg/…) für alle Karten.
 - Rückseite exakt nach Referenz-Layout (`docs/CARD_LAYOUT.md`).
 - Absenderdaten aus `config.yaml`.
@@ -48,7 +50,7 @@ python -m qslcards.main              # startet die GUI
 ## Ablauf in der GUI
 1. (Einmalig) HamQTH-/QRZ-Konto in der Config eintragen — sonst kann die App die
    Versandart nicht nachschlagen (alle Karten fallen auf `default_via`).
-2. ADIF-Logbuch wählen und laden — der Lookup startet automatisch im Hintergrund
+2. Logbuch wählen und laden — der Lookup startet automatisch im Hintergrund
    und füllt Via/Manager/Adresse; „PDF erzeugen" ist gesperrt, bis er fertig ist.
 3. Frontbild wählen, Absenderdaten prüfen (läuft parallel zum Lookup).
 4. Zustellwege priorisieren (Liste + Trennlinie) und Kartenmodus wählen.
@@ -62,7 +64,7 @@ nennt ein Hinweis beim Erzeugen alles Fehlende auf einmal und markiert die
 betroffenen Felder.
 
 Logbuch und Frontbild lassen sich auch über die **Menüleiste** öffnen
-(`Datei ▸ ADIF-Logbuch öffnen…` / `Frontbild wählen…`, samt „Zuletzt
+(`Datei ▸ Logbuch öffnen…` / `Frontbild wählen…`, samt „Zuletzt
 verwendet"-Listen).
 
 > Der Bereich unten rechts auf der Rückseite (in der Vorlage das Logo) bleibt frei.
@@ -85,7 +87,8 @@ Für die **Implementierung**:
   eingeschränkte Daten (im Wesentlichen den Manager); Lookup-Fehler brechen die
   Erzeugung nie ab — betroffene Stationen fallen dann auf `default_via`.
 - Der Signalrapport auf der Karte ist `RST_SENT` (wie wir die Gegenstation gehört
-  haben).
+  haben). In einem Contest-Log fehlt er oft ganz — viele Contests tauschen statt
+  eines Rapports einen Locator oder eine Sektion aus; die Spalte bleibt dann leer.
 - Das Programm-Icon wird aus `qslcards/assets/icons/app_icon.svg` erzeugt. Nach
   einer Änderung am SVG die PNG/ICO/ICNS-Dateien neu rendern:
   `python scripts/make_icon.py`.

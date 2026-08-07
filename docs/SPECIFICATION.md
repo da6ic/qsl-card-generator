@@ -6,12 +6,13 @@ Ausführliche Spezifikation. Ergänzt `CLAUDE.md`. Layout separat in `CARD_LAYOU
 
 ## 1. Anwendungsfall
 
-Ein Funkamateur (Absender, z.B. DN5MT) hat ein Logbuch im ADIF-Format. Er will
+Ein Funkamateur (Absender, z.B. DN5MT) hat ein Logbuch — im **ADIF**-Format aus
+dem Log-Programm oder im **Cabrillo**-Format aus einem Contest. Er will
 QSL-Karten für bestätigte QSOs drucken. Das Programm erzeugt eine PDF, in der
 jede Karte aus zwei A6-Seiten besteht (Bild vorne, Daten hinten) — wahlweise
-auch zu viert auf einem A4-Bogen. Vor der Erzeugung wählt er ADIF, Frontbild,
-Absenderdaten, die Priorität der Zustellwege (inkl. Trennlinie), Kartenmodus und
-Druckmodus.
+auch zu viert auf einem A4-Bogen. Vor der Erzeugung wählt er das Logbuch,
+Frontbild, Absenderdaten, die Priorität der Zustellwege (inkl. Trennlinie),
+Kartenmodus und Druckmodus.
 
 ---
 
@@ -22,16 +23,18 @@ Abschnitten 1–10 und einer **Statusleiste** am Fuß (§2.3). Farben und Abstä
 kommen ausschließlich aus `gui/theme.py` (§2.2) — kein Widget setzt selbst eine
 Farbe, so wie kein Zeichencode eine Layoutzahl setzt (`pdf/geometry.py`).
 
-**Pflichtangaben** (§2.4) tragen einen roten `*`: ADIF-Logbuch (1), Frontbild (2)
+**Pflichtangaben** (§2.4) tragen einen roten `*`: Logbuch (1), Frontbild (2)
 und im Absender (3) Rufzeichen, Name, Locator, DOK, CQ-Zone, ITU. Fehlt davon
 etwas, blockiert „PDF erzeugen" mit **einem** Popup und markiert die Stellen.
 
 Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
 
-1. **ADIF-Logbuch** (Pflicht, `*` im Titel): `Durchsuchen…`-Button, Pfadanzeige,
-   Button `Log laden`. Nach der Auswahl wird das Log **automatisch geladen**
-   (Hot-Load); der Button dient als manueller Reload. Nach dem Laden: Anzahl
-   gelesener QSOs. Ohne geladenes Log wird das Pfadfeld markiert (§2.4).
+1. **Logbuch (ADIF/Cabrillo)** (Pflicht, `*` im Titel): `Durchsuchen…`-Button,
+   Pfadanzeige, Button `Log laden`. Nach der Auswahl wird das Log **automatisch
+   geladen** (Hot-Load); der Button dient als manueller Reload. Das Format wird
+   am Inhalt erkannt (§4.6), die Endung ist nur ein Filter im Dateidialog. Nach
+   dem Laden: Anzahl gelesener QSOs. Ohne geladenes Log wird das Pfadfeld
+   markiert (§2.4).
 2. **Frontbild** (Pflicht, `*` im Titel): `Bild wählen…` (png/jpg/jpeg/webp),
    kleine Vorschau (Thumbnail). Fehlt das Bild, ist der **Rahmen des
    Vorschaufeldes** die Markierung — ein Eingabefeld gibt es hier nicht.
@@ -144,7 +147,7 @@ Geschäftslogik, verdrahtet wird in `app.py` (wie bei `sections.py`).
 
 | Menü | Einträge |
 |------|----------|
-| **Datei** | ADIF-Logbuch öffnen… (⌘/Strg+O), Zuletzt verwendete Logs ▸, Frontbild wählen… (+B), Zuletzt verwendete Bilder ▸, Ausgabeziel wählen… (+⇧S), PDF erzeugen (+P) |
+| **Datei** | Logbuch öffnen… (⌘/Strg+O), Zuletzt verwendete Logs ▸, Frontbild wählen… (+B), Zuletzt verwendete Bilder ▸, Ausgabeziel wählen… (+⇧S), PDF erzeugen (+P) |
 | **Bearbeiten** | Ausschneiden/Kopieren/Einfügen/Alles auswählen — als virtuelle Events ans fokussierte Widget |
 | **Aktionen** | Log neu laden (+R), Lookups neu abrufen (+⇧R), Lookup-Cache leeren… |
 | **Ansicht** | Farbthema ▸ System/Hell/Dunkel, Gehe zu Abschnitt ▸ 1–10 |
@@ -217,7 +220,7 @@ auf Retina-Displays sichtbar hochskaliert.
 ### 2.4 Pflichtangaben
 
 Ohne diese Angaben ist eine Karte unbrauchbar, deshalb blockieren sie die
-Erzeugung: **ADIF-Logbuch** (1), **Frontbild** (2) sowie im **Absender** (3)
+Erzeugung: **Logbuch** (1), **Frontbild** (2) sowie im **Absender** (3)
 `Rufzeichen`, `Name`, `Locator`, `DOK`, `CQ-Zone`, `ITU`
 (`sections.REQUIRED_SENDER_FIELDS`). Adresse (Straße/PLZ/Ort/Land) und
 Funk-Ausrüstung sind bewusst optional.
@@ -381,9 +384,25 @@ worden sein. `push_recent(entries, path)` setzt einen Pfad duplikatfrei nach vor
 
 ---
 
-## 4. ADIF-Parser (`adif/parser.py`)
+## 4. Logbuch-Parser (`logbook/`)
 
-### 4.1 Formatregeln
+Zwei Formate, ein Datenmodell: ADIF aus dem Alltags-Logbuch (§4.1–4.4) und
+**Cabrillo** aus dem Contest (§4.5). Beide liefern `list[QSO]`
+(`logbook/models.py`); alles danach — Lookup, Builder, Karten, PDF — kennt den
+Unterschied nicht mehr. Welches Format vorliegt, entscheidet der Dispatcher am
+**Inhalt** (§4.6).
+
+Für beide gilt bewusst: **kein** externes Package, eigener getesteter Parser.
+
+```
+logbook/
+  __init__.py   # Formaterkennung + Dispatcher (die öffentliche API)
+  models.py     # QSO
+  adif.py       # §4.1–4.4
+  cabrillo.py   # §4.5
+```
+
+### 4.1 ADIF: Formatregeln
 - ADIF besteht aus **Feld-Specifiern** `<NAME:LÄNGE>WERT` oder
   `<NAME:LÄNGE:TYP>WERT`. `LÄNGE` = Byte-Länge des Werts.
 - Feldnamen sind **case-insensitive** → intern immer `lower()`.
@@ -394,7 +413,7 @@ worden sein. `push_recent(entries, path)` setzt einen Pfad duplikatfrei nach vor
 - Text außerhalb von `<...>`-Tags nach `<EOH>` bis zum ersten `<` gehört nicht
   zum Wert und wird verworfen.
 
-### 4.2 Algorithmus (Tokenizer)
+### 4.2 ADIF: Algorithmus (Tokenizer)
 1. Optional: falls `<EOH>` (case-insensitive) vorkommt, ab dort weiterarbeiten.
 2. Cursor durch den String. An jedem `<`:
    - bis `>` lesen → Tag-Inhalt.
@@ -416,7 +435,7 @@ worden sein. `push_recent(entries, path)` setzt einen Pfad duplikatfrei nach vor
 3. Am Ende: falls Record nicht leer, ebenfalls übernehmen (toleranter Umgang mit
    fehlendem letzten `<EOR>`).
 
-### 4.3 Mapping Record → `QSO`
+### 4.3 ADIF: Mapping Record → `QSO`
 | ADIF-Feld        | QSO-Attribut     | Hinweis                                    |
 |------------------|------------------|--------------------------------------------|
 | `call`           | `call`           | Pflicht; Record ohne `call` überspringen   |
@@ -439,7 +458,7 @@ Die Felder `qsl_sent_via`/`qsl_via` werden weiterhin geparst (Rohdaten), steuern
 aber **nichts** mehr: Versandart **und** Manager werden je Station per Lookup
 bestimmt (§6). Das Testlog enthält diese Felder ohnehin nicht.
 
-### 4.4 Testfälle (mind.)
+### 4.4 ADIF: Testfälle (mind.)
 - Header vorhanden / fehlt.
 - Groß-/Kleinschreibung gemischt (`<Call:5>`, `<CALL:5>`).
 - Typ-Suffix (`<freq:6:N>14.074`).
@@ -447,6 +466,134 @@ bestimmt (§6). Das Testlog enthält diese Felder ohnehin nicht.
 - Fehlendes letztes `<EOR>`.
 - Record ohne `call` → übersprungen.
 - Mehrere QSOs mit demselben Call (für Gruppierung).
+
+### 4.5 Cabrillo (`logbook/cabrillo.py`)
+
+Contest-Logs: die Datei, die man beim Veranstalter abgibt. Zeilenorientiert,
+Version 3.0 (WWROF).
+
+#### 4.5.1 Formatregeln
+- Kopfzeilen `TAG: wert`, erste Zeile `START-OF-LOG: 3.0`, letzte `END-OF-LOG:`.
+  Die **Reihenfolge ist beliebig** — `CALLSIGN:` darf hinter den QSO-Zeilen
+  stehen. Mehrfach erlaubt: `ADDRESS`, `CLUB`, `OPERATORS`, `SOAPBOX`.
+- QSO-Zeilen:
+
+  ```
+  QSO: freq  mo date       time call          rst exch   call          rst exch   t
+  QSO:  3799 PH 2000-11-26 0711 N6TW          59  03     JT1Z          59  23     0
+  ```
+
+- **Die Spaltenpositionen sind nicht verbindlich.** Die Spezifikation zeigt sie
+  zwar, erklärt in den Notes aber ausdrücklich, dass jedes Leerzeichen und jeder
+  Tabulator als Trenner gilt. Lange Rufzeichen (`DL0MT/P`) sprengen die Felder
+  ohnehin → **tokenweise** zerlegen, nie nach Spalten.
+- Datum `yyyy-mm-dd`, Zeit `nnnn` (UTC), Rufzeichen nur `A-Z`, `0-9`, `/`.
+- `t` = Transmitter-ID, ein Zeichen `0`/`1`, nur bei Multi-TX-Kategorien.
+- `X-QSO:` sind vom Contest gestrichene Verbindungen. Sie werden **mit**
+  importiert (das QSO hat stattgefunden, die Gegenstation bekommt ihre Karte;
+  gestrichen wird meist wegen eines Regelverstoßes auf der eigenen Seite) und in
+  `raw["cabrillo_x_qso"]` markiert. Mit dem Nutzer so entschieden.
+- **`CALLSIGN`, `GRID-LOCATOR`, `NAME`, `ADDRESS*` sind Absenderdaten.** Sie
+  kommen laut §5.3 immer aus der Config. `CALLSIGN` wird ausschließlich intern
+  zur Zeilenzerlegung benutzt; beide landen nur informativ in `raw`
+  (`station_callsign`/`my_gridsquare`). `GRID-LOCATOR` darf **niemals** in
+  `qso.gridsquare` — das ist der Locator der *Gegen*station.
+
+#### 4.5.2 Algorithmus (zwei Durchläufe)
+1. Kopfzeilen sammeln (eigener Durchlauf, weil die Reihenfolge beliebig ist).
+2. Je `QSO:`/`X-QSO:`-Zeile zerlegen und normalisieren.
+
+Die Zahl der Austauschfelder hängt am Contest (2 bei VHF-Grid-Contests, 5 bei
+ARRL-SS) und ein Rapport fehlt in vielen Contests ganz. Über alle geprüften
+Templates gelten aber drei Invarianten: **beide Seiten haben gleich viele
+Felder**, das **erste Feld je Seite ist das Rufzeichen**, und ein Rapport steht —
+falls vorhanden — **direkt dahinter**. Darauf baut die Zerlegung:
+
+1. **Das Datum ist der Anker**, nicht ein fester Index: davor stehen genau
+   Frequenz und Modus. Damit ist die Zerlegung immun gegen Tabs, mehrfache
+   Leerzeichen und führende Ausrichtung.
+2. **Transmitter-ID nur abtrennen, wenn die Feldzahl dadurch gerade wird.** Sonst
+   verschwände bei einem Contest mit Seriennummern die letzte Nummer — 9A-CW
+   schreibt `… 599 001 9A2UE 599 101`, und `101` ist keine Transmitter-ID.
+3. **Trennstelle per Score**, nicht blind die Mitte: Symmetrie (+4), rechts
+   beginnt ein Rufzeichen-Muster und *kein* Locator (+3), links steht das eigene
+   Rufzeichen (+1), die Austauschfelder beider Seiten passen paarweise in der
+   Form zusammen (0–2). Im Normalfall gewinnt ohnehin die Mitte; das Scoring
+   rettet zusätzlich asymmetrische Exoten, statt die Zeile zu verwerfen.
+   Das eigene Rufzeichen ist bewusst nur ein *Signal*, keine Bedingung —
+   Portabel-Zusätze und Multi-Op-Logs machen einen harten Vergleich unbrauchbar.
+4. **Rapport rein positionell** (`felder[1]`), validiert gegen `[1-5][1-9][1-9]?`
+   plus die CW-Kurzform `5NN`. Genau diese Strenge ist der Trick: Seriennummern
+   wie `001` (R=0) und `101` (S=0) fallen automatisch durch, ebenso `JEFF`,
+   `FN12fr` oder `3`. **Fehlt der Rapport, bleibt er leer** — ein erfundenes „59"
+   wäre eine falsche Bestätigung auf einer QSL-Karte.
+
+Der Locator-Ausschluss in Schritt 3 ist nötig, weil ein sechsstelliger Locator
+wie `FN12FR` das Rufzeichen-Muster erfüllt (Präfix `FN1`, Ziffer `2`, Suffix `FR`).
+
+#### 4.5.3 Normalisierung nach `QSO`
+`cards/builder.py` diktiert die Formate (`_split_date` schneidet Positionen,
+`_format_freq` macht `float(...)`) — also normalisieren, nicht durchreichen:
+
+| Cabrillo | QSO | Regel |
+|----------|-----|-------|
+| `2000-11-26` | `qso_date` | → `"20001126"` |
+| `0711` | `time_on` | → `"0711"` |
+| Frequenzfeld | `freq` | MHz-String, siehe unten |
+| (aus `freq`) | `band` | über `BAND_EDGES`; außerhalb aller Bänder → leer |
+| `CW/PH/FM/RY/DG` | `mode` | `MODE_MAP`: PH→SSB, RY→RTTY, DG→DIGI; Unbekanntes durchgereicht |
+| `felder[1]` je Seite | `rst_sent`/`rst_rcvd` | nur bei gültigem Rapportmuster |
+| Empfangs-Austausch | `gridsquare` | nur wenn er **genau einen** Locator enthält |
+| — | `qsl_sent_via`, `qsl_via`, `name`, `qth`, `country` | immer leer: Cabrillo kennt keine Versandart (§6) |
+
+Die Frequenz in drei Regeln, **in dieser Reihenfolge**:
+1. **Bandbezeichner-Tabelle zuerst** (`1.2G`→1240, `2.3G`→2300, `10G`→10000, dazu
+   die real vorkommenden Kurzformen ohne `G` — das ARRL-UHF-Template schreibt
+   selbst `QSO: 1.2 PH …`). `2.3` ist 2,3 GHz und keine 2,3-MHz-Frequenz.
+2. **Zahl ≥ 1000 → kHz** (`3799`→`"3.799"`, `14000`→`"14"`). Die Schwelle ist
+   sauber: die niedrigste kHz-Angabe auf Kurzwelle ist 1800, der höchste
+   MHz-Bandbezeichner 902.
+3. **Sonst leer** — `LIGHT` hat keine Frequenz. Nichts raten; das Rohtoken bleibt
+   in `raw["cabrillo_freq"]`.
+
+`raw` trägt ADIF-Feldnamen, wo es sie gibt, plus `station_callsign`,
+`my_gridsquare`, `operator`, `contest_id` und die `cabrillo_*`-Rohwerte
+(`freq`, `mode`, `exch_sent`, `exch_rcvd`, `transmitter`, `x_qso`, `line`).
+
+**Bewusst verworfen:** den Austausch auf `name`/`qth` zu mappen (NAQP schickt
+`BOB CA`). Das erfordert Contest-Wissen und produziert bei jedem anderen Contest
+Müll — bei ARRL-SS würde `A` zum Namen. Name und QTH liefert der Lookup.
+
+#### 4.5.4 Testfälle (mind.)
+- Kopfdaten landen **nicht** im QSO (`CALLSIGN`/`GRID-LOCATOR`/`NAME`/`ADDRESS`
+  nur in `raw`) — der wichtigste Test des Moduls.
+- `CALLSIGN:` hinter den QSO-Zeilen; Datei ganz ohne Kopf; mehrfache Tags.
+- Je ein Beispiel aus den Contest-Templates: CQ-WW (3 Felder mit Rapport),
+  Transmitter-ID, 9A-CW (`101` bleibt Seriennummer), NAQP (kein Rapport, mit
+  `t`), EU-SPRINT (`001` ist kein Rapport), ARRL-SS (5 Felder), VHF-Grid
+  (Locator der Gegenstation), WW-Digi, RSGB-IOTA, Portabel-Zusatz in der Zeile,
+  Tabs statt Leerzeichen, sechsstelliger Locator.
+- Normalisierung: Datum/Zeit, Frequenztabelle, Bandableitung, Modus-Mapping.
+- **Integrationstest gegen den Builder**: aus einem Cabrillo-QSO wird eine
+  korrekte Kartenzeile (Datum gesplittet, `freq_mhz` gerechnet).
+- Robustheit: `X-QSO:` importiert und markiert; kaputte Zeile übersprungen, die
+  folgende gültige geparst; nur Kopf → leere Liste; `\r\n`.
+
+### 4.6 Formaterkennung und Fehlerverhalten (`logbook/__init__.py`)
+
+`detect_format(text)` entscheidet am **Inhalt**, nicht an der Dateiendung
+(`.log`/`.txt` sind mehrdeutig), in dieser Reihenfolge:
+1. `START-OF-LOG:` → Cabrillo (eindeutig).
+2. `<EOH>`/`<EOR>`/`<CALL:n>` → ADIF. Vor der nackten `QSO:`-Zeile, weil ein
+   ADIF-Kommentarwert durchaus „QSO:" enthalten kann.
+3. `QSO:`/`X-QSO:` am Zeilenanfang → kopfloses Cabrillo.
+4. sonst nichts.
+
+**Die Format-Parser werfen nie, der Dispatcher schon.** `adif.parse_text` und
+`cabrillo.parse_text` sind reine Formatumsetzer: eine unbrauchbare Zeile wird
+übersprungen und geloggt, das Ergebnis ist notfalls `[]`. Erst der Dispatcher
+weiß, dass ein *Anwender* eine *Datei* ausgewählt hat — nur dort ist „leer" ein
+Fehler statt eines Ergebnisses (`LogFormatError`, siehe §8).
 
 ---
 
@@ -536,7 +683,8 @@ Hilfsfunktionen fürs Remarks-Splitting (rein, ohne Seiteneffekte):
 > Vor Implementierung gegen die **aktuelle** Doku prüfen; Endpunkte können sich
 > ändern. Netz-/Auth-Fehler sind **nie** fatal (loggen, Feld leer, weiter).
 
-**Warum zentral:** Das ADIF-Log enthält **keine** Versandart. Der Lookup ist der
+**Warum zentral:** Das Log enthält **keine** Versandart — weder ADIF noch
+Cabrillo kennen sie. Der Lookup ist der
 einzige Weg, je Station herauszufinden, **wie** die QSL verschickt wird (Büro,
 Direkt, Manager) bzw. dass die Station **elektronisch** quittiert und keine Karte
 braucht. Er liefert außerdem den **QSL-Manager** (für Karte + Tabelle) und die
@@ -731,8 +879,11 @@ gefunden" und die Meldung stünde allein im Log. Deshalb:
 
 | Fall                                   | Verhalten                                   |
 |----------------------------------------|---------------------------------------------|
-| ADIF unlesbar/leer                     | GUI-Meldung, keine Karten                   |
+| Logdatei nicht lesbar (fehlt, Rechte)  | `OSError` → GUI-Meldung „Logbuch nicht lesbar" |
+| Format weder ADIF noch Cabrillo        | `LogFormatError` → GUI-Meldung „Logbuch nicht verwertbar"; die bisher geladenen QSOs bleiben stehen, kein Lookup startet |
+| Log erkannt, aber ohne QSOs            | ebenfalls `LogFormatError` (§4.6) — „0 QSOs geladen" wäre keine Antwort |
 | QSO ohne `call`                        | überspringen                                |
+| einzelne kaputte Cabrillo-Zeile        | überspringen + loggen, Import läuft weiter  |
 | Lookup ohne Treffer/„?"                | `via_routes = (default_via,)`, Karte trotzdem |
 | Station nur elektronisch (LoTW/eQSL)   | Wege = `Q`/`L`; unter der Trennlinie standardmäßig nicht gedruckt (manuell aktivierbar) |
 | keine Lookup-Credentials               | kein Netzcall, alle `via_routes = (default_via,)` |
@@ -750,6 +901,10 @@ in `geometry.py` referenzieren.
 
 ## 9. Tests (`tests/`)
 - `test_adif_parser.py`: alle Fälle aus §4.4.
+- `test_cabrillo_parser.py`: alle Fälle aus §4.5.4.
+- `test_logbook.py`: Formaterkennung und Fehlerverhalten des Dispatchers (§4.6),
+  inkl. „`parse_file` auf `Log.adi` liefert dasselbe wie der ADIF-Parser" als
+  Regressionsschutz und „fehlende Datei → `OSError`, nicht `LogFormatError`".
 - `test_card_builder.py`: alle QSOs (kein Via-Filter mehr), `via_routes` aus
   Lookup-Map + `default_via`-Fallback, `effective_via` (Priorität + Trennlinie +
   `via_override`), Datum-Split, Gruppierung per_qso/per_station, Zeilen-Überlauf

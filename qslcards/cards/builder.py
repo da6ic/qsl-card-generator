@@ -14,8 +14,8 @@ from collections.abc import Sequence
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from qslcards.adif.models import QSO
 from qslcards.config import AppConfig
+from qslcards.logbook import QSO
 from qslcards.lookup import accepted_routes, extract_manager_callsign, resolve_route
 from qslcards.pdf.geometry import MAX_ROWS_PLAIN, MAX_ROWS_WITH_REMARKS
 

@@ -30,9 +30,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from qslcards.adif.models import QSO  # noqa: E402
 from qslcards.cards.builder import build_cards  # noqa: E402
 from qslcards.config import AppConfig, GenerationConfig, SenderConfig  # noqa: E402
+from qslcards.logbook import QSO  # noqa: E402
 from qslcards.pdf.generator import generate  # noqa: E402
 from qslcards.pdf.geometry import SHEET_MODE_A4_4UP, SHEET_MODE_SINGLE  # noqa: E402
 

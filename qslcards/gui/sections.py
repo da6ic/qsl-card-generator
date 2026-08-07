@@ -308,14 +308,14 @@ def required_legend(parent: tk.Misc) -> ttk.Frame:
 
 
 class FileSection:
-    """1. ADIF-Logbuch (Pflichtangabe).
+    """1. Logbuch (Pflichtangabe), ADIF oder Cabrillo.
 
     Ohne geladenes Log gibt es nichts zu drucken; `set_missing(True)` umrandet
     dann das Pfadfeld rot (wie die Pflichtfelder in Abschnitt 3).
     """
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = required_section(parent, "1. ADIF-Logbuch")
+        self.frame = required_section(parent, "1. Logbuch (ADIF/Cabrillo)")
         self.path_var = tk.StringVar()
         self.count_var = tk.StringVar(value="Keine Datei geladen")
 

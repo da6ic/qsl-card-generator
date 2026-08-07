@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from qslcards.adif.parser import parse_file  # noqa: E402
+from qslcards.logbook import parse_file  # noqa: E402
 
 DEFAULT_LOG = ROOT / "tests" / "data" / "real_log.adi"
 

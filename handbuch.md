@@ -2,13 +2,14 @@
 
 ## Was das Programm macht {#einfuehrung}
 
-Der QSL-Karten-Generator nimmt ein **ADIF-Logbuch** und macht daraus fertige
+Der QSL-Karten-Generator nimmt dein **Logbuch** und macht daraus fertige
 **QSL-Karten als PDF**. Jede Karte besteht aus zwei A6-Seiten: vorne dein Bild,
 hinten das gewohnte QSL-Layout mit Absender, Empfänger und der QSO-Tabelle.
 
 Was du dafür brauchst:
 
-- ein **Logbuch** im ADIF-Format (`.adi` oder `.adif`) aus deinem Log-Programm,
+- ein **Logbuch** — im ADIF-Format (`.adi`, `.adif`) aus deinem Log-Programm
+  oder im Cabrillo-Format (`.cbr`, `.log`) aus einem Contest,
 - ein **Frontbild**, das auf allen Karten vorne erscheint,
 - deine **Absenderdaten** (Rufzeichen, Name, Locator, DOK, CQ-Zone, ITU),
 - optional ein kostenloses **HamQTH-Konto**, damit das Programm herausfindet,
@@ -26,7 +27,7 @@ noch fehlt, und markiert die betroffenen Felder rot.
 Die Oberfläche ist von oben nach unten in zehn Abschnitte geteilt — in dieser
 Reihenfolge arbeitest du sie ab:
 
-1. [Logbuch laden](#abschnitt-1) — ADIF-Datei wählen und einlesen.
+1. [Logbuch laden](#abschnitt-1) — ADIF- oder Cabrillo-Datei wählen und einlesen.
 2. [Frontbild wählen](#abschnitt-2) — ein Bild für alle Karten.
 3. [Absender ausfüllen](#abschnitt-3) — deine Stationsdaten.
 4. [Zustellwege ordnen](#abschnitt-4) — welche QSLs überhaupt gedruckt werden.
@@ -46,12 +47,25 @@ linken Rand kommst du ebenfalls direkt zu jedem Kapitel.
 Bei jedem Abschnitt steht oben rechts im Titel ein kleines **?**. Das öffnet
 genau das Kapitel dieses Handbuchs.
 
-## 1. ADIF-Logbuch {#abschnitt-1}
+## 1. Logbuch (ADIF/Cabrillo) {#abschnitt-1}
 
 Wähle mit **Durchsuchen…** deine Logdatei und klicke auf **Log laden**. Unter
 dem Feld steht danach, wie viele QSOs eingelesen wurden.
 
-Akzeptiert werden derzeit ADIF-Logdateien (`.adi` und `.adif`).
+Akzeptiert werden zwei Formate:
+
+- **ADIF** (`.adi`, `.adif`) — was jedes Log-Programm ausgibt.
+- **Cabrillo** (`.cbr`, `.log`) — die Datei, die du nach einem Contest beim
+  Veranstalter abgibst.
+
+Welches der beiden vorliegt, erkennt das Programm am Inhalt der Datei. Die
+Dateiendung ist nur ein Filter im Auswahlfenster; heißt deine Cabrillo-Datei
+`contest.txt`, stelle im Dateidialog auf **Alle Dateien** um, dann klappt es
+trotzdem.
+
+Passt der Inhalt zu keinem der beiden Formate, sagt das Programm dir das —
+statt kommentarlos „0 QSOs" anzuzeigen. Dein bisher geladenes Log bleibt in dem
+Fall unverändert stehen.
 
 Diese Felder aus dem Log landen auf der Karte:
 
@@ -67,6 +81,29 @@ Diese Felder aus dem Log landen auf der Karte:
   genauso wie `59`.
 
 Fehlt eines dieser Felder, bleibt die Spalte auf der Karte einfach leer.
+
+### Was bei einem Contest-Log anders ist
+
+Ein Cabrillo-Log ist knapper als ein ADIF-Log — es enthält nur, was der Contest
+braucht. Daran ändert sich für dich Folgendes:
+
+- **Der Rapport fehlt oft.** Viele Contests tauschen statt `59` einen Locator,
+  einen Namen oder eine Sektion aus (NAQP, die VHF-Contests, ARRL Sweepstakes).
+  Dann bleibt die Spalte SIGNAL REPORT leer. Das Programm erfindet dort bewusst
+  nichts — eine QSL-Karte soll nur bestätigen, was wirklich im Log steht.
+- **Dein eigenes Rufzeichen im Kopf der Datei wird nicht übernommen.** Der
+  Absender auf der Karte kommt immer aus [Abschnitt 3](#abschnitt-3), auch wenn
+  du im Contest unter einem anderen Rufzeichen gefahren bist.
+- **Gestrichene QSOs kommen mit.** Der Contest wertet sie nicht,
+  aber die Verbindung hat ja stattgefunden — die Gegenstation bekommt ihre
+  Karte. Willst du das nicht, setze die Zeile in der Vorschau
+  ([Kapitel 8](#abschnitt-8)) auf **Drucken: Nein**.
+- **Oberhalb von 902 MHz steht im Contest-Log nur das Band**, keine genaue
+  Frequenz. Auf der Karte steht dann die Bandmitte, zum Beispiel `1240` für das
+  23-cm-Band.
+- **Ein Contest-Log ist groß.** Bei mehreren hundert QSOs dauert die
+  Stationsabfrage ([Kapitel 6](#abschnitt-6)) entsprechend lange. „Eine Karte
+  pro Station" ([Kapitel 5](#abschnitt-5)) ist hier meist die bessere Wahl.
 
 Ein erneutes **Log laden** baut die Kartenliste komplett neu auf. Deine
 Korrekturen in der Vorschau ([Kapitel 8](#abschnitt-8)) gehen dabei verloren,
@@ -322,7 +359,7 @@ Kürzel, das auf deinem Rechner gilt.
 
 ### Datei
 
-- **ADIF-Logbuch öffnen…** — Windows/Linux `Strg + O`, macOS `⌘ + O`
+- **Logbuch öffnen…** — Windows/Linux `Strg + O`, macOS `⌘ + O`
 - **Zuletzt verwendete Logs** — kein Kürzel
 - **Frontbild wählen…** — Windows/Linux `Strg + B`, macOS `⌘ + B`
 - **Zuletzt verwendete Bilder** — kein Kürzel
@@ -358,6 +395,14 @@ Kürzel, das auf deinem Rechner gilt.
 **„Pflichtangaben fehlen"** — es fehlt eine der mit `*` markierten Angaben. Das
 Fenster listet alle auf einmal auf, danach sind die Stellen rot markiert und die
 Ansicht springt zur ersten davon.
+
+**„Logbuch nicht verwertbar"** — die Datei ist weder ADIF noch Cabrillo.
+Hast du vielleicht eine Auswertung oder eine Tabelle erwischt statt der
+Logdatei selbst? Ein ADIF-Log enthält Einträge wie `<CALL:5>`, ein Cabrillo-Log
+beginnt mit `START-OF-LOG:` ([Kapitel 1](#abschnitt-1)).
+
+**Die Spalte SIGNAL REPORT bleibt leer** — bei einem Contest-Log ist das normal:
+viele Contests tauschen gar keinen Rapport aus ([Kapitel 1](#abschnitt-1)).
 
 **„PDF erzeugen" reagiert nicht** — läuft noch der Lookup? Solange Stationen
 abgefragt werden, ist der Knopf gesperrt. Der Status unten im Fenster sagt, wie

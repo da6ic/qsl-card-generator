@@ -80,7 +80,7 @@ def test_menubar_has_all_top_level_menus(bar, root):
 def test_file_menu_entries(bar):
     menu = _submenu(bar.menubar, "Datei")
     labels = _labels(menu)
-    assert "ADIF-Logbuch öffnen…" in labels
+    assert "Logbuch öffnen…" in labels
     assert "Frontbild wählen…" in labels
     assert "Zuletzt verwendete Logs" in labels
     assert "Zuletzt verwendete Bilder" in labels
@@ -127,7 +127,7 @@ def test_handbook_entry_opens_help(bar, calls):
 
 
 def test_entries_call_their_action(bar, calls):
-    _invoke(_submenu(bar.menubar, "Datei"), "ADIF-Logbuch öffnen…")
+    _invoke(_submenu(bar.menubar, "Datei"), "Logbuch öffnen…")
     _invoke(_submenu(bar.menubar, "Aktionen"), "Log neu laden")
     _invoke(_submenu(bar.menubar, "Aktionen"), "Lookup-Cache leeren…")
     assert calls == [("open_log",), ("reload_log",), ("clear_lookup_cache",)]
