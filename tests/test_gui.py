@@ -718,6 +718,48 @@ def test_goto_section_scrolls(app, tmp_path):
     assert app.body.canvas.yview()[0] > 0.0
 
 
+def _help_marks(app) -> dict[int, tk.Misc]:
+    """Das „?" jedes Abschnitts (letztes Kind seines Titel-Widgets)."""
+    marks = {}
+    for number, frame in app._sections.items():
+        title = frame.nametowidget(str(frame.cget("labelwidget")))
+        marks[number] = title.winfo_children()[-1]
+    return marks
+
+
+def test_every_section_has_a_help_mark(app):
+    marks = _help_marks(app)
+    assert sorted(marks) == list(range(1, 11))
+    assert {mark.cget("text") for mark in marks.values()} == {"?"}
+    # Der Titel selbst bleibt sichtbar (der Text ist ins Label gewandert).
+    title = app.output_section.frame.nametowidget(str(app.output_section.frame.cget("labelwidget")))
+    assert title.winfo_children()[0].cget("text") == "10. Ausgabe"
+
+
+def test_help_mark_opens_its_chapter(app):
+    with mock.patch.object(app, "_show_help") as show:
+        _help_marks(app)[6].event_generate("<Button-1>")
+        app.update()
+    show.assert_called_once_with("abschnitt-6")
+
+
+def test_help_window_is_reused_and_follows_the_theme(app):
+    with mock.patch.object(appmod, "open_help") as opener:
+        app._show_help("abschnitt-3")
+        opener.assert_called_once()
+        assert opener.call_args.kwargs["anchor"] == "abschnitt-3"
+
+    window = app._help
+    assert window is not None
+    with mock.patch.object(appmod, "open_help") as opener:
+        app._show_help()  # zweiter Aufruf: kein zweites Fenster
+        opener.assert_not_called()
+    window.show.assert_called_once_with(None)
+
+    app._apply_theme("dark")
+    window.apply_palette.assert_called_once_with(app.palette)
+
+
 def test_toggling_print_greys_the_row_at_once(app, tmp_path):
     """Ja -> Nein muss sofort ausgegraut sein. Eine ausgewählte Zeile zeichnet ttk
     in den Auswahlfarben und verdeckt damit den `off`-Tag — das Umschalten nimmt

@@ -225,6 +225,11 @@ def _configure_styles(style: ttk.Style, pal: Palette) -> None:
     style.configure("SectionTitle.TLabel", foreground=pal.accent, font="TkHeadingFont")
     # Der `*` an Pflichtfeldern (Abschnitte 2 und 3).
     style.configure("Required.TLabel", foreground=pal.danger)
+    # Das „?" im Abschnittstitel (öffnet das Handbuch): zurückhaltend, erst beim
+    # Überfahren in Akzentfarbe. Ein `style.map` reicht nicht — ein Label kennt
+    # keinen Hover-Zustand, deshalb tauscht `sections.add_section_help` den Style.
+    style.configure("SectionHelp.TLabel", foreground=pal.text_muted, font="TkHeadingFont")
+    style.configure("SectionHelpHover.TLabel", foreground=pal.accent, font="TkHeadingFont")
     for role, color in (
         ("Success", pal.success),
         ("Warning", pal.warning),

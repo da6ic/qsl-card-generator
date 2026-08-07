@@ -106,12 +106,24 @@ def test_actions_and_view_menu_entries(bar):
 def test_help_menu_entries(bar):
     menu = _submenu(bar.menubar, "Hilfe")
     labels = _labels(menu)
-    assert "Dokumentation" in labels
+    assert labels[0] == "Handbuch"  # steht bewusst ganz oben
+    # Die technischen Projektdokumente sind hier nicht mehr verlinkt.
+    assert "Dokumentation" not in labels
     assert "config.yaml öffnen" in labels
     assert "Ausgabeordner anzeigen" in labels
     assert "Lookup-Cache anzeigen" in labels
     # „Über…" steht auf macOS im Programm-Menü.
     assert ("Über QSL-Karten-Generator" in labels) is not menumod.IS_MAC
+
+
+def test_handbook_entry_opens_help(bar, calls):
+    menu = _submenu(bar.menubar, "Hilfe")
+    # ⌘? auf macOS, sonst F1 — beides außerhalb des Buchstaben-Schemas.
+    accel = menu.entrycget(menu.index("Handbuch"), "accelerator")
+    assert accel == ("Command-?" if menumod.IS_MAC else "F1") == menumod.HELP_ACCELERATOR
+    _invoke(menu, "Handbuch")
+    # Ohne Anker: das Menü öffnet immer den Anfang des Handbuchs.
+    assert calls == [("show_help", None)]
 
 
 def test_entries_call_their_action(bar, calls):
@@ -181,6 +193,27 @@ def test_accelerators_match_platform():
         assert menumod.accelerator("o") == "Ctrl+O"
         assert menumod.binding("o") == "<Control-o>"
         assert menumod.binding("r", shift=True) == "<Control-Shift-R>"
+
+
+def test_help_key_really_fires(calls):
+    """Das Handbuch-Kürzel (⌘? bzw. F1) muss auch als Taste ankommen.
+
+    Eigenes Fenster statt der `root`-Fixture: ein per `withdraw()` verstecktes
+    Fenster nimmt keine synthetischen Tastenereignisse an — off-screen schon.
+    """
+    try:
+        window = tk.Tk()
+    except tk.TclError as exc:  # pragma: no cover - nur ohne Display
+        pytest.skip(f"kein Tk-Display: {exc}")
+    window.geometry("400x300+3000+3000")
+    window.update()
+    try:
+        MenuBar(window, MenuActions(show_help=lambda a: calls.append(("show_help", a))))
+        window.event_generate(menumod.HELP_BINDING)
+        window.update()
+        assert calls == [("show_help", None)]
+    finally:
+        window.destroy()
 
 
 if __name__ == "__main__":  # pragma: no cover

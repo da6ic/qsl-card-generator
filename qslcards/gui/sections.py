@@ -10,8 +10,7 @@ ttk-Styles + Abstands-Konstanten) — kein Widget setzt hier eine Farbe selbst.
 from __future__ import annotations
 
 import tkinter as tk
-from collections.abc import Iterable
-from pathlib import Path
+from collections.abc import Callable, Iterable
 from tkinter import ttk
 
 from qslcards.lookup import (
@@ -65,6 +64,13 @@ REQUIRED_SENDER_FIELDS: tuple[str, ...] = ("callsign", "name", "locator", "dok",
 
 # Zeichen hinter der Beschriftung eines Pflichtfeldes.
 REQUIRED_MARK = " *"
+
+# Schaltfläche im Abschnittstitel, die das Handbuch beim passenden Kapitel öffnet.
+# Mauszeiger: die Hand wie über einem Link. `question_arrow` (der X11-Zeiger mit
+# Fragezeichen) war kurz gesetzt und sieht auf macOS unpassend aus — nicht
+# zurückdrehen.
+SECTION_HELP_MARK = "?"
+SECTION_HELP_CURSOR = "hand2"
 
 # Sentinel-Token für die Trennlinie in der Prioritätsliste (Abschnitt 4).
 # Alles oberhalb wird gedruckt (in Reihenfolge = Priorität), alles darunter nicht.
@@ -896,6 +902,28 @@ class StatusBar:
         self.info_var.set(text)
 
 
-def project_root() -> Path:
-    """Wurzel des Projekts (enthält README.md/docs/) — für Menü „Dokumentation"."""
-    return Path(__file__).resolve().parent.parent.parent
+def add_section_help(frame: ttk.LabelFrame, command: Callable[[], None]) -> ttk.Label:
+    """Hängt ein kleines „?" an den Titel eines Abschnitts (öffnet das Handbuch).
+
+    Deckt beide Bauweisen ab: Abschnitte mit `text=` bekommen dafür ein
+    `labelwidget` (ihr Titel wandert in ein Label), die Pflicht-Abschnitte aus
+    `required_section` haben schon eines und werden nur ergänzt. Deshalb muss
+    kein einziger Abschnitts-Konstruktor davon wissen — `app.py` hängt das „?"
+    zentral an alle Rahmen.
+    """
+    existing = str(frame.cget("labelwidget"))
+    if existing:
+        holder = frame.nametowidget(existing)
+    else:
+        holder = ttk.Frame(frame)
+        ttk.Label(holder, text=frame.cget("text"), style="SectionTitle.TLabel").pack(side="left")
+        frame.configure(text="", labelwidget=holder)
+
+    mark = ttk.Label(
+        holder, text=SECTION_HELP_MARK, style="SectionHelp.TLabel", cursor=SECTION_HELP_CURSOR
+    )
+    mark.pack(side="left", padx=(GAP_COL, 0))
+    mark.bind("<Button-1>", lambda _e: command())
+    mark.bind("<Enter>", lambda _e: mark.configure(style="SectionHelpHover.TLabel"))
+    mark.bind("<Leave>", lambda _e: mark.configure(style="SectionHelp.TLabel"))
+    return mark

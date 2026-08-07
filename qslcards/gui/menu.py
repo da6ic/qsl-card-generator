@@ -69,7 +69,7 @@ class MenuActions:
     goto_section: Callable[[int], None] = _noop
     # Hilfe
     show_about: Callable[[], None] = _noop
-    open_doc: Callable[[str], None] = _noop
+    show_help: Callable[[str | None], None] = _noop
     open_config: Callable[[], None] = _noop
     reveal_output: Callable[[], None] = _noop
     reveal_cache: Callable[[], None] = _noop
@@ -89,12 +89,10 @@ SECTIONS: list[tuple[int, str]] = [
     (10, "Ausgabe"),
 ]
 
-# Dokumente für „Hilfe > Dokumentation" (Menütext -> Pfad im Projekt).
-DOCS: list[tuple[str, str]] = [
-    ("Kurzanleitung (README)", "README.md"),
-    ("Spezifikation", "docs/SPECIFICATION.md"),
-    ("Karten-Layout", "docs/CARD_LAYOUT.md"),
-]
+# Kürzel des Handbuchs: auf macOS ⌘? (dort das übliche Hilfe-Kürzel), sonst F1.
+# Beides passt nicht in das Buchstaben-Schema von `accelerator()`/`binding()`.
+HELP_ACCELERATOR = "Command-?" if IS_MAC else "F1"
+HELP_BINDING = "<Command-question>" if IS_MAC else "<F1>"
 
 _RECENT_EMPTY = "(noch nichts geöffnet)"
 
@@ -220,10 +218,13 @@ class MenuBar:
     def _build_help_menu(self) -> None:
         # `name="help"` ist auf macOS reserviert (Suchfeld) -> nur sonst nutzen.
         menu = tk.Menu(self.menubar, tearoff=0)
-        docs = tk.Menu(menu, tearoff=0)
-        for label, path in DOCS:
-            docs.add_command(label=label, command=lambda p=path: self.actions.open_doc(p))
-        menu.add_cascade(label="Dokumentation", menu=docs)
+        # Das Handbuch (für Anwender) statt der technischen Projektdokumente.
+        menu.add_command(
+            label="Handbuch",
+            accelerator=HELP_ACCELERATOR,
+            command=lambda: self.actions.show_help(None),
+        )
+        self._bindings.append((HELP_BINDING, lambda: self.actions.show_help(None)))
         menu.add_separator()
         menu.add_command(label="config.yaml öffnen", command=lambda: self.actions.open_config())
         menu.add_command(

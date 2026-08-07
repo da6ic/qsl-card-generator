@@ -40,6 +40,7 @@ from qslcards.pdf.generator import generate
 from qslcards.pdf.geometry import clamp_print_margin, normalize_sheet_mode
 
 from . import theme
+from .help import HelpWindow, open_help
 from .menu import MenuActions, MenuBar
 from .preview import PreviewTable
 from .scrolling import bind_wheel, wheel_step
@@ -56,10 +57,10 @@ from .sections import (
     RemarksSection,
     SenderSection,
     StatusBar,
+    add_section_help,
     ask_overwrite_manual_remarks,
     confirm,
     parse_mm,
-    project_root,
     required_legend,
     show_about_dialog,
 )
@@ -213,6 +214,9 @@ class App(tk.Tk):
         self._app_icons = load_app_icons(self)
         self._set_window_icon()
 
+        # Handbuch-Fenster (höchstens eines, siehe `_show_help`).
+        self._help: HelpWindow | None = None
+
         # Lookup-Zustand: Map CALL -> LookupResult|None (Via/Manager/Adresse).
         self.lookups: dict = {}
         self._lookup_running = False
@@ -309,7 +313,7 @@ class App(tk.Tk):
         root.columnconfigure(1, weight=1)
 
         # Sprungziele für „Ansicht > Gehe zu Abschnitt" (Nummer -> Rahmen).
-        self._sections: dict[int, tk.Misc] = {
+        self._sections: dict[int, ttk.LabelFrame] = {
             1: self.file_section.frame,
             2: self.image_section.frame,
             3: self.sender_section.frame,
@@ -321,6 +325,11 @@ class App(tk.Tk):
             9: self.printmode_section.frame,
             10: self.output_section.frame,
         }
+
+        # Kontexthilfe: jeder Abschnittstitel bekommt ein „?", das das Handbuch
+        # beim zugehörigen Kapitel öffnet (Anker `abschnitt-N` in handbuch.md).
+        for number, frame in self._sections.items():
+            add_section_help(frame, lambda n=number: self._show_help(f"abschnitt-{n}"))
 
     def _set_window_icon(self) -> None:
         """Setzt das Fenster-/Programmsymbol auf allen Plattformen.
@@ -359,7 +368,7 @@ class App(tk.Tk):
             set_theme=self._set_theme,
             goto_section=self._goto_section,
             show_about=self._show_about,
-            open_doc=self._open_doc,
+            show_help=self._show_help,
             open_config=lambda: self._open_path(Path(CONFIG_PATH)),
             reveal_output=self._reveal_output,
             reveal_cache=lambda: self._reveal_path(Path(DEFAULT_CACHE_PATH)),
@@ -893,6 +902,10 @@ class App(tk.Tk):
         theme.restyle_tree(self, self.palette)
         theme.restyle_tree(self.menubar.menubar, self.palette)
         self.preview.apply_palette(self.palette)
+        # Die Text-Tags des Handbuchs sind keine ttk-Styles und müssen von Hand
+        # nachgezogen werden, sonst bleibt ein offenes Fenster im alten Thema.
+        if self._help is not None and self._help.winfo_exists():
+            self._help.apply_palette(self.palette)
         self.menubar.set_theme_mode(mode)
 
     def _set_theme(self, mode: str) -> None:
@@ -919,9 +932,16 @@ class App(tk.Tk):
     def _show_about(self) -> None:
         show_about_dialog(self, __version__, self.palette)
 
-    def _open_doc(self, relative: str) -> None:
-        """Menü „Hilfe > Dokumentation": Datei aus dem Projektordner öffnen."""
-        self._open_path(project_root() / relative)
+    def _show_help(self, anchor: str | None = None) -> None:
+        """Handbuch zeigen — aus dem Menü (ohne Anker) oder aus einem „?".
+
+        Es gibt immer nur **ein** Fenster: ein zweiter Aufruf holt das offene
+        nach vorn und springt dort zum Kapitel.
+        """
+        if self._help is not None and self._help.winfo_exists():
+            self._help.show(anchor)
+            return
+        self._help = open_help(self, self.palette, anchor=anchor, menubar=self.menubar.menubar)
 
     def _open_path(self, path: Path) -> None:
         if not path.exists():

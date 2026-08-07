@@ -148,13 +148,20 @@ Geschäftslogik, verdrahtet wird in `app.py` (wie bei `sections.py`).
 | **Bearbeiten** | Ausschneiden/Kopieren/Einfügen/Alles auswählen — als virtuelle Events ans fokussierte Widget |
 | **Aktionen** | Log neu laden (+R), Lookups neu abrufen (+⇧R), Lookup-Cache leeren… |
 | **Ansicht** | Farbthema ▸ System/Hell/Dunkel, Gehe zu Abschnitt ▸ 1–10 |
-| **Hilfe** | Dokumentation ▸, config.yaml öffnen, Ausgabeordner anzeigen, Lookup-Cache anzeigen, Über… |
+| **Hilfe** | Handbuch (F1 bzw. ⌘?), config.yaml öffnen, Ausgabeordner anzeigen, Lookup-Cache anzeigen, Über… |
 
 Plattform-Eigenheiten sind in `menu.py` gekapselt: auf **macOS** ⌘-Kürzel sowie
 „Über…"/„Beenden" im Programm-Menü (`name="apple"`, `tk::mac::Quit`), sonst
 Strg-Kürzel mit „Beenden" in „Datei" und „Über…" in „Hilfe". Ein `accelerator`
 ist bei Tk nur Beschriftung — die Kürzel werden zusätzlich per `bind_all`
-registriert.
+registriert. Das Handbuch fällt aus dem Buchstaben-Schema von
+`accelerator()`/`binding()` heraus und hat deshalb eigene Konstanten
+(`HELP_ACCELERATOR`/`HELP_BINDING`): macOS `⌘?` (dort das übliche Hilfe-Kürzel),
+sonst `F1`.
+
+Die früher hier verlinkten Projektdokumente (README/Spezifikation/Karten-Layout)
+sind **bewusst nicht mehr im Menü** — sie richten sich an Entwickler. An ihrer
+Stelle steht das Anwender-Handbuch (§2.5).
 
 ### 2.2 Farbthema (`gui/theme.py`)
 
@@ -231,6 +238,50 @@ Funk-Ausrüstung sind bewusst optional.
   Druckversuch** — beim ersten Start wäre sonst das halbe Fenster rot — und
   verschwindet je Feld wieder, sobald es gefüllt ist (Trace je Variable bzw.
   `set_missing(False)` beim Bild-/Log-Laden).
+
+### 2.5 Anwender-Handbuch (`gui/help.py`, `handbuch.md`)
+
+Ein **Handbuch für den Anwender**, angezeigt **im Programm**: links die
+Kapitelliste, rechts der Text. Der Inhalt steht in **`handbuch.md` neben dem
+Programm** — also dort, wo auch `config.yaml` liegt. Bewusst **eine** Datei und
+keine Kopie im Paket: der Nutzer soll sie mit jedem Texteditor lesen und
+ergänzen können, und zwei Kopien wären zwei Wahrheiten. Gesucht wird sie zuerst
+im Arbeitsverzeichnis, dann im Programmordner; fehlt sie, zeigt das Fenster
+einen Hinweis mit dem erwarteten Pfad statt einer Ausnahme.
+
+- **Renderer** (`parse`/`parse_inline`): kein allgemeiner Markdown-Parser,
+  sondern genau der Umfang, den das Handbuch braucht — Überschriften (`#`–`###`)
+  mit optionaler Anker-ID `{#name}`, Absätze, Aufzählungen (eine Unterebene),
+  Codeblöcke sowie inline `**fett**`, `` `code` `` und `[Text](ziel)`. **Keine
+  Tabellen** (im Handbuch deshalb Aufzählungen), keine Bilder, keine
+  verschachtelte Auszeichnung — `**` in einer Link-Beschriftung wird entfernt,
+  damit keine rohen Sternchen stehen bleiben.
+- Mehrzeilige Absätze und Aufzählungspunkte werden **erst zusammengefügt und
+  dann** ausgezeichnet, sonst zerreißt ein `**fett**`, das im Quelltext über den
+  Zeilenumbruch reicht.
+- **Darstellung**: ein `tk.Text` (`state="disabled"`). Je Block eine Tk-Marke
+  (Sprungziel), je Blocktyp/Span ein Tag; Farben, Schriften und Abstände der Tags
+  kommen aus der `Palette` (`apply_palette`, deshalb folgt ein offenes Fenster
+  dem Themenwechsel ohne Neuaufbau).
+- **Anker sind der Vertrag zur Oberfläche**: das „?" im Titel von Abschnitt N
+  springt zu `abschnitt-N`. Ein Test prüft, dass es diesen Anker für alle zehn
+  Abschnitte gibt, und dass jeder interne Verweis ein existierendes Ziel hat.
+- **Verweise**: `#anker` springt im Handbuch, alles andere geht an
+  `webbrowser.open`.
+- **Kapitelliste**: alle `##`-Überschriften. Beim Scrollen wird das Kapitel
+  hervorgehoben, das **oben** steht — am unteren Anschlag jedoch das der
+  **letzten** Zeile, weil die letzten Kapitel kürzer sind als das Fenster und
+  oben sonst für immer das vorletzte stünde.
+- **Kontexthilfe**: `sections.add_section_help(frame, command)` hängt das „?" an
+  den Abschnittstitel; es funktioniert für beide Bauweisen (LabelFrame mit `text`
+  bekommt dafür ein `labelwidget`, `required_section` hat schon eins). `app.py`
+  hängt es zentral über `self._sections` an alle zehn Rahmen — kein
+  Abschnitts-Konstruktor weiß davon.
+- Das Fenster ist **nicht modal** (man soll beim Ausfüllen nachlesen können), es
+  gibt immer nur eines, es lädt bei `<FocusIn>` nach einer Änderung der Datei neu
+  (mtime), und es übernimmt die **Menüleiste des Hauptfensters** — sonst zeigt
+  macOS über einem Fenster ohne eigenes Menü die Standardleiste von Tk (mit
+  „Python"-Menü und Tk-Hilfeeinträgen).
 
 ---
 
@@ -542,6 +593,11 @@ Vorschau **und** Export.
 - JSON-Datei `lookup_cache.json`: `{ "CALL": {result, queried_at}, ... }`.
 - Vor jeder API-Abfrage Cache prüfen; Ergebnisse (auch negative) cachen.
 - Cache-Alter optional beachten (Default 180 Tage), sonst dauerhaft.
+- **Ausnahme:** Solange ein Provider die Anmeldung abgelehnt hat (§6.7), schreibt
+  `ChainedLookup` **nichts** (`degraded()`). Sonst stünde nach einem Lauf mit
+  falschem Passwort für jede Station ein negativer Eintrag in der Datei, und
+  selbst mit korrigierten Zugangsdaten fände der nächste Start nichts mehr.
+  Gelesen wird weiter — alte Treffer bleiben gültig.
 
 ### 6.6 Wann/wie wird gelookt?
 - **Automatisch beim Log-Laden**, für **alle** Stationen (eindeutige Rufzeichen),
@@ -551,6 +607,23 @@ Vorschau **und** Export.
 - Manueller **„Neu abrufen"**-Button holt fehlende/abgebrochene Stationen nach.
 - **Adresse**: wird für alle nachgeschlagenen Stationen geholt und (wenn
   `address_export`) für **alle** exportiert — sie steht **nicht** auf der Karte.
+
+### 6.7 Abgelehnte Zugangsdaten
+Lehnt ein Anbieter die Anmeldung ab, sähe der Nutzer sonst nur „0/N Stationen
+gefunden" und die Meldung stünde allein im Log. Deshalb:
+- Die Clients melden das über `on_auth_error(meldung)` und merken es sich in
+  `auth_failed` — **danach kein weiterer Anmeldeversuch** (vorher klopfte jedes
+  Rufzeichen neu an). Wichtig: nur eine **Antwort des Servers**, die den Login
+  ablehnt, zählt; ein Netzfehler wirft und landet in `lookup()`, er darf nicht
+  als falsches Passwort durchgehen.
+- `build_lookup`/`lookup_calls` reichen das als `auth_error_cb(anbieter, meldung)`
+  nach oben (Anbietername aus `PROVIDER_HAMQTH`/`PROVIDER_QRZ`).
+- Die GUI sammelt **je Anbieter die erste** Meldung (sonst stünde sie einmal pro
+  Station da), zeigt **ein** Hinweisfenster, setzt die Statuszeile auf `error`,
+  scrollt zu Abschnitt 6 und umrandet dessen Feldpaar rot
+  (`LookupSection.mark_auth_failed`, Zuordnung in `sections.PROVIDER_FIELDS`).
+  Die Markierung verschwindet, sobald das Feld geändert wird — dieselbe Sprache
+  wie bei den Pflichtfeldern (§2.4).
 
 ---
 

@@ -27,6 +27,9 @@ Rückseite im DARC-QSL-Layout.
   (nur für optionalen Kuvert-/Label-Export, nicht auf der Karte).
 - **Menüleiste** (Datei / Bearbeiten / Aktionen / Ansicht / Hilfe) mit den
   gewohnten Tastenkürzeln — ⌘ auf macOS, Strg unter Windows und Linux.
+- **Handbuch im Programm** (`Hilfe ▸ Handbuch`, F1 bzw. ⌘?): Kapitel zu jedem
+  Arbeitsschritt, links eine Kapitelliste, Verweise sind anklickbar. Jeder
+  Abschnitt der Oberfläche hat ein „?", das direkt sein Kapitel öffnet.
 - **Farbthema** in Hell und Dunkel; folgt standardmäßig dem Betriebssystem,
   umschaltbar über „Ansicht → Farbthema".
 
@@ -64,7 +67,14 @@ verwendet"-Listen).
 
 > Der Bereich unten rechts auf der Rückseite (in der Vorlage das Logo) bleibt frei.
 
-## Dokumentation für die Implementierung
+## Dokumentation
+
+Für **Anwender**: `handbuch.md` im Programmordner — dieselbe Datei, die
+`Hilfe ▸ Handbuch` im Programm anzeigt. Eine ganz normale Textdatei; wer mag,
+liest oder ergänzt sie im Editor, das Fenster übernimmt Änderungen beim nächsten
+Blick.
+
+Für die **Implementierung**:
 - `CLAUDE.md` — Leitfaden für die Umsetzung mit Claude Code.
 - `docs/SPECIFICATION.md` — Funktions-/Technik-Spezifikation.
 - `docs/CARD_LAYOUT.md` — exaktes Rückseiten-Layout.

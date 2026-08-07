@@ -81,6 +81,7 @@ qslcards/
     preview.py            # Tabelle: ALLE QSOs/Karten + Via/Route, Drucken-Flag
     theme.py              # Farbthema (hell/dunkel) + ALLE Farben/Abstände der GUI
     menu.py               # Menüleiste (plattformabhängige Kürzel/Sonderfälle)
+    help.py               # Handbuch-Fenster + kleiner Markdown-Renderer
     icon_canvas.py        # Programm-Icon als Vektor (für den „Über"-Dialog)
     scrolling.py          # Mausrad je Fenstersystem (macOS/Windows/X11)
     textedit.py           # Wort-/zeilenweises Löschen in Eingabefeldern
@@ -94,10 +95,12 @@ tests/
   test_geometry.py        test_scrolling.py
   test_config.py          test_textedit.py
   test_generator.py       test_gui.py
+  test_help.py
 scripts/
   preview_card.py         # Karten-Preview als PDF (`--4up [RAND_MM]` = A4-Bogen)
   make_icon.py            # app_icon.svg -> PNG (16–1024) + .ico + .icns
 config.example.yaml       # Vorlage -> Nutzer kopiert nach config.yaml
+handbuch.md               # Anwender-Handbuch (zeigt „Hilfe > Handbuch" an)
 requirements.txt
 README.md
 docs/
@@ -335,6 +338,12 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
 - [x] **Pflichtangaben** (Logbuch, Frontbild, Rufzeichen/Name/Locator/DOK/
       CQ-Zone/ITU) mit rotem `*`; fehlen welche, blockiert „PDF erzeugen" mit
       **einem** Popup und markiert die Stellen rot.
+- [x] **Abgelehnte Lookup-Zugangsdaten** werden gemeldet (Hinweisfenster, rote
+      Felder in Abschnitt 6) statt nur „0 Stationen gefunden"; der Cache bleibt
+      dabei sauber.
+- [x] **Anwender-Handbuch** im Programm (`Hilfe ▸ Handbuch`, F1 / ⌘?) aus
+      `handbuch.md`, mit Kapitelliste, klickbaren Verweisen und einem „?" je
+      Abschnitt, das ins passende Kapitel springt.
 ---
 
 ## 10. Nicht raten — nachschlagen
@@ -422,6 +431,41 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
 - Screenshots der laufenden App sind hier **nicht** möglich (`screencapture`
   scheitert ohne die macOS-Berechtigung „Bildschirmaufnahme"). Optische Änderungen
   headless prüfen (Style-Werte, `winfo`-Maße) und den Nutzer draufschauen lassen.
+- **Ein Toplevel ohne eigenes Menü ist auf macOS nicht menülos.** Tk setzt dann
+  seine Standardleiste ein — mit „Python"-Programmmenü und Tk-Hilfeeinträgen. Ein
+  eigenes Fenster bekommt deshalb `configure(menu=<Menüleiste des Hauptfensters>)`;
+  Tk legt sich dafür intern einen Klon an, das Hauptfenster behält seine.
+  Das gilt auch für eine gebündelte App — nur der Menütitel heißt dann wie das
+  Bundle statt „Python" (der Titel kommt vom Prozess, Tk kann ihn nicht setzen).
+
+**Handbuch (`gui/help.py` + `handbuch.md`)**
+- Der Text liegt **neben dem Programm** (`handbuch.md`, wie `config.yaml`), nicht
+  im Paket: der Nutzer soll ihn im Editor lesen und ergänzen können. Genau **eine**
+  Datei — zwei Kopien wären zwei Wahrheiten. Fehlt sie, zeigt das Fenster einen
+  Hinweis (selbst erzeugtes Markdown), keine Ausnahme.
+- Der Renderer kann **nur**, was das Handbuch braucht (siehe `SPECIFICATION.md`
+  §2.5). Deshalb dort **keine Tabellen** — die Tastenkürzel sind bewusst eine
+  Aufzählung. Verschachtelte Auszeichnung geht nicht: `**` in einer
+  Link-Beschriftung wird entfernt.
+- **Erst zusammenfügen, dann auszeichnen.** Ein `**fett**`, das im Quelltext über
+  den Zeilenumbruch reicht, zerriss anfangs in zwei Hälften und stand roh im
+  Fenster. Absätze *und* Aufzählungspunkte sammeln ihre Zeilen erst komplett.
+- **Anker sind der Vertrag zur Oberfläche**: `{#abschnitt-N}` ist das Sprungziel
+  des „?" von Abschnitt N. Bewusst explizit statt aus dem Überschriftentext
+  abgeleitet — sonst bricht jedes Umbenennen still die Kontexthilfe. Preis: die
+  IDE kennt diese Pandoc-Syntax nicht und meldet „Cannot resolve anchor"; das ist
+  eine Falschmeldung. Zwei Tests halten dagegen (jeder Abschnitt hat seinen Anker,
+  jeder interne Verweis trifft ein Ziel).
+- **Kapitelliste am unteren Anschlag**: dort zählt die **letzte** Zeile, sonst die
+  oberste. Die letzten Kapitel sind kürzer als das Fenster — oben stünde beim
+  Herunterscrollen für immer das vorletzte.
+- Das „?" hängt `sections.add_section_help` an; `app.py` verteilt es zentral über
+  `self._sections` an alle zehn Rahmen, **kein** Abschnitts-Konstruktor weiß davon.
+  Mauszeiger `hand2` (`question_arrow` war kurz gesetzt und sah auf macOS falsch aus).
+- Das Fenster ist **nicht modal** (Nachlesen beim Ausfüllen) und lädt bei
+  `<FocusIn>` nach einer mtime-Änderung neu. Eine Fußleiste mit „Schließen"/„Im
+  Editor öffnen" gab es kurz und wurde vom Nutzer verworfen — das macht die
+  Fenstersteuerung des Systems.
 
 **Layout-Wahrheit**
 - **Alle** Layout-Zahlen stehen in `pdf/geometry.py` (maßgeblich; `docs/CARD_LAYOUT.md`
@@ -544,6 +588,9 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   **Akzentfarbe** hervor, nicht in der Warnfarbe (Limit ist kein Fehler).
 - **Kein „Alle/Keine Karten drucken"** im Menü — vom Nutzer als überflüssig
   verworfen; Karten werden über die Spalte „Drucken" bzw. die Trennlinie gesteuert.
+- **Keine Entwicklerdokumente im Hilfe-Menü.** README/Spezifikation/Karten-Layout
+  standen dort einmal und wurden vom Nutzer ausdrücklich entfernt: das Menü
+  „Hilfe" gehört dem Anwender, dafür gibt es das Handbuch. Nicht zurückholen.
 
 **Realität der Testdaten (`Log.adi`)**
 - Enthält **kein** `QSL_SENT_VIA` (und keine Via-Info) — das ist der **Normalfall**:
