@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=QSL-Karten-Generator
+GenericName=QSL-Karten aus dem Logbuch
+Comment=Erzeugt aus einem Logbuch (ADIF/Cabrillo) QSL-Karten als PDF
+# Exec wird von install.sh auf den echten Pfad gesetzt.
+Exec=QSL-Karten-Generator
+Icon=qsl-karten-generator
+Terminal=false
+Categories=Utility;HamRadio;Network;
+Keywords=QSL;Amateurfunk;ADIF;Cabrillo;Logbuch;PDF;
+StartupNotify=true
+StartupWMClass=QSL-Karten-Generator

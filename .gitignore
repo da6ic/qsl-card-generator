@@ -19,6 +19,11 @@ lookup_cache.json
 # Python
 __pycache__/
 *.pyc
+*.egg-info/
+
+# Bündeln (PyInstaller + fertige Archive)
+/build/
+/dist/
 
 # Virtuelle Umgebung
 .venv/

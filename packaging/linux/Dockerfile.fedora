@@ -1,0 +1,57 @@
+# Baucontainer für das Linux-Bündel (Fedora).
+#
+#   docker build --platform linux/amd64 -f packaging/linux/Dockerfile.fedora -t qslcards-build .
+#   docker run --rm --platform linux/amd64 \
+#              --user "$(id -u):$(id -g)" -v "$PWD:/src" qslcards-build
+#
+# `--platform linux/amd64` ist auf Apple Silicon nötig: ohne die Angabe entsteht
+# ein aarch64-Programm, das auf keinem üblichen Fedora-PC läuft. Die Emulation
+# macht den Lauf spürbar langsam, aber das Ergebnis ist richtig.
+#
+# `--user` ist keine Kür: ohne die Angabe baut der Container als root, und
+# `dist/`, `build/` und `qslcards.egg-info/` gehören hinterher root im Repo des
+# Anwenders — vom Mac aus ließen sie sich nicht einmal mehr löschen.
+#
+# Mit podman derselbe Aufruf ohne `--user` (podman bildet den Benutzer von sich
+# aus ab), dafür mit `:z` an der Einhängung: `-v "$PWD:/src:z"` (SELinux).
+#
+# Warum ein Container und nicht einfach „irgendein Linux": PyInstaller bündelt
+# keine glibc. Ein Programm läuft nur auf Systemen, deren glibc mindestens so
+# neu ist wie die des Baurechners. Gebaut wird deshalb auf der ältesten
+# Fedora-Version, die unterstützt werden soll — F42, weil dort Tcl/Tk 9.0
+# systemweit angekommen ist (davor liefe die Vorschautabelle ohne ihre Icons).
+#
+# Das mitgelieferte Python 3.13 genügt: unter Linux kommt Tk vom System, nicht
+# vom Interpreter. Die 3.14-Empfehlung gilt nur für Windows und macOS, wo Tcl/Tk
+# im Python-Installer steckt.
+#
+# `fedora` ist das offizielle Abbild von Docker Hub (Docker Official Image).
+FROM fedora:42
+
+# python3-tkinter ist auf Fedora ein eigenes Paket und fehlt sonst still —
+# PyInstaller baut dann ein Programm, das beim Start kein tkinter findet.
+# binutils braucht PyInstaller für die Abhängigkeitsanalyse (objdump).
+RUN dnf -y install --setopt=install_weak_deps=False \
+        python3 python3-pip python3-tkinter \
+        binutils tar gzip findutils \
+    && dnf clean all
+
+# Die virtuelle Umgebung wird ins Abbild gebaut, nicht bei jedem Lauf: sonst
+# lädt jeder Durchgang die Abhängigkeiten neu — über die Emulation dauert das
+# länger als der Build selbst. `--user` beim Lauf darf sie nur lesen können.
+COPY pyproject.toml README.md /build/
+COPY qslcards/__init__.py /build/qslcards/__init__.py
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/venv/bin/pip install --no-cache-dir /build[build] \
+    && /opt/venv/bin/pip uninstall -y qslcards \
+    && rm -rf /build \
+    && chmod -R a+rX /opt/venv
+
+# Der Quellbaum kommt beim Lauf herein, nicht ins Abbild: derselbe Container
+# baut jeden Stand, ohne neu gebaut zu werden. `qslcards` selbst wird nicht
+# installiert — die Spec legt die Projektwurzel auf den Suchpfad.
+WORKDIR /src
+ENV HOME=/tmp
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+CMD ["/opt/venv/bin/python", "scripts/build_app.py", "--clean"]

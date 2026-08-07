@@ -1,11 +1,6 @@
 # Python 3.11+ erforderlich. Tkinter ist Teil der Standardbibliothek.
-reportlab>=4.0      # PDF-Erzeugung, mm-genaue Positionierung
-pillow>=10.0        # Bild laden/skalieren (Frontbild)
-requests>=2.31      # HamQTH-/QRZ-XML-API
-pyyaml>=6.0         # config.yaml lesen/schreiben
-
-# Entwicklung / Tests
-pytest>=8.0
-black>=24.0
-ruff>=0.4
-pypdf>=4.0          # nur Tests: Seitenzahl der erzeugten PDF prüfen
+#
+# Die Abhängigkeiten selbst stehen in `pyproject.toml` — hier nur der gewohnte
+# Einstieg, damit `pip install -r requirements.txt` weiter funktioniert.
+# Für einen Build zusätzlich: pip install -e ".[build]"
+-e .[dev]

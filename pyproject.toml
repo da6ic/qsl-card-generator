@@ -1,8 +1,47 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "qslcards"
-version = "0.1.0"
 description = "QSL-Karten-Generator: erzeugt aus einem Logbuch (ADIF/Cabrillo) QSL-Karten als PDF."
+readme = "README.md"
 requires-python = ">=3.11"
+# Eine Wahrheit: die Version steht in `qslcards/__init__.py` (sie wird auch im
+# „Über"-Dialog angezeigt) und wird hier daraus gelesen.
+dynamic = ["version"]
+dependencies = [
+    "reportlab>=4.0",   # PDF-Erzeugung, mm-genaue Positionierung
+    "pillow>=10.0",     # Bild laden/skalieren (Frontbild)
+    "requests>=2.31",   # HamQTH-/QRZ-XML-API
+    "pyyaml>=6.0",      # config.yaml lesen/schreiben
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "black>=24.0",
+    "ruff>=0.4",
+    "pypdf>=4.0",       # nur Tests: Seitenzahl der erzeugten PDF prüfen
+]
+# Zum Bündeln (siehe packaging/ und scripts/build_app.py). PyInstaller erst ab
+# 6.21: davor fehlt die Unterstützung für Tcl/Tk 9 mit eingebettetem Datenarchiv,
+# und ohne Tk 9 verschwinden die SVG-Icons der Vorschautabelle.
+build = ["pyinstaller>=6.21"]
+
+# `gui-scripts`, nicht `scripts`: unter Windows blitzt sonst bei jedem Start
+# kurz ein Konsolenfenster auf.
+[project.gui-scripts]
+qslcards = "qslcards.main:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "qslcards.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["qslcards*"]
+
+[tool.setuptools.package-data]
+qslcards = ["assets/fonts/*", "assets/icons/*"]
 
 [tool.black]
 line-length = 100

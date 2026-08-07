@@ -2,5 +2,7 @@
 
 from __future__ import annotations
 
-# Wird im „Über"-Dialog (Menü „Hilfe") angezeigt; parallel zu pyproject.toml pflegen.
+# Die Programmversion — hier und nur hier. `pyproject.toml` liest sie über
+# `[tool.setuptools.dynamic]` aus, der „Über"-Dialog (Menü „Hilfe") zeigt sie an,
+# und `scripts/build_app.py` benennt die Bündel danach.
 __version__ = "0.1.0"
