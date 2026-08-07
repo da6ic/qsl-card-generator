@@ -179,7 +179,15 @@ sieht dadurch auf allen Plattformen gleich aus.
   effort" und fällt bei Fehlern auf hell zurück — nie fatal.
 - Klassische tk-Widgets (Listbox, Canvas, Menüs) kennen keine ttk-Styles und
   werden per `restyle_tree(widget, palette)` eingefärbt — **beim Start und** bei
-  jedem Wechsel, sonst behalten sie die Farben des Betriebssystems.
+  jedem Wechsel, sonst behalten sie die Farben des Betriebssystems. Die Vorgabe
+  für erst *später* erzeugte tk-Widgets (Dialog-Toplevel) steht in der
+  Optionsdatenbank (`option_add("*Background"/"*Foreground")`).
+- Achtung: **kein `tk_setPalette`.** Es setzt nicht nur diese Vorgaben, sondern
+  läuft zusätzlich über den ganzen Widget-Baum und schreibt `-foreground`/
+  `-background` als *Instanz*-Option auf jedes Widget, das sie kennt — auch auf
+  `ttk::label`/`entry`/`combobox`/`spinbox`. Eine Instanz-Option schlägt den
+  ttk-Style: nach dem ersten Wechsel wäre der rote `*` textfarben, ab dem
+  zweiten blieben die Widgets sogar auf den Farben des alten Themas stehen.
 - Achtung `clam`: Radio-/Checkbuttons färbt man über `indicatorbackground`/
   `indicatorforeground`; `indicatorcolor` (die Option der alten tk-Widgets) wird
   ignoriert.

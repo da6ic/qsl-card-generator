@@ -427,6 +427,19 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
 - `restyle_tree` muss **beim Start** laufen, nicht nur beim Themenwechsel: Listbox,
   Canvas und Menüs sind keine ttk-Widgets und behielten sonst die Systemfarben
   (die Auswahl in der Prioritätsliste war deshalb schwarz).
+- **`tk_setPalette` ist Gift für ttk.** Es setzt nicht nur die Optionsdatenbank,
+  sondern läuft über den kompletten Widget-Baum und schreibt `-foreground`/
+  `-background` als **Instanz**-Option auf jedes Widget, das sie kennt — und
+  `ttk::label`/`entry`/`combobox`/`spinbox`/`progressbar` kennen sie. Eine
+  Instanz-Option schlägt den Style. Beim Start folgenlos (`theme.apply` läuft vor
+  `_build_ui`), beim Wechsel verloren 81 Widgets ihre Farbe: der rote `*`, die
+  blauen Abschnittstitel, das „?", die Fläche der Statusleiste, der
+  Thumbnail-Rahmen und die Icon-Untergründe der Tabelle. Ab dem **zweiten**
+  Wechsel blieben sie sogar auf den Farben des alten Themas stehen (Tk ersetzt
+  dort nur noch, was dem alten Vorgabewert entspricht). Ersatz: `option_add`
+  („*Background"/„*Foreground") für künftige tk-Widgets + `restyle_tree` für die
+  bestehenden. Zwei Tests halten dagegen (kein `TLabel` darf nach einem Wechsel
+  eine eigene Farbe tragen).
 - `clam` kennt **kein** `indicatorcolor` — Radio-/Checkbuttons färbt man über
   `indicatorbackground`/`indicatorforeground`. Eine Zuweisung an `indicatorcolor`
   schlägt nicht fehl, sie wirkt nur nicht.
