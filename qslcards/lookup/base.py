@@ -11,6 +11,7 @@ loggen und liefern `None`.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, fields
 from typing import TYPE_CHECKING, Protocol
 
@@ -73,15 +74,24 @@ class ChainedLookup:
       3. Ergebnis cachen (auch „nichts gefunden" als negativer Eintrag).
 
     Der Cache ist optional; ohne ihn wird jedes Mal frisch abgefragt.
+
+    `degraded()` meldet, dass ein Provider gerade unbrauchbar ist (abgelehnte
+    Anmeldung). Dann wird **nichts** geschrieben: sonst stünde nach einem Lauf
+    mit falschem Passwort für jede Station ein negativer Eintrag in der
+    Cache-Datei, und selbst mit korrigierten Zugangsdaten fände der nächste
+    Start nichts mehr. Gelesen wird weiter — alte Treffer bleiben gültig.
     """
 
     def __init__(
         self,
         providers: list[LookupProvider],
         cache: LookupCache | None = None,
+        *,
+        degraded: Callable[[], bool] | None = None,
     ) -> None:
         self._providers = list(providers)
         self._cache = cache
+        self._degraded = degraded or (lambda: False)
 
     def lookup(self, call: str, *, force: bool = False) -> LookupResult | None:
         """Schlägt `call` nach. Mit `force=True` wird der Cache **übersprungen**
@@ -105,7 +115,7 @@ class ChainedLookup:
                 result = found
                 break
 
-        if self._cache is not None:
+        if self._cache is not None and not self._degraded():
             self._cache.set(call, result or LookupResult(call=call, source="none"))
 
         return result

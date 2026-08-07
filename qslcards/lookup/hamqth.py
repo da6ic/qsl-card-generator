@@ -16,6 +16,7 @@ als `None` zurückgegeben — sie dürfen die PDF-Erzeugung nie abbrechen.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from xml.etree import ElementTree as ET
 
 import requests
@@ -37,13 +38,18 @@ class HamQTHClient:
         *,
         http: requests.Session | None = None,
         timeout: float = 10.0,
+        on_auth_error: Callable[[str], None] | None = None,
     ) -> None:
         self._user = user
         self._password = password
         self._program_id = program_id or "qslcards"
         self._http = http if http is not None else requests.Session()
         self._timeout = timeout
+        self._on_auth_error = on_auth_error
         self._session_id: str | None = None
+        # Der Server hat die Anmeldung abgelehnt (fast immer: falsche
+        # Zugangsdaten). Danach ist dieser Client für den Lauf unbrauchbar.
+        self.auth_failed = False
 
     # -- öffentliches Interface -------------------------------------------
 
@@ -85,6 +91,11 @@ class HamQTHClient:
     def _ensure_session(self) -> str | None:
         if self._session_id:
             return self._session_id
+        if self.auth_failed:
+            # Eine abgelehnte Anmeldung wird von allein nicht gültig: nicht für
+            # jedes weitere Rufzeichen erneut anklopfen (schont die API und
+            # macht den Lauf sofort fertig, statt N-mal ins Leere zu greifen).
+            return None
         root = self._get({"u": self._user, "p": self._password})
         if root is None:
             return None
@@ -92,9 +103,20 @@ class HamQTHClient:
         if session_id:
             self._session_id = session_id
             return session_id
-        error = _find_text(root, "error")
-        logger.warning("HamQTH-Anmeldung fehlgeschlagen: %s", error or "unbekannt")
+        self._fail_auth(_find_text(root, "error"))
         return None
+
+    def _fail_auth(self, message: str | None) -> None:
+        """Der Server hat die Anmeldung beantwortet und abgelehnt.
+
+        Nur hier — ein Netzfehler wirft und landet in `lookup()`, der darf nicht
+        als „falsches Passwort" durchgehen.
+        """
+        text = message or "unbekannter Fehler"
+        logger.warning("HamQTH-Anmeldung fehlgeschlagen: %s", text)
+        self.auth_failed = True
+        if self._on_auth_error is not None:
+            self._on_auth_error(text)
 
     def _get(self, params: dict[str, str]) -> ET.Element | None:
         resp = self._http.get(BASE_URL, params=params, timeout=self._timeout)

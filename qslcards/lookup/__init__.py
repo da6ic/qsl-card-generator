@@ -46,9 +46,16 @@ __all__ = [
     "active_via_priority",
     "VIA_CODES",
     "VIA_LABELS",
+    "PROVIDER_HAMQTH",
+    "PROVIDER_QRZ",
 ]
 
 DEFAULT_CACHE_PATH = "lookup_cache.json"
+
+# Anzeigenamen der Anbieter — sie stehen in Warnungen der GUI und ordnen die
+# Meldung den Feldern in Abschnitt 6 zu (siehe `sections.PROVIDER_FIELDS`).
+PROVIDER_HAMQTH = "HamQTH"
+PROVIDER_QRZ = "QRZ"
 
 # Zustellweg-Codes in kanonischer Reihenfolge: B=Büro (inkl. Manager),
 # D=Direkt, Q=eQSL, L=LOTW. Der Nutzer priorisiert diese Wege in der GUI und
@@ -75,26 +82,50 @@ def has_lookup_credentials(config: LookupConfig) -> bool:
 def build_lookup(
     config: LookupConfig,
     cache_path: str | Path = DEFAULT_CACHE_PATH,
+    *,
+    auth_error_cb: Callable[[str, str], None] | None = None,
 ) -> ChainedLookup:
     """Baut die Lookup-Fassade: HamQTH zuerst, QRZ als Fallback, mit JSON-Cache.
 
     Nur Provider mit Credentials werden eingehängt. Fehlen alle, bleibt eine
     reine Cache-Fassade übrig (liefert nur bereits gecachte Treffer).
+
+    `auth_error_cb(anbieter, meldung)` wird gerufen, wenn ein Anbieter die
+    Anmeldung ablehnt — die GUI warnt damit den Nutzer, statt ihn mit „0
+    Stationen gefunden" ratlos zu lassen.
     """
-    providers: list[LookupProvider] = []
+
+    def reporter(provider: str) -> Callable[[str], None] | None:
+        if auth_error_cb is None:
+            return None
+        return lambda message: auth_error_cb(provider, message)
+
+    clients: list[HamQTHClient | QRZClient] = []
     if config.hamqth_user and config.hamqth_pass:
-        providers.append(
+        clients.append(
             HamQTHClient(
                 config.hamqth_user,
                 config.hamqth_pass,
                 config.program_id,
+                on_auth_error=reporter(PROVIDER_HAMQTH),
             )
         )
     if config.qrz_user and config.qrz_pass:
-        providers.append(QRZClient(config.qrz_user, config.qrz_pass))
+        clients.append(
+            QRZClient(
+                config.qrz_user,
+                config.qrz_pass,
+                on_auth_error=reporter(PROVIDER_QRZ),
+            )
+        )
 
+    providers: list[LookupProvider] = list(clients)
     cache = LookupCache(cache_path)
-    return ChainedLookup(providers, cache=cache)
+    return ChainedLookup(
+        providers,
+        cache=cache,
+        degraded=lambda: any(client.auth_failed for client in clients),
+    )
 
 
 # Rufzeichen-Muster: Präfix (Buchstaben/Ziffern), mind. eine Ziffer, Suffix aus
@@ -213,6 +244,7 @@ def lookup_calls(
     cache_path: str | Path = DEFAULT_CACHE_PATH,
     force: bool = False,
     progress_cb: Callable[[int, int], None] | None = None,
+    auth_error_cb: Callable[[str, str], None] | None = None,
 ) -> dict[str, LookupResult | None]:
     """Schlägt alle (eindeutigen) Rufzeichen nach → Map `CALL -> LookupResult|None`.
 
@@ -222,7 +254,8 @@ def lookup_calls(
 
     Netz-/Auth-Fehler sind **nie** fatal: sie werden geloggt, das Ergebnis ist
     dann `None` (→ `accepted_routes` fällt auf `default_via`). `progress_cb(done,
-    total)` wird nach jedem abgefragten Rufzeichen aufgerufen.
+    total)` wird nach jedem abgefragten Rufzeichen aufgerufen,
+    `auth_error_cb(anbieter, meldung)` bei abgelehnter Anmeldung.
     """
     unique: list[str] = []
     seen: set[str] = set()
@@ -237,7 +270,7 @@ def lookup_calls(
         return results
 
     try:
-        lookup = build_lookup(config, cache_path)
+        lookup = build_lookup(config, cache_path, auth_error_cb=auth_error_cb)
     except Exception as exc:  # nie fatal
         logger.warning("Lookup konnte nicht initialisiert werden: %s", exc)
         return {call: None for call in unique}

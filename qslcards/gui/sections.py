@@ -10,10 +10,16 @@ ttk-Styles + Abstands-Konstanten) — kein Widget setzt hier eine Farbe selbst.
 from __future__ import annotations
 
 import tkinter as tk
+from collections.abc import Iterable
 from pathlib import Path
 from tkinter import ttk
 
-from qslcards.lookup import VIA_LABELS, normalize_via_priority
+from qslcards.lookup import (
+    PROVIDER_HAMQTH,
+    PROVIDER_QRZ,
+    VIA_LABELS,
+    normalize_via_priority,
+)
 from qslcards.pdf.geometry import PRINT_MARGIN_MAX, SHEET_MODE_A4_4UP, SHEET_MODE_SINGLE
 
 from .icon_canvas import icon_canvas
@@ -64,6 +70,13 @@ REQUIRED_MARK = " *"
 # Alles oberhalb wird gedruckt (in Reihenfolge = Priorität), alles darunter nicht.
 VIA_DIVIDER = "\x00divider"
 VIA_DIVIDER_LABEL = "──── nicht drucken ────"
+
+# Zugangsdaten-Felder je Anbieter (Abschnitt 6) — welche Felder rot werden,
+# wenn dieser Anbieter die Anmeldung ablehnt.
+PROVIDER_FIELDS: dict[str, tuple[str, ...]] = {
+    PROVIDER_HAMQTH: ("hamqth_user", "hamqth_pass"),
+    PROVIDER_QRZ: ("qrz_user", "qrz_pass"),
+}
 
 QSL_MARK_CHOICES = ["Leer lassen", "PSE QSL", "TNX QSL"]
 PORTABLE_CHOICES = ["Keins", "/p", "/m", "/t", "/r"]
@@ -579,7 +592,12 @@ class ModeSection:
 
 
 class LookupSection:
-    """6. Lookups (optional)."""
+    """6. Lookups (optional).
+
+    Lehnt ein Anbieter die Anmeldung ab, umrandet `mark_auth_failed` sein
+    Feldpaar rot — dieselbe Sprache wie bei den Pflichtfeldern in Abschnitt 3.
+    Die Markierung geht weg, sobald der Nutzer das Feld ändert.
+    """
 
     def __init__(self, parent: tk.Misc) -> None:
         self.frame = ttk.LabelFrame(parent, text="6. Lookups")
@@ -589,20 +607,33 @@ class LookupSection:
         self.qrz_pass = tk.StringVar()
         self.address_export = tk.BooleanVar(value=False)
 
+        self.vars: dict[str, tk.StringVar] = {
+            "hamqth_user": self.hamqth_user,
+            "hamqth_pass": self.hamqth_pass,
+            "qrz_user": self.qrz_user,
+            "qrz_pass": self.qrz_pass,
+        }
+        self.entries: dict[str, ttk.Entry] = {}
+        self._marked: set[str] = set()
+
         rows = [
-            ("HamQTH Benutzer", self.hamqth_user, False),
-            ("HamQTH Passwort", self.hamqth_pass, True),
-            ("QRZ Benutzer", self.qrz_user, False),
-            ("QRZ Passwort", self.qrz_pass, True),
+            ("hamqth_user", "HamQTH Benutzer", False),
+            ("hamqth_pass", "HamQTH Passwort", True),
+            ("qrz_user", "QRZ Benutzer", False),
+            ("qrz_pass", "QRZ Passwort", True),
         ]
-        for i, (label, var, secret) in enumerate(rows):
+        for i, (field, label, secret) in enumerate(rows):
+            var = self.vars[field]
             ttk.Label(self.frame, text=label).grid(row=i, column=0, pady=GAP_ROW, sticky="w")
-            ttk.Entry(
+            entry = ttk.Entry(
                 self.frame,
                 textvariable=var,
                 width=22,
                 show="•" if secret else "",
-            ).grid(row=i, column=1, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="we")
+            )
+            entry.grid(row=i, column=1, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="we")
+            self.entries[field] = entry
+            var.trace_add("write", lambda *_a, f=field: self._unmark(f))
 
         ttk.Checkbutton(
             self.frame,
@@ -610,6 +641,26 @@ class LookupSection:
             variable=self.address_export,
         ).grid(row=4, column=0, columnspan=2, pady=(PAD_INNER, GAP_ROW), sticky="w")
         self.frame.columnconfigure(1, weight=1)
+
+    def mark_auth_failed(self, providers: Iterable[str]) -> None:
+        """Markiert die Felder genau dieser Anbieter rot, alle anderen nicht mehr."""
+        for field in list(self._marked):
+            self._unmark(field)
+        for provider in providers:
+            for field in PROVIDER_FIELDS.get(provider, ()):
+                entry = self.entries.get(field)
+                if entry is not None:
+                    entry.configure(style="Invalid.TEntry")
+                    self._marked.add(field)
+
+    def _unmark(self, field: str) -> None:
+        """Markierung eines Feldes aufheben (auch bei jeder Änderung daran)."""
+        if field not in self._marked:
+            return
+        self._marked.discard(field)
+        entry = self.entries.get(field)
+        if entry is not None:
+            entry.configure(style="TEntry")
 
 
 class RemarksSection:

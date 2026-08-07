@@ -802,20 +802,59 @@ class App(tk.Tk):
         def progress(done: int, total: int) -> None:
             self.after(0, self.preview.set_status, f"Schlage Stationen nach… {done}/{total}")
 
-        # lookup_calls fängt Netz-/Auth-Fehler ab (nie fatal).
-        results = lookup_calls(calls, lookup_config, force=force, progress_cb=progress)
-        self.after(0, self._lookups_done, results)
+        # Je Anbieter nur die erste Meldung — sonst stünde sie einmal pro Station da.
+        auth_errors: dict[str, str] = {}
 
-    def _lookups_done(self, results: dict) -> None:
+        def auth_error(provider: str, message: str) -> None:
+            auth_errors.setdefault(provider, message)
+
+        # lookup_calls fängt Netz-/Auth-Fehler ab (nie fatal).
+        results = lookup_calls(
+            calls,
+            lookup_config,
+            force=force,
+            progress_cb=progress,
+            auth_error_cb=auth_error,
+        )
+        self.after(0, self._lookups_done, results, auth_errors)
+
+    def _lookups_done(self, results: dict, auth_errors: dict | None = None) -> None:
         self._lookup_running = False
         self.lookups.update(results)
         self._rebuild_cards()
         self.preview.refresh_btn.config(state="normal")
+        self._update_generate_state()
+
+        auth_errors = auth_errors or {}
+        self.lookup_section.mark_auth_failed(auth_errors)
+        if auth_errors:
+            self._report_auth_errors(auth_errors)
+            return
+
         total = len({(q.call or "").strip().upper() for q in self.qsos if q.call})
         found = sum(1 for r in self.lookups.values() if r is not None)
         self.preview.set_status(f"Lookup fertig – {found}/{total} Stationen gefunden.")
         self.status.set(f"Lookup fertig – {found}/{total} Stationen gefunden.", "ok")
-        self._update_generate_state()
+
+    def _report_auth_errors(self, auth_errors: dict) -> None:
+        """Warnt, wenn ein Anbieter die Zugangsdaten abgelehnt hat.
+
+        Ohne diesen Hinweis sähe der Nutzer nur „0 Stationen gefunden" und
+        hätte keinen Anhaltspunkt, dass sein Passwort das Problem ist.
+        """
+        names = " und ".join(auth_errors)
+        short = f"Anmeldung bei {names} fehlgeschlagen – Zugangsdaten prüfen."
+        self.preview.set_status(short)
+        self.status.set(short, "error")
+        self._goto_section(6)
+        details = "\n".join(f"• {provider}: {message}" for provider, message in auth_errors.items())
+        messagebox.showwarning(
+            "Anmeldung fehlgeschlagen",
+            "Die Zugangsdaten wurden vom Anbieter abgelehnt:\n\n"
+            f"{details}\n\n"
+            "Bitte in Abschnitt 6 (Lookups) prüfen. Ohne Anmeldung bleiben alle "
+            "Zustellwege auf dem Standard.",
+        )
 
     def _update_generate_state(self) -> None:
         busy = self._lookup_running or self._generating

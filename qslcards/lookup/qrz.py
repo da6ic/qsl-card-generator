@@ -17,6 +17,7 @@ abgefangen, geloggt und als `None` zurückgegeben.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from urllib.parse import quote_plus
 from xml.etree import ElementTree as ET
 
@@ -39,12 +40,16 @@ class QRZClient:
         *,
         http: requests.Session | None = None,
         timeout: float = 10.0,
+        on_auth_error: Callable[[str], None] | None = None,
     ) -> None:
         self._user = user
         self._password = password
         self._http = http if http is not None else requests.Session()
         self._timeout = timeout
+        self._on_auth_error = on_auth_error
         self._session_key: str | None = None
+        # Anmeldung vom Server abgelehnt -> Client für diesen Lauf unbrauchbar.
+        self.auth_failed = False
 
     # -- öffentliches Interface -------------------------------------------
 
@@ -87,6 +92,9 @@ class QRZClient:
     def _ensure_session(self) -> str | None:
         if self._session_key:
             return self._session_key
+        if self.auth_failed:
+            # Abgelehnte Anmeldung nicht für jedes weitere Rufzeichen wiederholen.
+            return None
         root = self._get(
             f"username={quote_plus(self._user)};"
             f"password={quote_plus(self._password)};agent={AGENT}"
@@ -97,9 +105,16 @@ class QRZClient:
         if key:
             self._session_key = key
             return key
-        error = _session_error(root)
-        logger.warning("QRZ-Anmeldung fehlgeschlagen: %s", error or "unbekannt")
+        self._fail_auth(_session_error(root))
         return None
+
+    def _fail_auth(self, message: str | None) -> None:
+        """Der Server hat die Anmeldung beantwortet und abgelehnt (siehe HamQTH)."""
+        text = message or "unbekannter Fehler"
+        logger.warning("QRZ-Anmeldung fehlgeschlagen: %s", text)
+        self.auth_failed = True
+        if self._on_auth_error is not None:
+            self._on_auth_error(text)
 
     def _get(self, query: str) -> ET.Element | None:
         resp = self._http.get(f"{BASE_URL}?{query}", timeout=self._timeout)

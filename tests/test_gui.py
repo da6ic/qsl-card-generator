@@ -117,6 +117,58 @@ def test_auto_lookup_fills_via_and_manager(app, tmp_path):
     assert str(app.output_section.generate_btn["state"]) == "normal"
 
 
+def _load_with_rejected_login(app, tmp_path, provider="HamQTH", message="Wrong user name or pass"):
+    """Log laden, wobei der Anbieter die Zugangsdaten ablehnt."""
+    path = tmp_path / "log.adi"
+    path.write_text(ADIF, encoding="utf-8")
+    app.file_section.path_var.set(str(path))
+    app.lookup_section.hamqth_user.set("u")
+    app.lookup_section.hamqth_pass.set("falsch")
+
+    def rejecting(calls, cfg, **kw):
+        kw["auth_error_cb"](provider, message)
+        return {c.strip().upper(): None for c in calls}
+
+    with (
+        mock.patch.object(appmod.threading, "Thread", _SyncThread),
+        mock.patch.object(appmod, "lookup_calls", side_effect=rejecting),
+        mock.patch.object(appmod, "messagebox") as box,
+    ):
+        app._load_log()
+        app.update()
+    return box
+
+
+def test_rejected_login_warns_and_marks_the_fields(app, tmp_path):
+    """Ohne Warnung sähe der Nutzer nur „0 Stationen gefunden"."""
+    box = _load_with_rejected_login(app, tmp_path)
+
+    box.showwarning.assert_called_once()
+    title, text = box.showwarning.call_args.args
+    assert title == "Anmeldung fehlgeschlagen"
+    assert "HamQTH" in text and "Wrong user name or pass" in text
+
+    entries = app.lookup_section.entries
+    assert str(entries["hamqth_user"].cget("style")) == "Invalid.TEntry"
+    assert str(entries["hamqth_pass"].cget("style")) == "Invalid.TEntry"
+    assert str(entries["qrz_user"].cget("style")) != "Invalid.TEntry"  # QRZ war nicht dran
+    assert "Anmeldung bei HamQTH fehlgeschlagen" in app.status.status_var.get()
+
+
+def test_editing_the_password_clears_the_mark(app, tmp_path):
+    _load_with_rejected_login(app, tmp_path)
+    app.lookup_section.hamqth_pass.set("richtig")
+    assert str(app.lookup_section.entries["hamqth_pass"].cget("style")) == "TEntry"
+
+
+def test_successful_lookup_clears_earlier_marks(app, tmp_path):
+    _load_with_rejected_login(app, tmp_path)
+    _load(app, tmp_path)  # zweiter Lauf, diesmal ohne Ablehnung
+    for entry in app.lookup_section.entries.values():
+        assert str(entry.cget("style")) != "Invalid.TEntry"
+    assert "Lookup fertig" in app.status.status_var.get()
+
+
 def test_without_credentials_all_default_via(app, tmp_path):
     # Keine Zugangsdaten -> kein Netzcall, alle Via = default_via ("B" -> „Büro").
     _load(app, tmp_path)

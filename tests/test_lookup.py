@@ -447,6 +447,19 @@ def test_chain_caches_negative_and_skips_second_lookup(tmp_path: Path):
     assert provider.calls == ["XX0XXX"]  # negativer Treffer gecacht
 
 
+def test_chain_degraded_writes_nothing_to_the_cache(tmp_path: Path):
+    """Abgelehnte Anmeldung: jede Station liefert `None`. Würde das gecacht,
+    fände auch der nächste Start mit richtigem Passwort nichts mehr."""
+    provider = StubProvider({"XX0XXX": None})
+    cache = LookupCache(tmp_path / "cache.json")
+    chain = ChainedLookup([provider], cache=cache, degraded=lambda: True)
+
+    assert chain.lookup("XX0XXX") is None
+    assert cache.get("XX0XXX") is None  # kein negativer Eintrag hinterlassen
+    assert chain.lookup("XX0XXX") is None
+    assert provider.calls == ["XX0XXX", "XX0XXX"]  # es gibt nichts zu überspringen
+
+
 def test_chain_force_bypasses_cache(tmp_path: Path):
     # Negativer Cache-Eintrag (z.B. nach Netzabbruch) soll mit force=True
     # erneut abgefragt werden.
@@ -478,6 +491,78 @@ def test_build_lookup_without_credentials_is_cache_only(tmp_path: Path):
     assert isinstance(chain, ChainedLookup)
     # Ohne Credentials keine Provider → nur Cache; unbekanntes Call = None
     assert chain.lookup("DL1ABC") is None
+
+
+def test_hamqth_reports_rejected_login_once_and_stops_trying():
+    """Falsche Zugangsdaten: einmal melden, danach nicht je Station neu anklopfen."""
+    session = FakeSession([FakeResponse(hamqth_error_xml("Wrong user name or password"))])
+    reported: list[str] = []
+    client = HamQTHClient("u", "falsch", http=session, on_auth_error=reported.append)
+
+    assert client.lookup("DL1ABC") is None
+    assert client.lookup("DL2XYZ") is None
+
+    assert reported == ["Wrong user name or password"]
+    assert client.auth_failed is True
+    assert len(session.calls) == 1  # nur der eine Anmeldeversuch
+
+
+def test_qrz_reports_rejected_login_once_and_stops_trying():
+    session = FakeSession([FakeResponse(qrz_error_xml("Username/password incorrect"))])
+    reported: list[str] = []
+    client = QRZClient("u", "falsch", http=session, on_auth_error=reported.append)
+
+    assert client.lookup("DL1ABC") is None
+    assert client.lookup("DL2XYZ") is None
+
+    assert reported == ["Username/password incorrect"]
+    assert client.auth_failed is True
+    assert len(session.calls) == 1
+
+
+def test_network_failure_is_not_reported_as_wrong_credentials():
+    """Ein Netzfehler darf nicht als abgelehntes Passwort durchgehen."""
+    session = FakeSession([requests.ConnectionError("kein Netz")])
+    reported: list[str] = []
+    client = HamQTHClient("u", "p", http=session, on_auth_error=reported.append)
+
+    assert client.lookup("DL1ABC") is None
+    assert reported == []
+    assert client.auth_failed is False
+
+
+def test_lookup_calls_forwards_auth_errors(tmp_path: Path, monkeypatch):
+    """Die Meldung des Anbieters muss bis zur GUI durchkommen."""
+
+    class RejectingClient:
+        auth_failed = False
+
+        def __init__(self, *args, on_auth_error=None, **kwargs):
+            self._report = on_auth_error
+
+        def lookup(self, call):
+            if not self.auth_failed:
+                self.auth_failed = True
+                if self._report is not None:
+                    self._report("Wrong user name or password")
+            return None
+
+    monkeypatch.setattr("qslcards.lookup.HamQTHClient", RejectingClient)
+    errors: list[tuple[str, str]] = []
+    results = lookup_calls(
+        ["DL1ABC", "DL2XYZ"],
+        LookupConfig(hamqth_user="u", hamqth_pass="falsch"),
+        cache_path=tmp_path / "cache.json",
+        auth_error_cb=lambda provider, message: errors.append((provider, message)),
+    )
+
+    assert results == {"DL1ABC": None, "DL2XYZ": None}
+    assert errors == [("HamQTH", "Wrong user name or password")]
+    # Und nichts davon landet als negativer Eintrag in der Cache-Datei.
+    assert (
+        not (tmp_path / "cache.json").exists()
+        or json.loads((tmp_path / "cache.json").read_text(encoding="utf-8")) == {}
+    )
 
 
 def test_build_lookup_wires_providers(tmp_path: Path):
