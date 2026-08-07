@@ -850,8 +850,20 @@ gefunden" und die Meldung stünde allein im Log. Deshalb:
   — ohne Druckrand die volle Seite (im Bogen: die volle Zelle), sonst derselbe
   Rahmen wie die Rückseite, damit beide Seiten deckungsgleich liegen. Mit
   Druckrand hat also auch das Frontbild den weißen Rand ringsum. Das Bild wird auch bei ungleichen
-  Rändern **nie verzerrt**. Einmal via Pillow geladen und als ImageReader
-  gecacht, für alle Karten wiederverwenden.
+  Rändern **nie verzerrt**.
+
+  > **`drawImage` bekommt den Dateipfad, nie ein `ImageReader`.** ReportLab
+  > bildet den Cache-Schlüssel eines `ImageReader` aus einem MD5 über die
+  > komplette entpackte Bitmap — bei **jedem** Aufruf. Ein 4096×3072-Foto sind
+  > 37,7 MB, die dann je Karte einmal kopiert und einmal gehasht werden:
+  > gemessene 119 ms pro Seite statt 4,6 ms. Bei 3525 Karten aus einem
+  > Contest-Log ist das der Unterschied zwischen 308 s und 4,6 s; obendrein
+  > reicht ReportLab ein JPEG nur über den Pfad unverändert durch, statt es als
+  > rohes RGB neu zu komprimieren (22 MB → 6,6 MB). Pillow wird hier nur noch
+  > für die Bildmaße gebraucht (Cover-Fit), die je Pfad gecacht werden.
+  > Nachweis: `test_front_image_is_passed_as_a_path`. Die *Wirkung* (ein
+  > Bild-XObject fürs ganze Dokument) taugt nicht als Test — der Digest ist ja
+  > jedes Mal derselbe, das Bild landet auch mit `ImageReader` nur einmal drin.
 - **Back** (`layout_back.py`): exakt nach `CARD_LAYOUT.md`. Alle Positionen/
   Größen aus `geometry.py`; die mitwachsenden Maße und die Y-Spiegelung kommen
   aus dem `PageLayout`, den `draw_back` einmal baut und an alle Helfer

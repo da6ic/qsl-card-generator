@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from unittest import mock
 
 import pytest
 from PIL import Image
 from pypdf import PdfReader
+from reportlab.pdfgen.canvas import Canvas
 
 from qslcards.cards.models import Card, CardRow
 from qslcards.config import AppConfig, GenerationConfig, LookupConfig
@@ -47,6 +49,50 @@ def _dummy_cards(
             )
         )
     return cards
+
+
+def test_front_image_is_passed_as_a_path(tmp_path: Path):
+    """`drawImage` muss den **Dateipfad** bekommen, nie ein `ImageReader`.
+
+    ReportLab schlüsselt ein `ImageReader`-Objekt über einen MD5 der komplett
+    entpackten Bitmap — und zwar bei jedem Aufruf neu. Bei einem 4096×3072-Foto
+    sind das 37,7 MB je Karte: gemessene 119 ms pro Seite statt 4,6 ms, bei
+    einem Contest-Log mit dreitausend Karten fünf Minuten statt zwanzig
+    Sekunden. Außerdem reicht ReportLab ein JPEG nur über den Pfad unverändert
+    durch, statt es als rohes RGB neu zu komprimieren (Datei ~5× kleiner).
+
+    Die Wirkung (ein Bild-XObject für alle Seiten) taugt **nicht** als Test:
+    der Digest ist ja jedes Mal derselbe, das Bild landet auch mit
+    `ImageReader` nur einmal im Dokument. Nachweisbar ist nur der Aufruf selbst.
+    """
+    img = _front_image(tmp_path)
+    seen: list[object] = []
+    real = Canvas.drawImage
+
+    def spy(self, image, *args, **kwargs):
+        seen.append(image)
+        return real(self, image, *args, **kwargs)
+
+    with mock.patch.object(Canvas, "drawImage", spy):
+        generate(_dummy_cards(3), AppConfig(), str(img), str(tmp_path / "cards.pdf"))
+
+    assert len(seen) == 3  # je Karte eine Vorderseite
+    assert all(arg == str(img) for arg in seen), f"kein Pfad übergeben: {seen}"
+
+
+def test_front_image_is_embedded_only_once(tmp_path: Path):
+    """Egal wie viele Karten: das Frontbild steht **einmal** im Dokument."""
+    img = _front_image(tmp_path)
+    out = tmp_path / "many.pdf"
+    generate(_dummy_cards(40), AppConfig(), str(img), str(out))
+
+    images = {
+        name
+        for page in PdfReader(str(out)).pages
+        for name, obj in page.get("/Resources", {}).get("/XObject", {}).items()
+        if obj.get_object().get("/Subtype") == "/Image"
+    }
+    assert len(images) == 1
 
 
 def test_generate_two_pages_per_card(tmp_path: Path):

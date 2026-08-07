@@ -603,6 +603,13 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   Locator aus `STATION_CALLSIGN`/`MY_GRIDSQUARE` zu ziehen, wurde zurückgenommen).
 - **Kein `subtitle`/„Responsive"** — komplett entfernt.
 - **Front im Cover-Modus** (füllt die Seite randlos, Überstand wird geclippt).
+- **`drawImage` bekommt den Dateipfad, nie ein `ImageReader`** (`layout_front.py`).
+  ReportLab hasht ein `ImageReader` sonst bei **jedem** Aufruf komplett (MD5 über
+  die entpackte Bitmap): gemessene 119 ms je Seite statt 4,6 ms, bei 3525 Karten
+  308 s statt 4,6 s, und die PDF wird 22 statt 6,6 MB groß (mit Pfad wandert ein
+  JPEG unverändert hinein). Pillow liefert nur noch die Maße für den Cover-Fit.
+  Ein Test hält das fest — er prüft den **Aufruf**, nicht die Wirkung: dass das
+  Bild nur einmal im Dokument landet, stimmt auch mit `ImageReader`.
 - `MARGIN = 3 mm`; Portabel-Kennung `/p`/`/m`/`/t`/`/r` **hinter dem eigenen
   Rufzeichen**; Bestätigungs-Markierung (Confirming QSO/SWL) oben mittig;
   Stationsdaten als Label/Wert-Spalte neben der Adresse; Funk-Block (RIG/ANT/PWR)
@@ -655,9 +662,17 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
 - Für Cabrillo gibt es **kein** Beispiel-Log im Repo: die Testfälle stehen inline
   in `tests/test_cabrillo_parser.py`, je einer pro Contest-Template. Zum
   Ausprobieren ein gemischtes Log im Scratchpad anlegen, nicht im Projekt-Root.
-- **Ein Contest-Log ist groß** (500–5000 QSOs) — entsprechend viele Lookups beim
-  Laden und potenziell tausende Karten. Ob Vorschautabelle und `generate` in der
-  Größenordnung angenehm bleiben, ist **noch nicht gemessen**.
+- **Ein Contest-Log ist groß** (500–5000 QSOs) — gemessen (5000 QSOs, 3525
+  Karten, Bogendruck): Parser 95 ms, `build_cards` 32 ms, Vorschautabelle
+  122 ms, PDF 4,6 s. Alles linear, die GUI bleibt bedienbar. Der Engpass war die
+  PDF-Erzeugung (308 s) und lag am `ImageReader` (siehe oben), nicht am Umfang.
+- **Der Lookup ist die eigentliche Geduldsprobe** und bleibt es: 3500 eindeutige
+  Rufzeichen bedeuten 3500 HamQTH-Abfragen. `LookupCache.set()` schreibt dabei
+  je Rufzeichen die ganze JSON-Datei neu (quadratisch: 0,7 s bei 700, 16,4 s bei
+  3500 Einträgen) — das **bleibt bewusst so**: neben zwanzig Minuten Netzzeit
+  fällt es nicht ins Gewicht, und das sofortige Schreiben macht den Cache
+  absturzsicher (ein abgebrochener Lauf behält jedes geholte Rufzeichen). Beim
+  zweiten Laden mit warmem Cache wird gar nicht mehr geschrieben.
 
 **Workflow-Konventionen**
 - Branch **`build/mvp`**. **Nicht selbst committen** — erst nach Review; committen,
