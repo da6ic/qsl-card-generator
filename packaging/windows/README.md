@@ -10,32 +10,44 @@ und erst 3.14 bringt **Tcl/Tk 9.0.4** mit (3.13 nur 8.6.15). Mit Tk 8.6 fehlen
 der Vorschautabelle stillschweigend die Stift- und Schaltersymbole — das Programm
 startet, es sieht nur falsch aus.
 
-Von <https://www.python.org/downloads/windows/>, Python 3.14.x:
+Von <https://www.python.org/downloads/windows/> beide Installer von Python 3.14.x
+herunterladen und ausführen: *Windows installer (64-bit)* **und** *Windows
+installer (32-bit)*.
 
-| Ziel | Installer | Empfohlener Pfad |
-|------|-----------|------------------|
-| 64-Bit | *Windows installer (64-bit)* | `C:\Python314` |
-| 32-Bit | *Windows installer (32-bit)* | `C:\Python314-32` |
+Beim Installieren **„tcl/tk and IDLE" angehakt lassen** (Standard) — ohne das
+gibt es kein tkinter. Ebenso **„py launcher"** anhaken; damit muss man sich
+später um Installationspfade nicht kümmern.
 
-Beim Installieren **tcl/tk and IDLE** angehakt lassen (Standard) — ohne das gibt
-es kein tkinter. „Install for all users" mit eigenem Pfad macht die beiden
-Bitbreiten leichter auseinanderzuhalten.
+**Wohin sie installiert werden, ist egal.** Der Standardpfad hängt davon ab, ob
+man „für alle Benutzer" oder „nur für mich" wählt (dann liegt Python unter
+`%LOCALAPPDATA%\Programs\Python\…`). Welche Interpreter installiert sind und wo,
+zeigt:
+
+```powershell
+py -0p
+```
 
 ## Bauen
 
 ```powershell
-git clone <repo> ; cd qsl-karten-generator
+git clone git@gitlab.j-homelab.de:side-projects/qsl-karten-generator.git
+cd qsl-karten-generator
+git checkout build/mvp
 
 # 64-Bit
-powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1 -Python "C:\Python314\python.exe"
+powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1 -Python "py -3.14"
 
 # 32-Bit
-powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1 -Python "C:\Python314-32\python.exe" -VenvDir ".venv-build32"
+powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1 -Python "py -3.14-32" -VenvDir ".venv-build32"
 ```
 
+`py -3.14` bzw. `py -3.14-32` wählt der Python-Launcher aus — **kein Pfad nötig**.
+Fehlt der Launcher, geht auch der vollständige Pfad:
+`-Python "$env:LOCALAPPDATA\Programs\Python\Python314\python.exe"`.
+
 Das Skript gibt vor dem Bauen Bitbreite und Tk-Version aus — genau die beiden
-Angaben, die man dem fertigen Programm nicht mehr ansieht. Stimmen sie nicht,
-abbrechen statt weiterbauen.
+Angaben, die man dem fertigen Programm nicht mehr ansieht. Steht dort `Tk 8.6`
+oder die falsche Bitbreite: abbrechen statt weiterbauen.
 
 Ergebnis: `dist\QSL-Karten-Generator-<version>-windows-x64.zip` bzw. `-x86.zip`.
 
