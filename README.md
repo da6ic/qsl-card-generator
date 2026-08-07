@@ -101,7 +101,12 @@ plattformabhängig: unter Windows und macOS steckt es im Python-Installer — un
 dort zählt die **Punktversion**: erst **3.14.7** bringt Tcl/Tk 9.0.4 mit,
 3.14.0–3.14.6 und 3.13 liefern noch 8.6.15. Unter Linux kommt Tk vom System
 (Fedora 42+ hat Tcl/Tk 9.0, dort genügt das mitgelieferte Python 3.13).
-PyInstaller muss **≥ 6.21** sein — davor kann es Tcl/Tk 9 nicht bündeln.
+PyInstaller muss **≥ 6.21** sein — davor kann es Tcl/Tk 9 gar nicht bündeln.
+
+**Für Windows reicht auch 6.21.0 noch nicht:** Python 3.14.7 legt die
+Tcl-Bibliothek *in die DLL*, und das kennt erst die noch unveröffentlichte
+Entwicklungsfassung. `build_app.py` erkennt das und nennt den Ausweg; Einzelheiten
+in `packaging/windows/README.md`.
 
 **Windows 32-Bit hat einen Haken**: PyYAML liefert für Python 3.14 kein
 win32-Wheel mehr. Was das bedeutet und welche drei Wege es gibt, steht in

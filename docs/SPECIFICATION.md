@@ -985,6 +985,10 @@ in `geometry.py` referenzieren.
 - `test_paths.py`: §10 — Quellmodus zeigt in die Projektwurzel (auch aus fremdem
   Arbeitsverzeichnis), gebündelt Portable- vs. Benutzerordner, macOS-Sonderfall
   `.app/Contents/MacOS`, Config und Cache im selben Ordner, `subprocess_env`.
+- `test_build_app.py`: die Vorbedingungsprüfung des Build-Skripts (§10.5), vor
+  allem die vier Kombinationen aus „Tcl-Daten eingebettet" × „PyInstaller kennt
+  den Fall" — die falsche davon erzeugte ein Bündel, das erst beim Doppelklick
+  starb. Außerdem, dass der Tk-Hinweis die **Punktversion** 3.14.7 nennt.
 
 ---
 
@@ -1055,8 +1059,13 @@ es läuft. Die harte Bedingung ist **Tk ≥ 9**: die SVG-Icons der Vorschautabel
 (§2) fehlen sonst ohne Fehlermeldung. Woher Tk kommt, ist plattformabhängig —
 Windows/macOS aus dem Python-Installer (erst **3.14.7** bringt 9.0.4 mit —
 3.14.0-3.14.6 haben noch 8.6.15), Linux vom
-System (Fedora 42+). PyInstaller muss **≥ 6.21** sein. Das Skript prüft alle drei
-Punkte vorab und bricht mit Klartext ab, statt still etwas Kaputtes zu bauen.
+System (Fedora 42+). PyInstaller muss **≥ 6.21** sein — für Windows sogar die noch
+unveröffentlichte Entwicklungsfassung, weil Python 3.14.7 die Tcl-Bibliothek
+in die DLL legt (`//zipfs:/…`) und 6.21.0 das nicht kennt; das Bündel bräche
+sonst erst beim Start ab. Das Skript prüft alle Punkte vorab und bricht mit
+Klartext ab, statt still etwas Kaputtes zu bauen — die PyInstaller-Fähigkeit
+dabei am Quelltext, weil die Fassung mit dem Fix sich weiterhin als 6.21.0
+meldet.
 
 Verpackt wird plattformabhängig: Windows/Linux als ZIP bzw. `tar.gz` (letzteres
 erhält die Ausführungsrechte), macOS zwingend mit **`ditto`** — ein gewöhnliches

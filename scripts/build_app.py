@@ -71,6 +71,37 @@ def _pyinstaller_version() -> tuple[int, ...] | None:
         return None
 
 
+def _tcl_uses_embedded_data() -> bool:
+    """Trägt Tcl seine Bibliothek in der DLL statt in einem Ordner daneben?
+
+    Tcl 9 kann das (`info library` liefert dann einen virtuellen Pfad
+    `//zipfs:/…`). Der Windows-Installer von Python 3.14.7 macht davon Gebrauch.
+    """
+    try:
+        import tkinter
+
+        return tkinter.Tcl().eval("info library").startswith("//zipfs:/")
+    except Exception:
+        return False
+
+
+def _pyinstaller_handles_embedded_tcl() -> bool:
+    """Kommt dieses PyInstaller mit eingebetteten Tcl-Daten zurecht?
+
+    Über die Versionsnummer ist das **nicht** zu beantworten: die Fassung mit dem
+    Fix meldet sich weiterhin als 6.21.0, weil sie noch nicht veröffentlicht ist.
+    Deshalb wird die Fähigkeit direkt an der Quelle geprüft.
+    """
+    try:
+        import inspect
+
+        from PyInstaller.utils.hooks import tcl_tk
+
+        return "//zipfs:/" in inspect.getsource(tcl_tk)
+    except Exception:
+        return False
+
+
 def check_prerequisites() -> list[str]:
     """Liefert die Liste der Probleme — leer heißt: es kann losgehen."""
     problems: list[str] = []
@@ -108,6 +139,20 @@ def check_prerequisites() -> list[str]:
             f"Tk {tk} statt {MIN_TK}+ (mit Python {platform.python_version()}). Die Stift-/"
             f"Schalter-Icons der Vorschautabelle würden im fertigen Programm fehlen — "
             f"ohne jede Fehlermeldung. {hint}"
+        )
+
+    # Tcl 9 mit eingebetteter Bibliothek + PyInstaller ohne die passende
+    # Behandlung ergibt ein Bündel, das erst beim **Start** stirbt
+    # („Tcl data directory ... not found"). Deshalb hier abfangen.
+    if _tcl_uses_embedded_data() and not _pyinstaller_handles_embedded_tcl():
+        problems.append(
+            "Dieses Tcl trägt seine Bibliothek in der DLL (Tcl 9, wie im "
+            "Windows-Installer von Python 3.14.7), aber dieses PyInstaller kennt "
+            "den Fall noch nicht — das fertige Programm bräche beim Start ab. Der "
+            "Fix ist in PyInstaller, aber noch nicht veröffentlicht (6.21.0 hat ihn "
+            "nicht). Abhilfe:\n"
+            '      pip install --force-reinstall "pyinstaller @ '
+            'git+https://github.com/pyinstaller/pyinstaller.git@develop"'
         )
 
     for needed in (SPEC, ROOT / "handbuch.md", ROOT / "config.example.yaml"):

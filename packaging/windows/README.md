@@ -35,6 +35,35 @@ zeigt:
 py -0p
 ```
 
+## PyInstaller: hier braucht es die Entwicklungsfassung
+
+Python 3.14.7 unter Windows bringt Tcl/Tk 9 mit **eingebetteter** Bibliothek —
+die Tcl-Skripte stecken in der DLL statt in einem Ordner daneben. Das
+veröffentlichte PyInstaller 6.21.0 kennt diesen Fall noch nicht: es sammelt
+nichts ein, und sein Laufzeit-Hook bricht beim **Start** des fertigen Programms
+ab mit
+
+```
+Tcl data directory "...\_internal\_tcl_data" not found.
+```
+
+Der Fix ist geschrieben, aber noch in keinem Release (siehe `news/9470.*` im
+PyInstaller-Repository; 6.21.0 ist vom Juni 2026). Bis zur nächsten
+Veröffentlichung deshalb:
+
+```powershell
+.venv-build\Scripts\python.exe -m pip install --force-reinstall `
+    "pyinstaller @ git+https://github.com/pyinstaller/pyinstaller.git@develop"
+```
+
+Das braucht **keinen** C-Compiler — die vorgebauten Bootloader liegen im
+Repository (Windows-64bit, Linux-64bit, Darwin-64bit; für Windows **32-Bit gibt
+es keinen**, ein weiterer Grund gegen diese Bitbreite).
+
+`build_app.py` erkennt die Lage selbst und bricht mit genau diesem Hinweis ab —
+die Versionsnummer hilft dabei nicht, denn die Fassung mit dem Fix meldet sich
+weiterhin als 6.21.0.
+
 ## Bauen
 
 ```powershell

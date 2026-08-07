@@ -737,9 +737,19 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
     `packaging/windows/README.md`.
   * Linux: Tk kommt vom System. **Fedora 42+** hat Tcl/Tk 9.0 systemweit, dort
     genügt das mitgelieferte Python 3.13 (3.14 gibt es erst ab F43).
-  * **PyInstaller ≥ 6.21** — davor kann es Tcl/Tk 9 mit eingebettetem
-    Datenarchiv nicht bündeln. `scripts/build_app.py` prüft alle drei Punkte
-    vorab und bricht mit Klartext ab.
+  * **PyInstaller ≥ 6.21** — davor kennt es Tcl/Tk 9 überhaupt nicht.
+- **Für Windows genügt auch 6.21.0 nicht.** Python 3.14.7 legt die Tcl-Bibliothek
+  *in die DLL* (`info library` liefert `//zipfs:/…`). PyInstaller 6.21.0 sammelt
+  dann nichts ein, und sein Laufzeit-Hook bricht beim **Start** des fertigen
+  Programms ab: „Tcl data directory … `_tcl_data` not found". Der Fix liegt in
+  `develop` (`news/9470.*`), ist aber in keinem Release — `pip install
+  "pyinstaller @ git+…@develop"`, ohne Compiler, die Bootloader liegen vorgebaut
+  im Repo (Windows-**32**-Bit allerdings nicht).
+  **Die Version verrät das nicht:** die Fassung mit dem Fix meldet weiter 6.21.0.
+  `build_app.py` prüft deshalb die **Fähigkeit** (`//zipfs:/` im Quelltext von
+  `PyInstaller.utils.hooks.tcl_tk`) und nur dann, wenn das lokale Tcl die
+  eingebettete Form nutzt — sonst meckerte es auf macOS/Linux grundlos.
+  `tests/test_build_app.py` hält alle vier Kombinationen fest.
 - **Cross-Compile existiert nicht.** PyInstaller bündelt den Interpreter, unter
   dem es läuft. Windows-Bündel nur auf Windows, Fedora-Bündel nur auf Linux
   (Container-Rezept in `packaging/linux/Dockerfile.fedora`, Basis `fedora:42`
