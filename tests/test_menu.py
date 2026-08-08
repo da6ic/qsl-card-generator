@@ -200,6 +200,14 @@ def test_help_key_really_fires(calls):
 
     Eigenes Fenster statt der `root`-Fixture: ein per `withdraw()` verstecktes
     Fenster nimmt keine synthetischen Tastenereignisse an — off-screen schon.
+
+    `focus_force` ist nicht schmückendes Beiwerk: `event_generate` stellt ein
+    Tastenereignis dem Widget mit dem **Tastaturfokus** zu. Ein frisch
+    erzeugtes Fenster bekommt ihn nur, wenn zuvor kein anderes Testfenster
+    offen war — allein lief dieser Test deshalb grün, im Gesamtlauf hinter
+    `test_gui.py`/`test_help.py` stand der Fokus auf `None` und das Ereignis
+    verpuffte. Ein funktionierendes Kürzel sah so wie ein kaputtes aus.
+    Dieselbe Vorkehrung trifft `test_textedit.py` in seiner Fixture.
     """
     try:
         window = tk.Tk()
@@ -209,6 +217,8 @@ def test_help_key_really_fires(calls):
     window.update()
     try:
         MenuBar(window, MenuActions(show_help=lambda a: calls.append(("show_help", a))))
+        window.focus_force()
+        window.update()
         window.event_generate(menumod.HELP_BINDING)
         window.update()
         assert calls == [("show_help", None)]
