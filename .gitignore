@@ -25,8 +25,13 @@ __pycache__/
 /build/
 /dist/
 
-# Virtuelle Umgebung
+# Virtuelle Umgebungen: `.venv` zum Entwickeln, `.venv-build` zum Bündeln
+# (so heißt sie in packaging/windows/build.ps1). Beide bleiben draußen.
+# `.venv-build` blieb bisher nur deshalb unsichtbar, weil `venv` sich selbst
+# eine `.gitignore` mit `*` hineinschreibt — darauf sollte sich niemand
+# verlassen müssen.
 .venv/
+.venv-build/
 
 # IDE / OS
 .idea/
