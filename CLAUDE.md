@@ -399,10 +399,14 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
       vorher Tk 9 / PyInstaller ≥ 6.21 und verpacken das Ergebnis.
 - [x] **macOS-Bündel gebaut und geprüft** (arm64, ad-hoc signiert, ZIP via
       `ditto`): startet aus dem Archiv, Tk 9 und alle Assets an Bord.
-- [ ] **Windows (64-Bit) und Fedora**: Skripte, Container-Rezept und Prüflisten
-      liegen bereit (`packaging/*/README.md`). Windows wurde angefangen und deckte
-      dabei drei Stolperfallen auf (Tk erst ab 3.14.7, eingebettete Tcl-Daten,
-      PowerShell-Zitierung); Fedora steht noch aus. **32-Bit entfällt bewusst.**
+- [x] **Windows-Bündel gebaut und geprüft** (x64, Python 3.14.7/Tk 9.0.4,
+      PyInstaller aus `develop` wegen eingebetteter Tcl-9-Daten, ZIP): startet
+      aus dem Archiv ohne Konsolenfenster und läuft stabil. Drei Stolperfallen
+      auf dem Weg dahin (Tk erst ab 3.14.7, eingebettete Tcl-Daten,
+      PowerShell-Zitierung) sind in `packaging/windows/README.md` festgehalten.
+      **32-Bit entfällt bewusst.**
+- [ ] **Fedora**: Container-Rezept und Prüfliste liegen bereit
+      (`packaging/linux/README.md`), aber noch nicht gebaut/geprüft.
 ---
 
 ## 10. Nicht raten — nachschlagen
