@@ -90,7 +90,7 @@ es läuft. Jedes Ziel braucht sein eigenes Betriebssystem:
 | Ziel | Gebaut auf | Python | Ergebnis |
 |---|---|---|---|
 | Windows 64-Bit | Windows (VM genügt) | **3.14.7+** x64 von python.org | `…-windows-x64.zip` |
-| Fedora | Fedora 42+ oder der Container in `packaging/linux/` | System-Python 3.13+ | `…-linux-x86_64.tar.gz` |
+| Fedora | Fedora 42+ oder der Container in `packaging/linux/` | **`python3.14`** aus den Fedora-Paketen | `…-linux-x86_64.tar.gz` |
 | macOS | macOS (Apple Silicon) | Homebrew (mit `tcl-tk`) oder python.org **3.14.7+** | `…-macos-arm64.zip` |
 
 **Die entscheidende Größe ist Tk 9, nicht die Python-Version.** Die
@@ -100,7 +100,10 @@ plattformabhängig: im Installer von python.org steckt es mit drin — und dort
 zählt die **Punktversion**: erst **3.14.7** bringt Tcl/Tk 9.0.4 mit,
 3.14.0–3.14.6 und 3.13 liefern noch 8.6.15. Bei Homebrew und unter Linux hängt
 Tk dagegen gar nicht am Interpreter: dort zählt das Paket `tcl-tk` bzw. das
-System (Fedora 42+ hat Tcl/Tk 9.0, dort genügt das mitgelieferte Python 3.13).
+System. Auf Fedora 42 ist Tcl/Tk 9.0 zwar Systempaket, aber sein Standard-Python
+3.13 ist gegen die Kompatibilitätspakete `tcl8`/`tk8` gebaut und meldet 8.6 —
+gebaut wird dort deshalb mit dem mitgelieferten **`python3.14`**
+(`packaging/linux/README.md` zeigt die Messung).
 PyInstaller muss **≥ 6.21** sein — davor kann es Tcl/Tk 9 gar nicht bündeln.
 
 **Für Windows reicht auch 6.21.0 noch nicht:** Python 3.14.7 legt die

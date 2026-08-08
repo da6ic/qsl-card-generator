@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import stat
 import sys
+import tarfile
 import zipfile
 from pathlib import Path
 
@@ -105,6 +106,33 @@ def test_windows_zip_carries_the_short_guide(tmp_path, monkeypatch):
     assert (folder / "LIESMICH.txt").is_file()
     with zipfile.ZipFile(archive) as bundle:
         assert f"{build_app.APP_NAME}/LIESMICH.txt" in bundle.namelist()
+
+
+def test_linux_tar_carries_the_short_guide_and_the_install_helpers(tmp_path, monkeypatch):
+    """Auch das Linux-Archiv trägt die Kurzanleitung — und **nicht** die README.
+
+    `packaging/linux/README.md` beschreibt, wie man das Programm baut
+    (Container, PyInstaller, glibc). Sie lag früher im Archiv und war für den
+    Anwender, der es gerade heruntergeladen hat, schlicht die falsche Datei.
+
+    `install.sh` und die `.desktop`-Datei müssen dagegen mit: ohne sie bräuchte
+    er für die Einrichtung zusätzlich das Repository.
+    """
+    dist = tmp_path / "dist"
+    folder = dist / build_app.APP_NAME
+    folder.mkdir(parents=True)
+    (folder / build_app.APP_NAME).write_bytes(b"")
+    monkeypatch.setattr(build_app, "DIST_DIR", dist)
+
+    archive = build_app.package_tar(folder)
+
+    assert (folder / "LIESMICH.txt").is_file()
+    with tarfile.open(archive) as bundle:
+        names = bundle.getnames()
+    assert f"{build_app.APP_NAME}/LIESMICH.txt" in names
+    assert f"{build_app.APP_NAME}/install.sh" in names
+    assert f"{build_app.APP_NAME}/qsl-karten-generator.desktop" in names
+    assert f"{build_app.APP_NAME}/README.md" not in names
 
 
 def _fake_app(dist: Path) -> Path:

@@ -1,0 +1,43 @@
+QSL-Karten-Generator — Installation unter Linux
+================================================
+
+Gebaut für Fedora 42 und neuer (64-Bit-PC, x86_64). Auf anderen Distributionen
+läuft es, sofern deren glibc mindestens 2.41 ist.
+
+1. Dieses Archiv an einen Ort entpacken, den du beschreiben darfst — dein
+   Persönlicher Ordner, der Schreibtisch oder ein USB-Stick:
+
+     tar xzf QSL-Karten-Generator-*-linux-x86_64.tar.gz
+     cd QSL-Karten-Generator
+
+2. Entweder direkt starten:
+
+     ./QSL-Karten-Generator
+
+   Oder fest einrichten, mit Eintrag im Anwendungsmenü und Programmsymbol:
+
+     ./install.sh
+
+   Das Skript fragt kein Passwort und braucht kein sudo. Alles landet unter
+   ~/.local (Programm in ~/.local/opt/qsl-karten-generator). Wieder entfernen:
+
+     ./install.sh --uninstall
+
+3. Eine Warnung wie unter Windows oder macOS gibt es hier nicht — Linux fragt
+   bei einem heruntergeladenen Programm nicht nach.
+
+   Sollte sich das Programm per Doppelklick im Dateimanager nicht starten
+   lassen, fehlt ihm nur das Ausführungsrecht:
+
+     chmod +x QSL-Karten-Generator
+
+Zwei Kleinigkeiten, die auf einer Fedora-Workstation da sind und in einer
+minimalen Installation fehlen können. Ohne sie stürzt nichts ab, es fehlt nur
+eine Funktion — install.sh weist darauf hin, wenn es so ist:
+
+  xdg-open   (Paket xdg-utils)  „PDF öffnen" und „Ausgabeordner anzeigen"
+  gsettings  (Paket glib2)      Farbthema folgt automatisch dem System
+
+Alles Weitere — die Bedienung, wo deine Einstellungen gespeichert werden und
+wie du das Programm auf einem USB-Stick mitnimmst — steht im Handbuch:
+im Programm unter  Hilfe ▸ Handbuch  (oder Taste F1).

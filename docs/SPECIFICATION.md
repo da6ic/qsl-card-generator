@@ -1058,8 +1058,11 @@ Portable-Modus braucht einen Ordner).
 es läuft. Die harte Bedingung ist **Tk ≥ 9**: die SVG-Icons der Vorschautabelle
 (§2) fehlen sonst ohne Fehlermeldung. Woher Tk kommt, ist plattformabhängig —
 Windows/macOS aus dem Python-Installer (erst **3.14.7** bringt 9.0.4 mit —
-3.14.0-3.14.6 haben noch 8.6.15), Linux vom
-System (Fedora 42+). PyInstaller muss **≥ 6.21** sein — für Windows sogar die noch
+3.14.0-3.14.6 haben noch 8.6.15), Linux vom System. Auf Fedora 42 genügt es
+nicht, dass Tcl/Tk 9.0 als Systempaket vorliegt: das Standard-Python 3.13 ist
+gegen die Kompatibilitätspakete `tcl8`/`tk8` gebaut und meldet 8.6 — gebaut wird
+dort mit dem mitgelieferten **`python3.14`**.
+PyInstaller muss **≥ 6.21** sein — für Windows sogar die noch
 unveröffentlichte Entwicklungsfassung, weil Python 3.14.7 die Tcl-Bibliothek
 in die DLL legt (`//zipfs:/…`) und 6.21.0 das nicht kennt; das Bündel bräche
 sonst erst beim Start ab. Das Skript prüft alle Punkte vorab und bricht mit
@@ -1072,7 +1075,9 @@ erhält die Ausführungsrechte), macOS zwingend mit **`ditto`** — ein gewöhnl
 `zip` löst die Symlinks in `Contents/Frameworks` auf und zerstört die Signatur.
 
 Ausgeliefert wird überall ein **Ordner**, in dem neben dem Programm eine
-Kurzanleitung liegt (`LIESMICH.txt` bzw. unter Linux `install.sh` + README). Auf
+`LIESMICH.txt` liegt; unter Linux kommen `install.sh` und die `.desktop`-Datei
+dazu. Die READMEs aus `packaging/` gehören **nicht** ins Archiv — sie beschreiben
+das Bauen und wären für den Anwender die falsche Datei. Auf
 macOS entsteht er eigens (`macos_delivery_folder`): das Bauergebnis ist dort die
 `.app`, und in die gehört nichts hinein. Die `.app` wird dabei **verschoben**,
 nicht kopiert — was ausgeliefert wird, ist genau das, was in `dist/` ausprobiert

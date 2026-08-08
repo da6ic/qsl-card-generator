@@ -18,21 +18,37 @@
 # Warum ein Container und nicht einfach „irgendein Linux": PyInstaller bündelt
 # keine glibc. Ein Programm läuft nur auf Systemen, deren glibc mindestens so
 # neu ist wie die des Baurechners. Gebaut wird deshalb auf der ältesten
-# Fedora-Version, die unterstützt werden soll — F42, weil dort Tcl/Tk 9.0
-# systemweit angekommen ist (davor liefe die Vorschautabelle ohne ihre Icons).
-#
-# Das mitgelieferte Python 3.13 genügt: unter Linux kommt Tk vom System, nicht
-# vom Interpreter. Die 3.14-Empfehlung gilt nur für Windows und macOS, wo Tcl/Tk
-# im Python-Installer steckt.
+# Fedora-Version, die unterstützt werden soll — F42 (glibc 2.41).
 #
 # `fedora` ist das offizielle Abbild von Docker Hub (Docker Official Image).
 FROM fedora:42
 
-# python3-tkinter ist auf Fedora ein eigenes Paket und fehlt sonst still —
-# PyInstaller baut dann ein Programm, das beim Start kein tkinter findet.
+# **Nicht `python3`, sondern `python3.14`** — und das ist der ganze Trick an
+# dieser Datei. Fedora 42 hat Tcl/Tk 9.0 zwar als Systempaket (`tk` = 9.0.0),
+# aber sein Standard-Python ist 3.13 und dessen `python3-tkinter` ist gegen die
+# **Kompatibilitätspakete** `tcl8`/`tk8` gebaut: `tkinter.TkVersion` meldet dort
+# 8.6. Damit fehlten der Vorschautabelle stillschweigend die Stift- und
+# Schalter-Symbole (`gui/preview.py` fängt den Fehler ab) — genau der Fall, den
+# `scripts/build_app.py` verhindern soll; es bräche den Build mit „Tk 8.6 statt
+# 9.0+" ab. Nachgeprüft mit `dnf repoquery --requires`:
+#
+#   python3-tkinter    (3.13) -> libtcl8.6.so    libtk8.6.so
+#   python3.14-tkinter (3.14) -> libtcl9.0.so    libtcl9tk9.0.so
+#
+# Fedora 42 liefert 3.14 als Parallel-Interpreter mit, gegen Tcl/Tk 9 gebaut.
+# Der Umweg über Fedora 43 (dessen Standard-Python 3.14 ist) wäre die Alternative
+# gewesen und wurde verworfen: dessen glibc 2.42 ist neuer, das fertige Programm
+# liefe dann nicht mehr auf Fedora 42.
+#
+# `info library` liefert hier einen echten Ordner (`/usr/share/tcl9.0`), keinen
+# eingebetteten `//zipfs:/`-Pfad wie der Windows-Installer — das veröffentlichte
+# PyInstaller 6.21.0 genügt also, die `develop`-Fassung ist nur unter Windows nötig.
+#
+# tkinter ist auf Fedora ein eigenes Paket und fehlt sonst still — PyInstaller
+# baut dann ein Programm, das beim Start kein tkinter findet.
 # binutils braucht PyInstaller für die Abhängigkeitsanalyse (objdump).
 RUN dnf -y install --setopt=install_weak_deps=False \
-        python3 python3-pip python3-tkinter \
+        python3.14 python3.14-tkinter \
         binutils tar gzip findutils \
     && dnf clean all
 
@@ -41,7 +57,7 @@ RUN dnf -y install --setopt=install_weak_deps=False \
 # länger als der Build selbst. `--user` beim Lauf darf sie nur lesen können.
 COPY pyproject.toml README.md /build/
 COPY qslcards/__init__.py /build/qslcards/__init__.py
-RUN python3 -m venv /opt/venv \
+RUN python3.14 -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
     && /opt/venv/bin/pip install --no-cache-dir /build[build] \
     && /opt/venv/bin/pip uninstall -y qslcards \

@@ -111,7 +111,8 @@ scripts/
   build_app.py            # auslieferbare Anwendung bauen + verpacken
 packaging/
   qslcards.spec           # PyInstaller: eine Spec für alle drei Plattformen
-  linux/                  # .desktop, install.sh, Dockerfile.fedora, README
+  linux/                  # .desktop, install.sh, LIESMICH.txt, Dockerfile.fedora,
+                          #   README (python3.14 statt python3, glibc, Prüfliste)
   windows/                # build.ps1, LIESMICH.txt, README (Python, SmartScreen)
   macos/                  # LIESMICH.txt, README (Tk-Herkunft, Gatekeeper, ditto)
                           #   kein Bauskript — build_app.py genügt hier
@@ -119,6 +120,7 @@ config.example.yaml       # Vorlage = genau das, was config.save(AppConfig())
                           #   schreibt (Test hält das fest). Fällt zurück, solange
                           #   es noch keine config.yaml gibt.
 handbuch.md               # Anwender-Handbuch (zeigt „Hilfe > Handbuch" an)
+.dockerignore             # Build-Kontext für Dockerfile.fedora klein halten
 requirements.txt
 README.md
 docs/
@@ -409,8 +411,13 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
       auf dem Weg dahin (Tk erst ab 3.14.7, eingebettete Tcl-Daten,
       PowerShell-Zitierung) sind in `packaging/windows/README.md` festgehalten.
       **32-Bit entfällt bewusst.**
-- [ ] **Fedora**: Container-Rezept und Prüfliste liegen bereit
-      (`packaging/linux/README.md`), aber noch nicht gebaut/geprüft.
+- [x] **Fedora-Bündel gebaut und geprüft** (x86_64, `tar.gz`, im Container
+      `fedora:42` mit `python3.14`/Tk 9.0, auf einer Fedora-VM abgenommen):
+      startet, Vorschautabelle zeigt ihre SVG-Symbole, PDF mit Umlauten,
+      `install.sh` richtet Menüeintrag und Symbole ein, Portable-Modus greift.
+      Zwei Stolperfallen unterwegs (Standard-Python 3.13 baut mit **Tk 8.6**;
+      `PIL._tkinter_finder` fehlte im Bündel) stehen in
+      `packaging/linux/README.md`.
 ---
 
 ## 10. Nicht raten — nachschlagen
@@ -740,9 +747,30 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   * **Windows 32-Bit ist doppelt blockiert** und wird deshalb nicht mehr gebaut
     (siehe Entscheidungen unten): PyYAML hat für `cp314` kein win32-Wheel mehr,
     und PyInstallers `develop` bringt keinen vorgebauten 32-Bit-Bootloader mit.
-  * Linux: Tk kommt vom System. **Fedora 42+** hat Tcl/Tk 9.0 systemweit, dort
-    genügt das mitgelieferte Python 3.13 (3.14 gibt es erst ab F43).
+  * Linux: Tk kommt vom System — aber **„Fedora 42 hat Tcl/Tk 9" genügt nicht**.
+    Das Systempaket `tk` ist dort 9.0.0, das Standard-Python 3.13 ist jedoch
+    gegen die Kompatibilitätspakete gebaut und meldet **8.6**:
+    `python3-tkinter → libtcl8.6.so/libtk8.6.so`, dagegen
+    `python3.14-tkinter → libtcl9.0.so/libtcl9tk9.0.so` (`dnf repoquery
+    --requires`). Gebaut wird deshalb mit dem parallel mitgelieferten
+    **`python3.14`**. *Verworfen:* `fedora:43` (Standard-Python ist dort 3.14) —
+    dessen glibc 2.42 ist neuer, das Bündel liefe dann nicht mehr auf F42.
+    Hier genügt das **veröffentlichte** PyInstaller 6.21.0: `info library`
+    liefert einen echten Ordner, keinen `//zipfs:/`-Pfad wie unter Windows.
   * **PyInstaller ≥ 6.21** — davor kennt es Tcl/Tk 9 überhaupt nicht.
+- **`PIL._tkinter_finder` muss in `hiddenimports`** — sonst bleibt die Miniatur
+  in GUI-Abschnitt 2 nach der Bildauswahl leer. Pillow lädt das Modul erst zur
+  Laufzeit aus seiner C-Erweiterung `_imagingtk`, die statische Analyse sieht den
+  Import nie. **Nur Linux ist betroffen**: dort lädt CPython `_tkinter.so` mit
+  `RTLD_LOCAL`, die Tcl/Tk-Symbole sind unsichtbar und Pillow nimmt den Umweg
+  über `_tkinter_finder` + `dlopen`; auf macOS sind sie global sichtbar, Windows
+  hat einen eigenen Zweig über `GetProcAddress`. Der Eintrag gilt trotzdem für
+  alle drei Ziele — er kostet nichts. **Silent** ist der Fehler, weil
+  `app._update_thumbnail` nur `OSError`/`ValueError` fängt: der
+  `ModuleNotFoundError` landet im Protokoll, im Fenster steht weiter „keine
+  Vorschau", und die **PDF ist völlig in Ordnung** (`drawImage(pfad)` braucht
+  kein Tk). Prüfen: `"PIL._tkinter_finder" in sys.modules` nach einem
+  `ImageTk.PhotoImage(...)`.
 - **Für Windows genügt auch 6.21.0 nicht.** Python 3.14.7 legt die Tcl-Bibliothek
   *in die DLL* (`info library` liefert `//zipfs:/…`). PyInstaller 6.21.0 sammelt
   dann nichts ein, und sein Laufzeit-Hook bricht beim **Start** des fertigen
@@ -759,7 +787,20 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   dem es läuft. Windows-Bündel nur auf Windows, Fedora-Bündel nur auf Linux
   (Container-Rezept in `packaging/linux/Dockerfile.fedora`, Basis `fedora:42`
   von Docker Hub — die **älteste** unterstützte Version, weil PyInstaller keine
-  glibc mitbringt und das Ergebnis sonst nur auf neueren Systemen läuft).
+  glibc mitbringt und das Ergebnis sonst nur auf neueren Systemen läuft;
+  F42 = glibc 2.41). Die **Architektur** ist genauso wenig frei: auf Apple
+  Silicon braucht es `--platform linux/amd64`, sonst entsteht ein aarch64-
+  Programm. Und `--user "$(id -u):$(id -g)"`, sonst gehören `dist/`, `build/`
+  und `qslcards.egg-info/` hinterher root und lassen sich vom Mac aus nicht
+  einmal mehr löschen.
+- **Das Linux-Bündel lässt sich ohne Fedora-Rechner prüfen**: zweiter Container
+  aus **nacktem** `fedora:42` (ohne Python — sonst beweist ein Start nichts über
+  die Vollständigkeit), darin `Xvfb :99`, `xdotool` für Menü/Kürzel und
+  `import -window root` für den Screenshot. So sind die SVG-Symbole der
+  Vorschautabelle, die Bildminiatur und eine fertige PDF nachweisbar, ohne zu
+  klicken. Ein `xdg-open`, das mit **Exit 3** („no method available") scheitert,
+  ist dabei in Ordnung — im Container fehlt bloß ein Betrachter. Ein
+  `symbol lookup error` wäre das Warnzeichen (siehe `paths.subprocess_env()`).
 - **`ditto`, nicht `zip`, für die `.app`.** Ein gewöhnliches `zip` löst die
   Symlinks in `Contents/Frameworks` auf und zerstört damit die Signatur; die
   entpackte Anwendung startet dann gar nicht mehr („is damaged"). Auf arm64 ist
@@ -808,8 +849,22 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   Bootloader in PyInstallers `develop`, und Windows 10 in 32 Bit ist seit
   Oktober 2025 ohne Support — Begründung in `packaging/windows/README.md`),
   macOS **arm64 ad-hoc signiert** (nicht notarisiert — Empfänger müssen den
-  Start einmal erlauben, siehe oben), Linux **Fedora**. Bewusst außen
+  Start einmal erlauben, siehe oben), Linux **Fedora, nur x86_64** (auf Apple
+  Silicon deshalb `--platform linux/amd64`; ein natives aarch64-Bündel wurde
+  vom Nutzer verworfen — der übliche Fedora-PC ist x86_64). Bewusst außen
   vor: Inno-Setup, RPM, AppImage, Notarisierung, CI, Windows-ARM64.
+- **Der Container-Lauf und `dist/` teilen sich einen Ordner.** `docker run` hängt
+  das Repo ein, und der CMD ist `build_app.py --clean` — ein Fedora-Lauf löscht
+  also ein danebenliegendes macOS-/Windows-Bündel. Vor dem Bauen `dist/` sichern.
+  Nur dokumentiert, **nicht** im Code gelöst (vom Nutzer so entschieden;
+  Alternative „PyInstaller-Arbeitsordner je Plattform" wurde verworfen). Ohne
+  `--clean` zu bauen wäre keine Lösung: dann fände PyInstaller in
+  `build/pyinstaller` noch die Analyse-Zwischenstände der anderen Plattform.
+- **Ins Archiv gehört `LIESMICH.txt`, nie die README aus `packaging/`.** Die
+  beschreibt das **Bauen** (Container, PyInstaller, glibc) und ist für den
+  Anwender die falsche Datei; unter Linux lag sie eine Zeit lang mit drin.
+  `install.sh` und die `.desktop`-Datei müssen dagegen mit — sonst bräuchte er
+  fürs Einrichten zusätzlich das Repository.
 - **Ein Bauskript je Plattform nur, wo etwas zu beschaffen ist**: `build.ps1`
   (Windows: Interpreter, venv, PyInstaller aus `develop`), `Dockerfile.fedora`
   (Linux: überhaupt ein Fedora 42). Auf macOS steht die Umgebung — dort ist

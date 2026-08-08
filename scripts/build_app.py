@@ -272,15 +272,26 @@ def package_zip(folder: Path) -> Path:
 
 
 def package_tar(folder: Path) -> Path:
-    """tar.gz für Linux — erhält im Gegensatz zu ZIP die Ausführungsrechte."""
+    """tar.gz für Linux — erhält im Gegensatz zu ZIP die Ausführungsrechte.
+
+    Mitgeliefert wird die Kurzanleitung, nicht `packaging/linux/README.md`: die
+    beschreibt, wie man dieses Programm **baut** (Container, PyInstaller) und
+    geht den Anwender nichts an, der es gerade heruntergeladen hat. Damit hat
+    jede der drei Plattformen dieselbe `LIESMICH.txt` neben dem Programm.
+
+    `install.sh` und die `.desktop`-Datei müssen mit, sonst bräuchte der
+    Anwender für die Einrichtung zusätzlich das Repository.
+    """
+    guide = ROOT / "packaging" / "linux" / "LIESMICH.txt"
+    if guide.is_file():
+        shutil.copy2(guide, folder / guide.name)
+
     target = DIST_DIR / f"{archive_stem()}.tar.gz"
     target.unlink(missing_ok=True)
     extras = ROOT / "packaging" / "linux"
     with tarfile.open(target, "w:gz") as tar:
         tar.add(folder, arcname=folder.name)
-        # Die Installationshilfen wandern mit ins Archiv, damit der Anwender
-        # nicht zusätzlich das Repository braucht.
-        for name in ("install.sh", "qsl-karten-generator.desktop", "README.md"):
+        for name in ("install.sh", "qsl-karten-generator.desktop"):
             source = extras / name
             if source.is_file():
                 tar.add(source, arcname=f"{folder.name}/{name}")

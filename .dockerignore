@@ -1,0 +1,27 @@
+# Was NICHT in den Build-Kontext gehört (packaging/linux/Dockerfile.fedora).
+#
+# Der Kontext ist die Projektwurzel, weil das Abbild `pyproject.toml`,
+# `README.md` und `qslcards/__init__.py` braucht. Ohne diese Liste schickt
+# Docker bei jedem `docker build` den kompletten Ordner an den Daemon —
+# mit `.venv`, `dist/` und `build/` sind das ~270 MB statt ~6 MB, und über
+# die amd64-Emulation dauert allein das Übertragen spürbar.
+#
+# Der Quellbaum selbst kommt beim `docker run` als Einhängung herein
+# (`-v "$PWD:/src"`), nicht über den Kontext — hier darf also großzügig
+# ausgeschlossen werden.
+
+.venv/
+.venv-build/
+build/
+dist/
+.git/
+.idea/
+.DS_Store
+**/.DS_Store
+**/__pycache__/
+*.egg-info/
+*.pdf
+*.adi
+*.adif
+lookup_cache.json
+config.yaml
