@@ -1071,5 +1071,18 @@ Verpackt wird plattformabhängig: Windows/Linux als ZIP bzw. `tar.gz` (letzteres
 erhält die Ausführungsrechte), macOS zwingend mit **`ditto`** — ein gewöhnliches
 `zip` löst die Symlinks in `Contents/Frameworks` auf und zerstört die Signatur.
 
-Anleitungen und Prüflisten: `packaging/windows/README.md`,
-`packaging/linux/README.md`.
+Ausgeliefert wird überall ein **Ordner**, in dem neben dem Programm eine
+Kurzanleitung liegt (`LIESMICH.txt` bzw. unter Linux `install.sh` + README). Auf
+macOS entsteht er eigens (`macos_delivery_folder`): das Bauergebnis ist dort die
+`.app`, und in die gehört nichts hinein. Die `.app` wird dabei **verschoben**,
+nicht kopiert — was ausgeliefert wird, ist genau das, was in `dist/` ausprobiert
+wurde.
+
+Ein eigenes Bauskript hat nur die Plattform, auf der etwas zu beschaffen ist:
+`packaging/windows/build.ps1` (Interpreter über den `py`-Launcher, venv,
+PyInstaller aus `develop`) und `packaging/linux/Dockerfile.fedora` (überhaupt
+ein Fedora 42). Auf macOS steht die Umgebung ohnehin — dort ist `build_app.py`
+der ganze Vorgang.
+
+Anleitungen und Prüflisten: `packaging/macos/README.md`,
+`packaging/windows/README.md`, `packaging/linux/README.md`.

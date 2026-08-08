@@ -404,10 +404,14 @@ darf das Programm nicht schreiben. Beim ersten Start meldet Windows „Der
 Computer wurde durch Windows geschützt" — das Programm ist nicht signiert. Über
 *Weitere Informationen* ▸ *Trotzdem ausführen* geht es weiter.
 
-**macOS** — ZIP entpacken und die App dorthin legen, wo du sie haben willst.
-Beim ersten Start einmal **Rechtsklick ▸ Öffnen** statt Doppelklick, sonst
-verweigert macOS den Start: die App ist signiert, aber nicht bei Apple
-registriert. Danach genügt der Doppelklick.
+**macOS** — ZIP entpacken und die App dorthin legen, wo du sie haben willst
+(`Programme`, Schreibtisch oder USB-Stick); die `LIESMICH.txt` daneben brauchst
+du danach nicht mehr. Beim ersten Start verweigert macOS den Start: die App ist
+signiert, aber nicht bei Apple registriert. Der Weg daran vorbei hängt an der
+Version — auf **macOS 15 und neuer** klickst du die Meldung weg und erlaubst den
+Start unter *Systemeinstellungen ▸ Datenschutz & Sicherheit* mit *Dennoch
+öffnen*; auf **macOS 14 und älter** genügt einmal **Rechtsklick ▸ Öffnen** statt
+Doppelklick. Danach reicht der Doppelklick.
 
 **Linux** — `tar xzf QSL-Karten-Generator-*.tar.gz`, dann im entpackten Ordner
 `./install.sh`. Das legt das Programm nach `~/.local/opt` und trägt es ins

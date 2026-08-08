@@ -1,0 +1,30 @@
+QSL-Karten-Generator — Installation unter macOS
+================================================
+
+1. QSL-Karten-Generator.app aus diesem Ordner dorthin ziehen, wo du sie haben
+   willst: in den Ordner „Programme", auf den Schreibtisch oder auf einen
+   USB-Stick. Diese Datei brauchst du danach nicht mehr.
+
+2. Beim ersten Start meldet macOS, die App stamme von einem nicht verifizierten
+   Entwickler und lasse sich nicht auf Schadsoftware prüfen. Das Programm ist
+   signiert, aber nicht bei Apple registriert; die Registrierung setzt ein
+   kostenpflichtiges Entwicklerkonto voraus.
+
+   Der Weg daran vorbei — einmalig, danach genügt der Doppelklick:
+
+     macOS 15 und neuer
+       Doppelklick auf die App, die Meldung wegklicken, dann
+       Systemeinstellungen  ▸  Datenschutz & Sicherheit
+       Dort unten steht „QSL-Karten-Generator wurde blockiert…"
+       ▸  Dennoch öffnen  ▸  im Nachfragefenster erneut  Öffnen
+
+     macOS 14 und älter
+       Rechtsklick (oder Ctrl-Klick) auf die App  ▸  Öffnen
+       ▸  im Nachfragefenster erneut  Öffnen
+
+3. Ein Installationsprogramm gibt es nicht, und es ist auch keines nötig. Zum
+   Entfernen ziehst du die App in den Papierkorb.
+
+Alles Weitere — die Bedienung, wo deine Einstellungen gespeichert werden und
+wie du das Programm auf einem USB-Stick mitnimmst — steht im Handbuch:
+im Programm unter  Hilfe ▸ Handbuch  (oder ⌘ + ?).

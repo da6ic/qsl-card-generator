@@ -91,15 +91,16 @@ es läuft. Jedes Ziel braucht sein eigenes Betriebssystem:
 |---|---|---|---|
 | Windows 64-Bit | Windows (VM genügt) | **3.14.7+** x64 von python.org | `…-windows-x64.zip` |
 | Fedora | Fedora 42+ oder der Container in `packaging/linux/` | System-Python 3.13+ | `…-linux-x86_64.tar.gz` |
-| macOS | macOS (Apple Silicon) | Homebrew oder python.org **3.14.7+** | `…-macos-arm64.zip` |
+| macOS | macOS (Apple Silicon) | Homebrew (mit `tcl-tk`) oder python.org **3.14.7+** | `…-macos-arm64.zip` |
 
 **Die entscheidende Größe ist Tk 9, nicht die Python-Version.** Die
 Vorschautabelle zeichnet ihre Stift- und Schaltersymbole aus SVG, was erst Tk 9
 kann; mit Tk 8.6 fehlen sie **ohne Fehlermeldung**. Woher Tk kommt, ist
-plattformabhängig: unter Windows und macOS steckt es im Python-Installer — und
-dort zählt die **Punktversion**: erst **3.14.7** bringt Tcl/Tk 9.0.4 mit,
-3.14.0–3.14.6 und 3.13 liefern noch 8.6.15. Unter Linux kommt Tk vom System
-(Fedora 42+ hat Tcl/Tk 9.0, dort genügt das mitgelieferte Python 3.13).
+plattformabhängig: im Installer von python.org steckt es mit drin — und dort
+zählt die **Punktversion**: erst **3.14.7** bringt Tcl/Tk 9.0.4 mit,
+3.14.0–3.14.6 und 3.13 liefern noch 8.6.15. Bei Homebrew und unter Linux hängt
+Tk dagegen gar nicht am Interpreter: dort zählt das Paket `tcl-tk` bzw. das
+System (Fedora 42+ hat Tcl/Tk 9.0, dort genügt das mitgelieferte Python 3.13).
 PyInstaller muss **≥ 6.21** sein — davor kann es Tcl/Tk 9 gar nicht bündeln.
 
 **Für Windows reicht auch 6.21.0 noch nicht:** Python 3.14.7 legt die
@@ -111,8 +112,12 @@ in `packaging/windows/README.md`.
 `packaging/windows/README.md`. Windows 11 ist 64-Bit-only, und Windows 10 in
 32 Bit ist seit Oktober 2025 ohne Support.
 
-Ausführliche Anleitungen samt Prüfliste nach dem Bauen:
-`packaging/windows/README.md` und `packaging/linux/README.md`.
+Ausführliche Anleitungen samt Prüfliste nach dem Bauen liegen je Plattform
+daneben: `packaging/macos/README.md`, `packaging/windows/README.md` und
+`packaging/linux/README.md`. Ein eigenes Bauskript hat nur, wo etwas zu
+beschaffen ist — Windows `build.ps1` (Interpreter + venv), Linux
+`Dockerfile.fedora` (überhaupt ein Fedora); auf macOS genügt `build_app.py`
+selbst.
 
 ## Dokumentation
 

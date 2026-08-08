@@ -13,6 +13,7 @@ also nicht — es braucht eine Fähigkeitsprüfung. Genau die wird hier festgeha
 
 from __future__ import annotations
 
+import stat
 import sys
 import zipfile
 from pathlib import Path
@@ -104,3 +105,60 @@ def test_windows_zip_carries_the_short_guide(tmp_path, monkeypatch):
     assert (folder / "LIESMICH.txt").is_file()
     with zipfile.ZipFile(archive) as bundle:
         assert f"{build_app.APP_NAME}/LIESMICH.txt" in bundle.namelist()
+
+
+def _fake_app(dist: Path) -> Path:
+    """Eine `.app`-Attrappe mit dem Symlink, auf den es beim Packen ankommt."""
+    app = dist / f"{build_app.APP_NAME}.app"
+    (app / "Contents" / "MacOS").mkdir(parents=True)
+    (app / "Contents" / "MacOS" / build_app.APP_NAME).write_bytes(b"")
+    (app / "Contents" / "Frameworks").mkdir()
+    (app / "Contents" / "Frameworks" / "Tk.framework").symlink_to("Versions/Current")
+    return app
+
+
+def test_macos_app_moves_into_a_folder_that_can_carry_the_guide(tmp_path, monkeypatch):
+    """Auf macOS ist das Bauergebnis die `.app` — und in die gehört nichts hinein.
+
+    Deshalb bekommt sie einen Ordner, der auch die Kurzanleitung trägt. Er wird
+    verschoben, nicht kopiert: sonst lägen 200 MB doppelt in `dist/` und der
+    Anwender bekäme womöglich eine andere `.app` als die ausprobierte.
+    """
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    app = _fake_app(dist)
+    monkeypatch.setattr(build_app, "DIST_DIR", dist)
+
+    folder = build_app.macos_delivery_folder(app)
+
+    assert folder.name == build_app.archive_stem()
+    assert (folder / app.name).is_dir()
+    assert not app.exists()
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="`ditto` gibt es nur auf macOS")
+def test_macos_archive_keeps_symlinks_and_carries_the_guide(tmp_path, monkeypatch):
+    """`ditto` statt `zip` — und die Kurzanleitung muss mit.
+
+    Ein gewöhnliches `zip` (auch `shutil.make_archive`) löst die Symlinks in
+    `Contents/Frameworks` auf und zerstört damit die Code-Signatur; die
+    entpackte Anwendung startet dann gar nicht mehr („is damaged"). Der Test
+    prüft deshalb den Symlink **im Archiv**, nicht bloß, dass eine Datei entsteht.
+    """
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    monkeypatch.setattr(build_app, "DIST_DIR", dist)
+    folder = build_app.macos_delivery_folder(_fake_app(dist))
+
+    archive = build_app.package_macos(folder)
+
+    assert (folder / "LIESMICH.txt").is_file()
+    with zipfile.ZipFile(archive) as bundle:
+        names = bundle.namelist()
+        assert f"{folder.name}/LIESMICH.txt" in names
+        assert (
+            f"{folder.name}/{build_app.APP_NAME}.app/Contents/MacOS/{build_app.APP_NAME}" in names
+        )
+
+        link = f"{folder.name}/{build_app.APP_NAME}.app/Contents/Frameworks/Tk.framework"
+        assert stat.S_ISLNK(bundle.getinfo(link).external_attr >> 16)

@@ -112,7 +112,9 @@ scripts/
 packaging/
   qslcards.spec           # PyInstaller: eine Spec für alle drei Plattformen
   linux/                  # .desktop, install.sh, Dockerfile.fedora, README
-  windows/                # build.ps1, README (Python-Beschaffung, SmartScreen)
+  windows/                # build.ps1, LIESMICH.txt, README (Python, SmartScreen)
+  macos/                  # LIESMICH.txt, README (Tk-Herkunft, Gatekeeper, ditto)
+                          #   kein Bauskript — build_app.py genügt hier
 config.example.yaml       # Vorlage = genau das, was config.save(AppConfig())
                           #   schreibt (Test hält das fest). Fällt zurück, solange
                           #   es noch keine config.yaml gibt.
@@ -398,7 +400,9 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
       auslieferbare Anwendung für die Plattform, auf der sie laufen, prüfen
       vorher Tk 9 / PyInstaller ≥ 6.21 und verpacken das Ergebnis.
 - [x] **macOS-Bündel gebaut und geprüft** (arm64, ad-hoc signiert, ZIP via
-      `ditto`): startet aus dem Archiv, Tk 9 und alle Assets an Bord.
+      `ditto`): startet aus dem Archiv, Tk 9 und alle Assets an Bord. Im Archiv
+      liegt die `.app` zusammen mit `LIESMICH.txt` in einem Ordner; Anleitung und
+      Prüfliste in `packaging/macos/README.md`.
 - [x] **Windows-Bündel gebaut und geprüft** (x64, Python 3.14.7/Tk 9.0.4,
       PyInstaller aus `develop` wegen eingebetteter Tcl-9-Daten, ZIP): startet
       aus dem Archiv ohne Konsolenfenster und läuft stabil. Drei Stolperfallen
@@ -760,6 +764,15 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   Symlinks in `Contents/Frameworks` auf und zerstört damit die Signatur; die
   entpackte Anwendung startet dann gar nicht mehr („is damaged"). Auf arm64 ist
   eine (ad-hoc genügende) Signatur Pflicht — PyInstaller setzt sie selbst.
+- **Der Rechtsklick-Trick ist tot.** Mit **macOS 15 (Sequoia)** hat Apple
+  „Rechtsklick ▸ Öffnen" für nicht notarisierte Programme entfernt; der Anwender
+  muss seitdem über *Systemeinstellungen ▸ Datenschutz & Sicherheit ▸ Dennoch
+  öffnen*. Beim Selbsttest **sieht man das nie**: die Meldung hängt am
+  Quarantäne-Flag, das nur Browser/Mail/AirDrop setzen, nicht ein lokaler
+  Kopiervorgang (nachstellen mit `xattr -w com.apple.quarantine …`).
+- **Homebrew-Python hängt nicht an der Punktversion.** Die Regel „erst 3.14.7
+  bringt Tk 9" gilt für die Installer von python.org. Homebrew bindet das Paket
+  `tcl-tk` ein — dieser Rechner baut mit **3.14.6 und Tk 9.0**.
 - **`LD_LIBRARY_PATH` vergiftet jeden Kindprozess.** PyInstaller stellt den
   Bibliothekspfad des Bündels nach vorn; ein davon geerbtes `xdg-open` oder
   `gsettings` lädt die gebündelten Bibliotheken statt der eigenen und stirbt mit
@@ -794,9 +807,17 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   Blockaden: kein PyYAML-win32-Wheel für `cp314`, kein vorgebauter 32-Bit-
   Bootloader in PyInstallers `develop`, und Windows 10 in 32 Bit ist seit
   Oktober 2025 ohne Support — Begründung in `packaging/windows/README.md`),
-  macOS **arm64 ad-hoc signiert** (nicht notarisiert
-  — Empfänger brauchen Rechtsklick ▸ Öffnen), Linux **Fedora**. Bewusst außen
+  macOS **arm64 ad-hoc signiert** (nicht notarisiert — Empfänger müssen den
+  Start einmal erlauben, siehe oben), Linux **Fedora**. Bewusst außen
   vor: Inno-Setup, RPM, AppImage, Notarisierung, CI, Windows-ARM64.
+- **Ein Bauskript je Plattform nur, wo etwas zu beschaffen ist**: `build.ps1`
+  (Windows: Interpreter, venv, PyInstaller aus `develop`), `Dockerfile.fedora`
+  (Linux: überhaupt ein Fedora 42). Auf macOS steht die Umgebung — dort ist
+  `scripts/build_app.py` der ganze Vorgang, ein Wrapper wäre reine Fassade.
+  Ausgeliefert wird auf **allen** Plattformen ein Ordner mit Kurzanleitung
+  daneben; auf macOS legt ihn `macos_delivery_folder` an (in die `.app` gehört
+  nichts hinein), und die `.app` wandert **hinein** statt hineinkopiert zu
+  werden.
 - **`config.example.yaml` wird nicht von Hand gepflegt**: sie ist byteweise das,
   was `config.save(AppConfig())` schreibt — leer, ohne Kommentare, mit
   `config.CONFIG_HEADER` als erster Zeile („bitte nicht von Hand bearbeiten").

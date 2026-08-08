@@ -124,17 +124,27 @@ def check_prerequisites() -> list[str]:
     tk = _tk_version()
     if tk is None:
         problems.append(
-            "tkinter ist in diesem Python nicht verfügbar (Fedora: dnf install python3-tkinter)."
+            "tkinter ist in diesem Python nicht verfügbar (Fedora: dnf install python3-tkinter, "
+            "Homebrew: brew install python-tk)."
         )
     elif tk < MIN_TK:
-        hint = (
-            # Nicht „3.14" — die Punktversion zählt: 3.14.0 bis 3.14.6 lieferten
-            # noch Tcl/Tk 8.6.15, erst 3.14.7 bringt 9.0.4 mit.
-            "Python 3.14.7 oder neuer verwenden — erst dieser Installer bringt "
-            "Tcl/Tk 9.0.4 mit (3.14.0–3.14.6 und 3.13 haben 8.6.15)."
-            if sys.platform.startswith("win") or sys.platform == "darwin"
-            else "Tk kommt hier vom System: Fedora 42+ liefert Tcl/Tk 9."
-        )
+        # Nicht „3.14" — beim Installer von python.org zählt die Punktversion:
+        # 3.14.0 bis 3.14.6 lieferten noch Tcl/Tk 8.6.15, erst 3.14.7 bringt
+        # 9.0.4 mit. Homebrew und Linux hängen dagegen gar nicht am Interpreter.
+        if sys.platform.startswith("win"):
+            hint = (
+                "Python 3.14.7 oder neuer verwenden — erst dieser Installer bringt "
+                "Tcl/Tk 9.0.4 mit (3.14.0–3.14.6 und 3.13 haben 8.6.15)."
+            )
+        elif sys.platform == "darwin":
+            hint = (
+                "Von python.org Python 3.14.7 oder neuer verwenden — erst dieser "
+                "Installer bringt Tcl/Tk 9.0.4 mit (3.14.0–3.14.6 und 3.13 haben "
+                "8.6.15). Mit Homebrew zählt die Punktversion nicht: dessen Python "
+                "bindet das Paket tcl-tk ein (brew install tcl-tk python-tk)."
+            )
+        else:
+            hint = "Tk kommt hier vom System: Fedora 42+ liefert Tcl/Tk 9."
         problems.append(
             f"Tk {tk} statt {MIN_TK}+ (mit Python {platform.python_version()}). Die Stift-/"
             f"Schalter-Icons der Vorschautabelle würden im fertigen Programm fehlen — "
@@ -215,17 +225,26 @@ def write_version_resource() -> None:
 
 
 # ------------------------------------------------------------------ Verpacken
-def package_macos(app: Path) -> Path:
-    """`.app` als ZIP — zwingend mit `ditto`.
+def package_macos(folder: Path) -> Path:
+    """Auslieferordner als ZIP — zwingend mit `ditto`.
 
-    Ein gewöhnliches `zip` löst die Symlinks in `Contents/Frameworks` auf und
-    zerstört damit die Code-Signatur; die entpackte Anwendung startet dann auf
-    Apple Silicon nicht mehr („is damaged").
+    Ein gewöhnliches `zip` (auch der Umweg über `shutil.make_archive`) löst die
+    Symlinks in `Contents/Frameworks` auf und zerstört damit die Code-Signatur;
+    die entpackte Anwendung startet dann auf Apple Silicon nicht mehr
+    („is damaged").
+
+    Die Kurzanleitung wandert **in den Ordner**, nicht bloß ins Archiv — dasselbe
+    Prinzip wie bei Windows und Linux: was ausgeliefert wird, ist genau das, was
+    in `dist/` ausprobiert wurde.
     """
+    guide = ROOT / "packaging" / "macos" / "LIESMICH.txt"
+    if guide.is_file():
+        shutil.copy2(guide, folder / guide.name)
+
     target = DIST_DIR / f"{archive_stem()}.zip"
     target.unlink(missing_ok=True)
     subprocess.run(
-        ["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(app), str(target)],
+        ["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(folder), str(target)],
         check=True,
     )
     return target
@@ -268,6 +287,28 @@ def package_tar(folder: Path) -> Path:
     return target
 
 
+def macos_delivery_folder(app: Path) -> Path:
+    """Legt die `.app` in den Ordner, der später ausgeliefert wird.
+
+    Unter Windows und Linux ist das Bauergebnis von sich aus ein Ordner, neben
+    die Programmdatei passt also eine Kurzanleitung. Auf macOS ist das Ergebnis
+    die `.app` — und **in** die gehört nichts hinein, sie ist die Anwendung.
+    Deshalb bekommt sie einen Ordner, der beides trägt.
+
+    Verschoben statt kopiert: sonst lägen 200 MB doppelt in `dist/`, und der
+    Anwender bekäme womöglich eine andere `.app` als die ausprobierte.
+
+    Nebeneffekt, der willkommen ist: `paths.program_dir()` ist auf macOS der
+    Ordner **über** der `.app` — behält der Anwender diesen Ordner (etwa auf
+    einem USB-Stick), genügt eine `config.yaml` darin für den Portable-Modus.
+    """
+    folder = DIST_DIR / archive_stem()
+    shutil.rmtree(folder, ignore_errors=True)
+    folder.mkdir(parents=True)
+    app.rename(folder / app.name)
+    return folder
+
+
 # ---------------------------------------------------------------------- Ablauf
 def build(clean: bool) -> Path:
     """Ruft PyInstaller auf und liefert das erzeugte Programm zurück."""
@@ -294,6 +335,9 @@ def build(clean: bool) -> Path:
         # wäre neben der `.app` nur verwirrend — außerdem läge er im selben
         # Verzeichnis, in dem der Portable-Modus nach `config.yaml` sucht.
         shutil.rmtree(DIST_DIR / APP_NAME, ignore_errors=True)
+        # Damit ist das Bauergebnis auf allen drei Plattformen der Ordner, der
+        # ausgeliefert wird — `--no-package` zeigt genau ihn.
+        result = macos_delivery_folder(result)
 
     return result
 
