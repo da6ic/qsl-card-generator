@@ -42,6 +42,21 @@ datas = [
     (str(PROJECT_ROOT / "config.example.yaml"), "."),
 ]
 
+# Module, die die statische Analyse **nicht** finden kann und die deshalb von
+# Hand genannt werden müssen.
+#
+# `PIL._tkinter_finder` sucht die Tcl/Tk-Bibliothek für Pillows C-Erweiterung
+# `_imagingtk`; nachgeladen wird es erst zur Laufzeit und aus C heraus, also
+# sieht PyInstaller den Import nirgends. Ohne diese Zeile stirbt
+# `ImageTk.PhotoImage(...)` mit „No module named 'PIL._tkinter_finder'" — und
+# damit **still**: `app._update_thumbnail` fängt nur `OSError`/`ValueError`, die
+# Ausnahme landet im Protokoll und der Anwender sieht in Abschnitt 2 lediglich
+# weiterhin „keine Vorschau", nachdem er ein Bild gewählt hat. Die PDF ist davon
+# nicht betroffen (dort geht das Bild über `drawImage(pfad)`, ohne Tk) — genau
+# deshalb fällt es beim Ausprobieren so leicht durchs Raster.
+# Gefunden beim Linux-Bündel, betrifft aber alle drei Plattformen.
+hiddenimports = ["PIL._tkinter_finder"]
+
 # Was nicht mit hinein soll. Entwicklungswerkzeuge landen sonst über die
 # venv-Analyse mit im Bündel und blähen es auf.
 excludes = [
@@ -66,7 +81,7 @@ a = Analysis(  # noqa: F821
     pathex=[str(PROJECT_ROOT)],
     binaries=[],
     datas=datas,
-    hiddenimports=[],
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
