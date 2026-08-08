@@ -232,6 +232,20 @@ def package_macos(app: Path) -> Path:
 
 
 def package_zip(folder: Path) -> Path:
+    """ZIP für Windows — mit der Kurzanleitung neben der `.exe`.
+
+    Sie beantwortet nur, was **vor** dem ersten Start zählt (wohin entpacken,
+    SmartScreen) und verweist für alles Weitere aufs Handbuch; das bleibt die
+    eine Wahrheit zur Bedienung.
+
+    Die Datei wandert **in den Ordner**, nicht bloß ins Archiv: so ist das, was
+    ausgeliefert wird, genau das, was in `dist/` ausprobiert wurde — und
+    `shutil.make_archive` könnte eine Einzeldatei ohnehin nicht nachtragen.
+    """
+    guide = ROOT / "packaging" / "windows" / "LIESMICH.txt"
+    if guide.is_file():
+        shutil.copy2(guide, folder / guide.name)
+
     target = DIST_DIR / f"{archive_stem()}.zip"
     target.unlink(missing_ok=True)
     shutil.make_archive(str(target.with_suffix("")), "zip", folder.parent, folder.name)

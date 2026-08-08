@@ -392,6 +392,31 @@ Kürzel, das auf deinem Rechner gilt.
 - **Über QSL-Karten-Generator** — auf Windows und Linux hier, auf macOS im
   Programmmenü ganz links.
 
+## Installieren und weitergeben {#installation}
+
+Das Programm kommt als Archiv und braucht kein Installationsprogramm. Du
+entpackst es an einen Ort, den du beschreiben darfst, und startest es von dort.
+Zum Entfernen löschst du den Ordner wieder.
+
+**Windows** — ZIP entpacken nach Dokumente, Desktop oder auf einen USB-Stick,
+dann `QSL-Karten-Generator.exe` starten. **Nicht** nach `C:\Programme`: dorthin
+darf das Programm nicht schreiben. Beim ersten Start meldet Windows „Der
+Computer wurde durch Windows geschützt" — das Programm ist nicht signiert. Über
+*Weitere Informationen* ▸ *Trotzdem ausführen* geht es weiter.
+
+**macOS** — ZIP entpacken und die App dorthin legen, wo du sie haben willst.
+Beim ersten Start einmal **Rechtsklick ▸ Öffnen** statt Doppelklick, sonst
+verweigert macOS den Start: die App ist signiert, aber nicht bei Apple
+registriert. Danach genügt der Doppelklick.
+
+**Linux** — `tar xzf QSL-Karten-Generator-*.tar.gz`, dann im entpackten Ordner
+`./install.sh`. Das legt das Programm nach `~/.local/opt` und trägt es ins
+Anwendungsmenü ein, ohne `sudo`. Entfernen mit `./install.sh --uninstall`. Ohne
+Installation läuft es genauso: `./QSL-Karten-Generator` im entpackten Ordner.
+
+Gibst du das Archiv weiter, gib den Hinweis auf die Startmeldung mit — sonst
+hält der Empfänger das Programm für gefährlich und löscht es.
+
 ## Wo liegen meine Dateien? {#dateien}
 
 Das Programm legt seine Dateien dort ab, wo dein Betriebssystem sie erwartet.

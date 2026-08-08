@@ -14,6 +14,7 @@ also nicht — es braucht eine Fähigkeitsprüfung. Genau die wird hier festgeha
 from __future__ import annotations
 
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -83,3 +84,23 @@ def test_platform_tag_is_usable_as_a_filename():
     tag = build_app.platform_tag()
     assert tag and " " not in tag
     assert build_app.archive_stem().endswith(tag)
+
+
+def test_windows_zip_carries_the_short_guide(tmp_path, monkeypatch):
+    """Die Kurzanleitung muss neben der `.exe` landen, nicht nur im Repository.
+
+    Sie ist das Einzige, was den Anwender **vor** dem ersten Start erreicht —
+    fehlt sie, steht er ohne Hinweis vor der SmartScreen-Meldung und hält das
+    Programm für gefährlich.
+    """
+    dist = tmp_path / "dist"
+    folder = dist / build_app.APP_NAME
+    folder.mkdir(parents=True)
+    (folder / f"{build_app.APP_NAME}.exe").write_bytes(b"")
+    monkeypatch.setattr(build_app, "DIST_DIR", dist)
+
+    archive = build_app.package_zip(folder)
+
+    assert (folder / "LIESMICH.txt").is_file()
+    with zipfile.ZipFile(archive) as bundle:
+        assert f"{build_app.APP_NAME}/LIESMICH.txt" in bundle.namelist()

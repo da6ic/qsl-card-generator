@@ -118,6 +118,14 @@ Der Anwender entpackt das ZIP an einen Ort, den er beschreiben darf
 (`Dokumente`, Desktop, USB-Stick) und startet `QSL-Karten-Generator.exe`.
 Ein Installer ist nicht nötig; das Programm ist bewusst als Ordner gebaut.
 
+Im Archiv liegt dafür `LIESMICH.txt` neben der `.exe` — `build_app.py` kopiert
+sie beim Verpacken aus diesem Ordner dorthin (dasselbe Prinzip wie `install.sh`
+im Linux-Archiv). Sie beantwortet **nur**, was vor dem ersten Start zählt: wohin
+entpacken und wie man an SmartScreen vorbeikommt. Alles Weitere steht im
+Handbuch, Kapitel „Installieren und weitergeben" — das bleibt die eine Wahrheit
+zur Bedienung, und die Kurzanleitung verweist ausdrücklich dorthin. Wer sie
+erweitert, baut sich zwei Dokumente, die auseinanderlaufen.
+
 **SmartScreen:** Das Programm ist nicht signiert. Beim ersten Start meldet
 Windows „Der Computer wurde durch Windows geschützt". Der Weg dahin: *Weitere
 Informationen* ▸ *Trotzdem ausführen*. Ein Zertifikat, das das abstellt

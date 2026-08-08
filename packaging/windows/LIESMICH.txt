@@ -1,0 +1,22 @@
+QSL-Karten-Generator — Installation unter Windows
+=================================================
+
+1. Diesen Ordner an einen Ort entpacken, den du beschreiben darfst:
+   Dokumente, Desktop oder einen USB-Stick.
+
+   Nicht nach C:\Programme — dorthin darf das Programm nicht schreiben.
+
+2. QSL-Karten-Generator.exe starten.
+
+3. Beim ersten Start meldet Windows „Der Computer wurde durch Windows
+   geschützt". Das Programm ist nicht signiert; ein Zertifikat, das diese
+   Meldung abstellt, kostet einen dreistelligen Betrag pro Jahr.
+
+   Der Weg daran vorbei:  Weitere Informationen  ▸  Trotzdem ausführen
+
+Ein Installationsprogramm gibt es nicht, und es ist auch keines nötig. Zum
+Entfernen genügt es, diesen Ordner wieder zu löschen.
+
+Alles Weitere — die Bedienung, wo deine Einstellungen gespeichert werden und
+wie du das Programm auf einem USB-Stick mitnimmst — steht im Handbuch:
+im Programm unter  Hilfe ▸ Handbuch  (oder Taste F1).
