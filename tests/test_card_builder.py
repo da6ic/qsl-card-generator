@@ -317,17 +317,15 @@ def test_normalize_is_idempotent():
 
 def test_marks_taken_from_config_no_auto_logic():
     qsos = [make_qso("DL1AA"), make_qso("DL2BB")]
-    cards = build_cards(qsos, config(qsl_mark="tnx", portable_mark="t", confirm_mark="swl"))
+    cards = build_cards(qsos, config(qsl_mark="tnx", confirm_mark="swl"))
     assert cards
     assert all(c.qsl_mark == "tnx" for c in cards)
-    assert all(c.portable_mark == "t" for c in cards)
     assert all(c.confirm_mark == "swl" for c in cards)
 
 
 def test_marks_default_none():
     card = build_cards([make_qso("DL1AA")], config())[0]
     assert card.qsl_mark == "none"
-    assert card.portable_mark == "none"
     assert card.confirm_mark == "none"
 
 

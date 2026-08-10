@@ -12,7 +12,7 @@ from pypdf import PdfReader
 from reportlab.pdfgen.canvas import Canvas
 
 from qslcards.cards.models import Card, CardRow
-from qslcards.config import AppConfig, GenerationConfig, LookupConfig
+from qslcards.config import AppConfig, GenerationConfig, LookupConfig, SenderConfig
 from qslcards.lookup.base import LookupResult
 from qslcards.pdf import geometry as g
 from qslcards.pdf.generator import generate
@@ -389,6 +389,43 @@ def test_sheet_mode_off_leaves_output_untouched(tmp_path: Path):
         PdfReader(str(plain)).pages, PdfReader(str(single)).pages, strict=True
     ):
         assert page_a.get_contents().get_data() == page_b.get_contents().get_data()
+
+
+# --- Großbuchstaben-Felder des Absenders ----------------------------------
+
+
+@pytest.mark.parametrize(
+    "typed,printed",
+    [
+        ("dl2sct", "DL2SCT"),
+        ("f/dl0mt/p", "F/DL0MT/P"),  # Gastrufzeichen + Portabel-Kennung
+        ("dl0mt/qrp", "DL0MT/QRP"),
+    ],
+)
+def test_sender_callsign_is_printed_uppercase(tmp_path: Path, typed, printed):
+    """Das Rufzeichen steht vollständig und groß auf der Karte.
+
+    Alles, was dazugehört, steht im Feld selbst — Landespräfix, Portabel-Kennung,
+    `/QRP`. Ein eigenes Feld für die Kennung gibt es nicht mehr.
+    """
+    cfg = AppConfig(sender=SenderConfig(callsign=typed))
+    out = tmp_path / "cards.pdf"
+    generate(_dummy_cards(1), cfg, str(_front_image(tmp_path)), str(out))
+
+    back = _content(PdfReader(str(out)).pages[1])
+    assert f"({printed}) Tj" in back
+    assert typed not in back
+
+
+def test_locator_and_dok_are_printed_uppercase(tmp_path: Path):
+    """Auch aus einer von Hand geänderten Config kommen sie groß aufs Papier."""
+    cfg = AppConfig(sender=SenderConfig(callsign="DL2SCT", locator="jo31ab", dok="b01"))
+    out = tmp_path / "cards.pdf"
+    generate(_dummy_cards(1), cfg, str(_front_image(tmp_path)), str(out))
+
+    back = _content(PdfReader(str(out)).pages[1])
+    assert "(JO31AB) Tj" in back
+    assert "(B01) Tj" in back
 
 
 def test_address_export_only_when_enabled(tmp_path: Path):

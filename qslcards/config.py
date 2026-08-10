@@ -84,7 +84,10 @@ class GenerationConfig:
     static_footer: str = "TNX FR NICE CONTACT, 73"
     remarks: str = ""  # globaler REMARKS-Text (alle Karten); leer -> kein Kasten
     qsl_mark: str = "none"  # "pse" | "tnx" | "none" (global)
-    portable_mark: str = "none"  # "none" | "p" | "m" | "t" | "r" (global)
+    # Die Portabel-Kennung hatte hier bis Version 0.1 ein eigenes Feld samt
+    # Dropdown. Sie steht jetzt einfach im Rufzeichen (`F/DL0MT/P`) — ein Feld
+    # weniger, und Gastrufzeichen, `/QRP`, `/MM` oder `/4` brauchen keine
+    # Sonderbehandlung mehr.
     confirm_mark: str = "none"  # "qso" | "swl" | "none" (global)
 
 

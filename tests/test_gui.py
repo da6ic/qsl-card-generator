@@ -346,6 +346,64 @@ def test_manual_remark_kept_on_global_delete_per_station(app, tmp_path):
     assert all(c.remarks == "" for c in dl1 if not c.remarks_manual)
 
 
+# -- Absender ---------------------------------------------------------------
+
+
+def test_callsign_is_uppercased_when_leaving_the_field(app):
+    """Rufzeichen groß, sobald das Feld den Fokus verliert.
+
+    Beim Tippen bewusst nicht: das Setzen der Variablen rückte die Schreibmarke
+    ans Ende. Die Karte selbst schreibt zusätzlich groß (layout_back).
+    """
+    entry = app.sender_section.entries["callsign"]
+    var = app.sender_section.vars["callsign"]
+
+    var.set(" dl2sct ")
+    assert var.get() == " dl2sct "  # während des Tippens unangetastet
+
+    entry.event_generate("<FocusOut>")
+    assert var.get() == "DL2SCT"
+    assert app._gather_config().sender.callsign == "DL2SCT"
+
+
+@pytest.mark.parametrize(
+    "field,typed,expected", [("locator", "jo31ab", "JO31AB"), ("dok", "b01", "B01")]
+)
+def test_locator_and_dok_are_uppercased(app, field, typed, expected):
+    app.sender_section.vars[field].set(typed)
+    app.sender_section.entries[field].event_generate("<FocusOut>")
+    assert app.sender_section.vars[field].get() == expected
+
+
+@pytest.mark.parametrize(
+    "typed,expected",
+    [
+        ("f/dl0mt/p", "F/DL0MT/P"),  # Gastrufzeichen + Portabel-Kennung
+        ("dl0mt/qrp", "DL0MT/QRP"),
+        ("dl0mt/mm", "DL0MT/MM"),  # maritime mobile
+        ("w1aw/4", "W1AW/4"),  # Rufbezirk
+    ],
+)
+def test_callsign_keeps_everything_that_belongs_to_it(app, typed, expected):
+    """Das Rufzeichenfeld ist die einzige Wahrheit — nichts wird abgetrennt.
+
+    Ein Dropdown für die Portabel-Kennung gab es kurz; es musste Präfixe,
+    `/QRP`, `/MM` und Rufbezirke von den vier eigenen Kennungen unterscheiden.
+    Ohne das Dropdown gibt es diese Fälle nicht mehr.
+    """
+    app.sender_section.vars["callsign"].set(typed)
+    app.sender_section.entries["callsign"].event_generate("<FocusOut>")
+
+    assert app.sender_section.vars["callsign"].get() == expected
+    assert app._gather_config().sender.callsign == expected
+
+
+def test_sender_section_has_no_portable_widget(app):
+    """Das Dropdown ist weg — und darf nicht durch die Hintertür zurückkommen."""
+    assert not hasattr(app.sender_section, "portable")
+    assert not hasattr(app.sender_section, "portable_combo")
+
+
 # -- Aussehen, Menüleiste und „Zuletzt verwendet" ---------------------------
 
 

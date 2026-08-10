@@ -127,14 +127,19 @@ LOG_TYPES = [
 # Display <-> Code-Mappings der Dropdowns.
 QSL_MARK_TO_CODE = {"Leer lassen": "none", "PSE QSL": "pse", "TNX QSL": "tnx"}
 QSL_CODE_TO_DISPLAY = {v: k for k, v in QSL_MARK_TO_CODE.items()}
-PORTABLE_TO_CODE = {"Keins": "none", "/p": "p", "/m": "m", "/t": "t", "/r": "r"}
-PORTABLE_CODE_TO_DISPLAY = {v: k for k, v in PORTABLE_TO_CODE.items()}
 CONFIRM_MARK_TO_CODE = {
     "Leer lassen": "none",
     "Confirming QSO": "qso",
     "Confirming SWL-Report": "swl",
 }
 CONFIRM_CODE_TO_DISPLAY = {v: k for k, v in CONFIRM_MARK_TO_CODE.items()}
+
+# Absenderfelder, die fachlich Großbuchstaben tragen: sie werden beim Verlassen
+# des Feldes umgestellt. CQ-Zone/ITU sind Zahlen, Name/Adresse gehören dem
+# Anwender. Die Karte stellt dieselben Felder beim Zeichnen noch einmal um
+# (layout_back) — dort ist es die Garantie, hier die sichtbare Rückmeldung.
+# Das Rufzeichen trägt dabei alles, was dazugehört: `F/DL0MT/P`, `DL0MT/QRP`.
+UPPERCASE_SENDER_FIELDS = ("callsign", "locator", "dok")
 
 # Thumbnail-Maximalgröße. Die Höhe bleibt unter der natürlichen Höhe des
 # Absender-Blocks, damit ein geladenes Bild die linke Spalte (und damit das
@@ -412,12 +417,15 @@ class App(tk.Tk):
         self.mode_section.radio_qso.config(command=self._rebuild_cards)
         self.mode_section.radio_station.config(command=self._rebuild_cards)
         self.sender_section.qsl_combo.bind("<<ComboboxSelected>>", lambda _e: self._rebuild_cards())
-        self.sender_section.portable_combo.bind(
-            "<<ComboboxSelected>>", lambda _e: self._rebuild_cards()
-        )
         self.sender_section.confirm_combo.bind(
             "<<ComboboxSelected>>", lambda _e: self._rebuild_cards()
         )
+        # Rufzeichen/Locator/DOK: beim Verlassen des Feldes großschreiben, damit
+        # Oberfläche, Config und Karte dasselbe zeigen.
+        for field in UPPERCASE_SENDER_FIELDS:
+            self.sender_section.entries[field].bind(
+                "<FocusOut>", lambda _e, name=field: self._on_uppercase_field_commit(name)
+            )
         # Globaler Remarks-Text: ändert Kartentext UND ggf. die Zeilen-Aufteilung
         # (mit Remarks weniger Zeilen). Rebuild erst bei Fokusverlust/Enter, nicht
         # bei jedem Tastendruck (Enter gibt via _defocus_entry den Fokus frei).
@@ -474,9 +482,6 @@ class App(tk.Tk):
             self.sender_section.qsl_mark.set(
                 QSL_CODE_TO_DISPLAY.get(config.generation.qsl_mark, "Leer lassen")
             )
-            self.sender_section.portable.set(
-                PORTABLE_CODE_TO_DISPLAY.get(config.generation.portable_mark, "Keins")
-            )
             self.sender_section.confirm_mark.set(
                 CONFIRM_CODE_TO_DISPLAY.get(config.generation.confirm_mark, "Leer lassen")
             )
@@ -518,7 +523,6 @@ class App(tk.Tk):
             static_footer=self.base_config.generation.static_footer,
             remarks=self.remarks_section.remarks.get(),
             qsl_mark=QSL_MARK_TO_CODE.get(self.sender_section.qsl_mark.get(), "none"),
-            portable_mark=PORTABLE_TO_CODE.get(self.sender_section.portable.get(), "none"),
             confirm_mark=CONFIRM_MARK_TO_CODE.get(self.sender_section.confirm_mark.get(), "none"),
         )
         # Aussehen und „Zuletzt verwendet" haben keine Eingabefelder: sie werden
@@ -543,6 +547,18 @@ class App(tk.Tk):
         self.focus_set()
         return "break"
 
+    def _on_uppercase_field_commit(self, field: str) -> None:
+        """Rufzeichen/Locator/DOK beim Verlassen des Feldes großschreiben.
+
+        Beim Tippen wird bewusst nicht umgestellt: das Setzen der Variablen
+        rückt die Schreibmarke ans Ende, was mitten im Wort stört.
+        """
+        var = self.sender_section.vars[field]
+        current = var.get()
+        upper = current.strip().upper()
+        if upper != current:
+            var.set(upper)
+
     # --------------------------------------------------- Auto-Sync (Config)
     def _config_mtime(self) -> float | None:
         try:
@@ -555,7 +571,6 @@ class App(tk.Tk):
         watched: list[tk.Variable] = [
             *self.sender_section.vars.values(),
             self.sender_section.qsl_mark,
-            self.sender_section.portable,
             self.sender_section.confirm_mark,
             self.remarks_section.remarks,
             self.lookup_section.hamqth_user,

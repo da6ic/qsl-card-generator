@@ -147,7 +147,7 @@ def draw_back(c: Canvas, card: Card, config: AppConfig) -> None:
         qsl_yt = g.QSL_MARK_YT_RADIO if radio else g.QSL_MARK_YT
         table_top = g.TABLE_YT_TOP_RADIO if radio else g.TABLE_YT_TOP
 
-        _draw_sender(c, page, config, card.portable_mark)
+        _draw_sender(c, page, config)
         _draw_recipient(c, page, card)
         _draw_station(c, page, config)
         _draw_radio(c, page, radio)
@@ -189,12 +189,15 @@ def _draw_radio(c: Canvas, page: PageLayout, entries: list[tuple[str, str]]) -> 
         _text_in_band(c, page, cx, head_bottom, value_h, value, g.FONT_REGULAR, g.SIZE_RADIO)
 
 
-def _draw_sender(c: Canvas, page: PageLayout, config: AppConfig, portable_mark: str) -> None:
+def _draw_sender(c: Canvas, page: PageLayout, config: AppConfig) -> None:
     s = config.sender
-    callsign = s.callsign
-    if portable_mark and portable_mark != "none":
-        callsign = f"{callsign}/{portable_mark}"
-    text(c, page, g.SENDER_X, g.CALLSIGN_YT, callsign, g.FONT_BOLD, g.SIZE_CALLSIGN)
+    # Das Rufzeichen steht so auf der Karte, wie es in der Config steht — mit
+    # allem, was dazugehört: Landespräfix (`F/DL0MT`), Portabel-Kennung
+    # (`/P`), `/QRP`, `/MM`. Nur großgeschrieben wird es, auch bei einer von
+    # Hand geänderten Config.
+    text(
+        c, page, g.SENDER_X, g.CALLSIGN_YT, s.callsign.strip().upper(), g.FONT_BOLD, g.SIZE_CALLSIGN
+    )
     text(c, page, g.SENDER_X, g.ADDR_Z1_YT, s.name, g.FONT_REGULAR, g.SIZE_ADDRESS)
     text(c, page, g.SENDER_X, g.ADDR_Z2_YT, s.street, g.FONT_REGULAR, g.SIZE_ADDRESS)
     text(
@@ -276,10 +279,13 @@ def _draw_recipient(c: Canvas, page: PageLayout, card: Card) -> None:
 
 def _draw_station(c: Canvas, page: PageLayout, config: AppConfig) -> None:
     # Stationsblock als Label/Wert-Spalten rechts neben der Adresse.
+    # Locator und DOK sind — wie das Rufzeichen — Großbuchstaben-Felder; die
+    # Oberfläche stellt sie beim Verlassen des Feldes um, hier steht die Garantie
+    # für von Hand geänderte Config-Dateien. CQ-Zone/ITU sind Zahlen.
     s = config.sender
     rows = (
-        ("Locator:", s.locator, g.STATION_Z1_YT),
-        ("DOK:", s.dok, g.STATION_Z2_YT),
+        ("Locator:", s.locator.strip().upper(), g.STATION_Z1_YT),
+        ("DOK:", s.dok.strip().upper(), g.STATION_Z2_YT),
         ("CQ-Zone:", s.waz, g.STATION_Z3_YT),
         ("ITU:", s.itu, g.STATION_Z4_YT),
     )

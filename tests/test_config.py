@@ -55,7 +55,6 @@ def test_load_example_all_fields():
     assert c.generation.print_margin_right == 0.0
     assert c.generation.static_footer == "TNX FR NICE CONTACT, 73"
     assert c.generation.qsl_mark == "none"
-    assert c.generation.portable_mark == "none"
     assert c.generation.confirm_mark == "none"
 
 

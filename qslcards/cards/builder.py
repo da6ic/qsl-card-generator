@@ -149,7 +149,6 @@ def build_cards(qsos: list[QSO], config: AppConfig, lookups: Lookups | None = No
     # Globale, manuelle Markierungen aus der Config je Karte übernehmen.
     for card in cards:
         card.qsl_mark = gen.qsl_mark
-        card.portable_mark = gen.portable_mark
         card.confirm_mark = gen.confirm_mark
         card.remarks = remarks
 

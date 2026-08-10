@@ -29,7 +29,7 @@ class Card:
     via_routes: tuple[str, ...]  # akzeptierte Zustellwege der Station (B/D/Q/L)
     rows: list[CardRow]  # 1..N (per_station kann mehrere haben)
     qsl_mark: str = "none"  # global aus config: "pse" | "tnx" | "none"
-    portable_mark: str = "none"  # global aus config: "none" | "p" | "m" | "t" | "r"
+    # Keine Portabel-Kennung mehr: sie steht im Rufzeichen des Absenders (Config).
     confirm_mark: str = "none"  # global aus config: "qso" | "swl" | "none"
     remarks: str = ""  # REMARKS-Text der Karte; leer -> kein Kasten (dynamisch).
     #   Default = globaler Config-Wert; in der Vorschau je Karte überschreibbar.

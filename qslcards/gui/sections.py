@@ -86,7 +86,6 @@ PROVIDER_FIELDS: dict[str, tuple[str, ...]] = {
 }
 
 QSL_MARK_CHOICES = ["Leer lassen", "PSE QSL", "TNX QSL"]
-PORTABLE_CHOICES = ["Keins", "/p", "/m", "/t", "/r"]
 CONFIRM_MARK_CHOICES = ["Leer lassen", "Confirming QSO", "Confirming SWL-Report"]
 
 # Breite der Absender-Textfelder; Dropdowns bekommen dieselbe Breite, damit
@@ -367,7 +366,12 @@ class ImageSection:
 
 
 class SenderSection:
-    """3. Absender (Config) inkl. globaler Markierungen (QSL/Portabel).
+    """3. Absender (Config) inkl. globaler Markierungen (QSL/Bestätigung).
+
+    Die Portabel-Kennung hat **kein** eigenes Feld: sie wird einfach ins
+    Rufzeichen getippt (`F/DL0MT/P`). Ein Dropdown dafür gab es kurz und wurde
+    verworfen — es musste Landespräfixe, `/QRP`, `/MM` und Rufbezirke von den
+    vier eigenen Kennungen unterscheiden, ohne dabei etwas zu gewinnen.
 
     Die Pflichtfelder (`REQUIRED_SENDER_FIELDS`) tragen ein rotes `*`. Bleiben sie
     leer, blockieren sie die PDF-Erzeugung; `mark_missing` umrandet sie dann rot.
@@ -396,9 +400,6 @@ class SenderSection:
         # Globale Markierungen (gelten für alle Karten).
         self.qsl_mark = tk.StringVar(value=QSL_MARK_CHOICES[0])
         self.qsl_combo = self._add_combo(row, "QSL-Markierung", self.qsl_mark, QSL_MARK_CHOICES)
-        row += 1
-        self.portable = tk.StringVar(value=PORTABLE_CHOICES[0])
-        self.portable_combo = self._add_combo(row, "Portabel", self.portable, PORTABLE_CHOICES)
         row += 1
         self.confirm_mark = tk.StringVar(value=CONFIRM_MARK_CHOICES[0])
         self.confirm_combo = self._add_combo(
