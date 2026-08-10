@@ -84,6 +84,26 @@ def test_record_without_call_skipped():
     assert qsos[0].call == "DL2ND"
 
 
+def test_lowercase_call_is_uppercased():
+    """Rufzeichen kommen großgeschrieben aus dem Parser (wie bei Cabrillo).
+
+    Sonst stünde die Kleinschreibung auf der Karte und „dl2nd" wäre im Modus
+    „pro Station" eine andere Station als „DL2ND". Der Rohwert bleibt in `raw`.
+    """
+    text = "<CALL:5>dl2nd<QSO_DATE:8>20260719<TIME_ON:4>1508<EOR>"
+    qsos = parse_text(text)
+    assert qsos[0].call == "DL2ND"
+    assert qsos[0].raw["call"] == "dl2nd"
+
+
+def test_mixed_case_calls_are_one_station():
+    text = (
+        "<CALL:5>dl2nd<QSO_DATE:8>20260719<TIME_ON:4>1508<EOR>"
+        "<CALL:5>DL2ND<QSO_DATE:8>20260720<TIME_ON:4>0900<EOR>"
+    )
+    assert {q.call for q in parse_text(text)} == {"DL2ND"}
+
+
 def test_multiple_qsos_same_call():
     text = (
         "<CALL:5>DL2ND<QSO_DATE:8>20260719<TIME_ON:4>1508<EOR>"

@@ -98,8 +98,16 @@ def _tokenize(text: str) -> list[dict[str, str]]:
 
 
 def _record_to_qso(record: dict[str, str]) -> QSO | None:
-    """Bildet einen Roh-Record auf ein QSO ab. Records ohne `call` -> None."""
-    call = record.get("call", "").strip()
+    """Bildet einen Roh-Record auf ein QSO ab. Records ohne `call` -> None.
+
+    Das Rufzeichen wird großgeschrieben — wie in `cabrillo._to_qso`, damit beide
+    Formate dasselbe liefern. Rufzeichen sind fachlich Großbuchstaben; ohne die
+    Normalisierung stünde die Kleinschreibung auf der Karte, und „dl2sct" wäre
+    im Modus „pro Station" eine *andere* Station als „DL2SCT" (der Lookup
+    normalisiert längst, die Gruppierung tat es nicht). Der Rohwert bleibt in
+    `raw` erhalten.
+    """
+    call = record.get("call", "").strip().upper()
     if not call:
         return None
 
