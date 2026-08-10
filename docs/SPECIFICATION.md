@@ -43,13 +43,19 @@ Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
    und ITU** Pflicht (`*` an der Beschriftung), Adresse und Funk-Ausrüstung nicht.
    Durch eine Trennlinie abgesetzt die **Funk-Ausrüstung**
    (erscheint dynamisch auf der Karte, sobald gefüllt): `Empfänger` (RIG),
-   `Antenne` (ANT), `Leistung` (PWR). Zusätzlich drei globale Dropdowns (gelten für
+   `Antenne` (ANT), `Leistung` (PWR). Zusätzlich zwei globale Dropdowns (gelten für
    **alle** Karten):
    - **QSL-Markierung** (`qsl_mark`): `PSE QSL` / `TNX QSL` / `Leer lassen`.
-   - **Portabel-Markierung** (`portable_mark`): `Keins` / `/p` / `/m` / `/t` / `/r`
-     (Kennung hinter dem eigenen Rufzeichen).
    - **Bestätigung** (`confirm_mark`): `Leer lassen` / `Confirming QSO` /
      `Confirming SWL-Report`.
+
+   **Rufzeichen, Locator und DOK** werden beim Verlassen des Feldes in
+   Großbuchstaben umgestellt (die Karte tut es beim Zeichnen noch einmal, damit
+   auch eine von Hand geänderte `config.yaml` richtig gedruckt wird). Das
+   Rufzeichen trägt dabei **alles**, was dazugehört: Landespräfix (`F/DL0MT`),
+   Portabel-Kennung (`F/DL0MT/P`), `/QRP`, `/MM`, Rufbezirk (`W1AW/4`). Ein
+   eigenes Dropdown für die Portabel-Kennung gab es und wurde entfernt — es
+   musste diese Fälle auseinanderhalten, ohne etwas zu gewinnen.
    Kein „Untertitel"/„Responsive" mehr. Keine Speichern/Laden-Buttons: die
    Config wird **automatisch** gespeichert (debounced) und bei externer Änderung
    von `config.yaml` **automatisch neu geladen**.
@@ -62,7 +68,7 @@ Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
    Lookup, §6). Die Liste **entfernt keine Zeilen**, sondern setzt nur die
    Drucken-Markierung. Kein Via-Filter (B/D/M) mehr.
 5. **Kartenmodus**: Radiobuttons `Eine Karte pro QSO` / `Eine Karte pro Station`.
-   (Die globalen Markierungen QSL/Portabel/Bestätigung stehen in Abschnitt 3.)
+   (Die globalen Markierungen QSL/Bestätigung stehen in Abschnitt 3.)
 6. **Lookups (optional)**: HamQTH-Benutzer/Passwort, QRZ-Benutzer/Passwort,
    Checkbox „Adress-/Label-Export erzeugen". **Kein** Schalter „Adressen
    nachschlagen" mehr — der Lookup läuft **automatisch beim Log-Laden** (§6),
@@ -357,8 +363,9 @@ class GenerationConfig:
     remarks: str = ""                  # globaler REMARKS-Text (alle Karten); leer
                                        #   -> kein Kasten. Max. 80 Zeichen (GUI).
     qsl_mark: str = "none"             # "pse" | "tnx" | "none" (global)
-    portable_mark: str = "none"        # "none" | "p" | "m" | "t" | "r" (global)
     confirm_mark: str = "none"         # "none" | "qso" | "swl" (global)
+    # Hinweis: KEIN `portable_mark` mehr — die Portabel-Kennung steht im
+    # Rufzeichen des Absenders (`F/DL0MT/P`), siehe §2.1 Abschnitt 3.
     # Hinweis: KEIN `via_filter`/`include_missing_via` mehr — die Via steht nie im
     # Log, sie wird immer per Lookup bestimmt (§6).
 
@@ -638,7 +645,6 @@ class Card:
     via_routes: tuple[str, ...] # akzeptierte Zustellwege der Station (B/D/Q/L)
     rows: list[CardRow]        # 1..N (per_station kann mehrere haben)
     qsl_mark: str = "none"     # global aus config: "pse" | "tnx" | "none"
-    portable_mark: str = "none" # global aus config: "none" | "p" | "m" | "t" | "r"
     confirm_mark: str = "none" # global aus config: "none" | "qso" | "swl"
     remarks: str = ""          # REMARKS-Text dieser Karte (leer -> kein Kasten);
                                #   Default = config.remarks, je Karte überschreibbar
@@ -682,8 +688,6 @@ aus `via_routes`, ggf. per `via_override` erzwungen; `None` = nicht drucken).
 7. **Markierungen (global, manuell)**: jede Karte erhält unverändert die
    Werte aus der Config:
    - `card.qsl_mark = config.qsl_mark` (`"pse"` | `"tnx"` | `"none"`).
-   - `card.portable_mark = config.portable_mark`
-     (`"none"` | `"p"` | `"m"` | `"t"` | `"r"`).
    - `card.confirm_mark = config.confirm_mark` (`"none"` | `"qso"` | `"swl"`).
    - `card.remarks = config.remarks` (globaler REMARKS-Text; je Karte in der
      Vorschau überschreibbar).
@@ -893,8 +897,9 @@ gefunden" und die Meldung stünde allein im Log. Deshalb:
   gezeichnet, wenn `card.remarks` gesetzt ist (dynamisch); der Footer-Text steht
   immer. Der **Funk-Block** (RIG/ANT/PWR-Tabelle) erscheint nur, wenn mindestens
   eins der Felder `receiver`/`antenna`/`power` gefüllt ist; dann rücken QSL-
-  Markierung und QSO-Tabelle nach unten. Portabel-Kennung (`/p`/`/m`/`/t`/`/r`)
-  steht hinter dem eigenen Rufzeichen, die Bestätigungs-Markierung oben mittig.
+  Markierung und QSO-Tabelle nach unten. Das eigene Rufzeichen wird
+  großgeschrieben so gezeichnet, wie es in der Config steht (samt Präfix und
+  Portabel-Kennung); die Bestätigungs-Markierung steht oben mittig.
 - **Normalisierung vor dem Zeichnen**: `generate` wendet auf jede Karte
   `regroup_card_by_remarks` an (§5.2) — so bekommt keine Karte mehr Zeilen, als je
   nach Remarks-Zustand Platz haben (Sicherung pro Karte, egal wie die Remarks auf

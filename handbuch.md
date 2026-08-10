@@ -146,13 +146,18 @@ Unter **Funk-Ausrüstung** kannst du Empfänger, Antenne und Leistung angeben. D
 Block erscheint auf der Karte nur, wenn mindestens eines der Felder gefüllt ist,
 und zeigt nur die ausgefüllten Werte.
 
-Unter **Markierungen** stellst du drei Dinge für alle Karten ein:
+Unter **Markierungen** stellst du zwei Dinge für alle Karten ein:
 
 - **QSL-Markierung** — `PSE QSL` (bitte um Karte) oder `TNX QSL` (Dank für die
   erhaltene Karte); „Leer lassen" druckt nichts.
-- **Portabel** — hängt `/p`, `/m`, `/t` oder `/r` direkt an dein Rufzeichen.
 - **Bestätigung** — `Confirming QSO` oder `Confirming SWL-Report`, mittig oben
   auf der Karte.
+
+Eine **Portabel-Kennung** tippst du einfach mit ins Rufzeichen: `DL0MT/P`. Genauso
+alles andere, was dazugehört — ein Landespräfix aus dem Urlaub (`F/DL0MT`), beides
+zusammen (`F/DL0MT/P`), `/QRP` oder `/MM`. Was im Feld steht, steht auf der Karte;
+klein Getipptes wird dabei großgeschrieben, sobald du das Feld verlässt (das gilt
+auch für Locator und DOK).
 
 Alles, was du hier eintippst, wird kurz darauf automatisch gespeichert. Beim
 nächsten Start steht es wieder da.

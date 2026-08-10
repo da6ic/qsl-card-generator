@@ -110,8 +110,8 @@ ist:
 
 Gegenüber der Original-DARC-Karte bewusst geändert:
 - kein „Responsive"-Untertitel;
-- die **Portabel-Kennung** (`/p`/`/m`/`/t`/`/r`) hängt **hinter dem eigenen
-  Rufzeichen** (nicht als separate Kästchen);
+- eine **Portabel-Kennung** steht im Rufzeichen selbst (`F/DL0MT/P`), nicht als
+  separate Kästchen — siehe unten;
 - die **Bestätigungs-Markierung** (`Confirming QSO`/`Confirming SWL-Report`) steht
   oben mittig — nur der gewählte Text, kein Kästchen;
 - die **QSL-Markierung** (`PSE QSL`/`TNX QSL`) steht links unter dem Stationsblock
@@ -143,10 +143,13 @@ Schrift = DejaVuSans (regular/bold). Linksbündig, sofern nicht anders angegeben
 
 Kein „Untertitel"/„Responsive" mehr (Feld `subtitle` entfernt).
 
-### Portabel-Kennung (hinter dem eigenen Rufzeichen)
-Ist `portable_mark != "none"`, wird das eigene Rufzeichen als
-`{callsign}/{portable_mark}` gezeichnet (`/p`/`/m`/`/t`/`/r`) — **kein** separates
-Element, keine feste Position (siehe `_draw_sender`).
+### Eigenes Rufzeichen (Schreibweise)
+`sender.callsign` wird **großgeschrieben** und sonst unverändert gezeichnet — mit
+allem, was zum Rufzeichen gehört: Landespräfix (`F/DL0MT`), Portabel-Kennung
+(`F/DL0MT/P`), `/QRP`, `/MM`, Rufbezirk (`W1AW/4`). Es gibt **kein** eigenes Feld
+und keine eigene Position dafür (siehe `_draw_sender`); ein Dropdown
+`portable_mark` gab es und wurde entfernt, weil es Präfixe, `/MM` und Rufbezirke
+von den vier eigenen Kennungen unterscheiden musste, ohne etwas zu gewinnen.
 
 ### Bestätigungs-Markierung (oben mittig)
 Nur der **gewählte** Text (kein Kästchen), an fester, zentrierter Position.
@@ -247,7 +250,7 @@ die Begrenzung sitzt in den Eingabefeldern der GUI (global + je Karte).
 
 ## 4. Hilfsfunktionen (in `layout_back.py`)
 
-Es gibt **keine** Checkbox-Funktion mehr: alle Markierungen (Portabel, Bestätigung,
+Es gibt **keine** Checkbox-Funktion mehr: alle Markierungen (Bestätigung,
 PSE/TNX QSL) werden als reiner **Text** gezeichnet (die Karte wird ohnehin gezielt
 für die gewählte Aussage gedruckt).
 Alle Helfer bekommen als zweites Argument den `PageLayout` der Seite (`page`,

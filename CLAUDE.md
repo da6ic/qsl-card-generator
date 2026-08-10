@@ -612,7 +612,7 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   „(optional)"/„(für alle Karten)" in Abschnitt 3 wurden vom Nutzer verworfen —
   neue Erklärtexte nur auf ausdrücklichen Wunsch.
 - **GUI-Abschnitte**: 1 Logbuch (ADIF/Cabrillo), 2 Frontbild, 3 Absender (inkl. Funk-Ausrüstung +
-  globale Markierungen QSL/Portabel/Bestätigung), 4 Zustellwege (priorisierbare
+  globale Markierungen QSL/Bestätigung), 4 Zustellwege (priorisierbare
   Liste + Trennlinie), 5 Kartenmodus, 6 Lookups, **7 Bemerkungen**, 8 Vorschau,
   9 Druckmodus (inkl. Bogendruck + Druckrand), 10 Ausgabe.
 - **Druckrand: vier Werte, keine Verzerrung, Überschuss ins Layout** (iterativ mit
@@ -658,6 +658,32 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
     identisch. Deshalb **keine** gespiegelte Zellenreihenfolge (gleiche
     Begründung wie beim Druckmodus „separate"). Leere Zellen auf dem letzten
     Bogen bleiben leer.
+- **Rufzeichen: ein Feld, alles drin, alles groß** (in zwei Runden mit dem Nutzer
+  erarbeitet; die verworfenen Zwischenstände stehen bewusst mit da):
+  * **Rufzeichen, Locator und DOK werden großgeschrieben** — in der GUI beim
+    Verlassen des Feldes (nicht beim Tippen: das Setzen der `tk.Variable` rückt
+    die Schreibmarke ans Ende), und beim Zeichnen noch einmal in `layout_back`.
+    Doppelt mit Absicht: die GUI ist die sichtbare Rückmeldung, die Karte die
+    Garantie für eine von Hand geänderte `config.yaml`. CQ-Zone/ITU sind Zahlen,
+    Name/Adresse gehören dem Anwender.
+  * **Der ADIF-Parser schreibt `call` groß** (Cabrillo tat es schon). Sonst stand
+    die Kleinschreibung auf der Karte, und `dl2sct` war im Modus „pro Station"
+    eine **andere** Station als `DL2SCT` — zwei Karten statt einer. Der Rohwert
+    bleibt in `raw`.
+  * **Das Dropdown „Portabel" (`portable_mark`) ist entfernt** — Feld, Widget,
+    `Card`-Attribut, Config-Eintrag. Die Kennung wird ins Rufzeichen getippt
+    (`F/DL0MT/P`). *Verworfen (zwei Zwischenstände):* erst ein Popup, das die
+    mitgetippte Kennung ins Dropdown übernimmt (trennte am **ersten**
+    Schrägstrich und ließ `F/DL0MT/p` durchfallen), dann dasselbe am **letzten**
+    Schrägstrich. Beides musste Landespräfixe (`F/`), `/QRP`, `/MM` (maritime
+    mobile — **nicht** das `/m` des Dropdowns!) und Rufbezirke (`W1AW/4`) von den
+    vier eigenen Kennungen unterscheiden. Ohne das Dropdown gibt es diese Fälle
+    schlicht nicht mehr. **Folge:** die Kennung wird jetzt **groß** gedruckt
+    (`/P` statt `/p`) — die Kleinschreibung zurückzuholen hieße, die
+    Fallunterscheidung wieder einzubauen.
+  * **Keine Migration alter Configs:** ein `portable_mark` in einer bestehenden
+    `config.yaml` wird beim Laden ignoriert und verschwindet beim nächsten
+    Auto-Save; die Kennung muss einmal ins Rufzeichen getippt werden.
 - **Absender kommt komplett aus der Config** (Rufzeichen, Locator, DOK, …), nie
   aus dem Log — vom Nutzer bewusst so bestätigt (ein kurzer Versuch, Rufzeichen/
   Locator aus `STATION_CALLSIGN`/`MY_GRIDSQUARE` zu ziehen, wurde zurückgenommen).
@@ -670,8 +696,7 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   JPEG unverändert hinein). Pillow liefert nur noch die Maße für den Cover-Fit.
   Ein Test hält das fest — er prüft den **Aufruf**, nicht die Wirkung: dass das
   Bild nur einmal im Dokument landet, stimmt auch mit `ImageReader`.
-- `MARGIN = 3 mm`; Portabel-Kennung `/p`/`/m`/`/t`/`/r` **hinter dem eigenen
-  Rufzeichen**; Bestätigungs-Markierung (Confirming QSO/SWL) oben mittig;
+- `MARGIN = 3 mm`; Bestätigungs-Markierung (Confirming QSO/SWL) oben mittig;
   Stationsdaten als Label/Wert-Spalte neben der Adresse; Funk-Block (RIG/ANT/PWR)
   dynamisch darunter; REMARKS über volle Breite; Fuß unten mit ~3 mm Rahmenabstand.
 - **GUI: keine Speichern/Laden-Buttons** — Config wird automatisch gespeichert
