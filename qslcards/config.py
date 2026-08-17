@@ -34,14 +34,16 @@ class SenderConfig:
 
 @dataclass
 class LookupConfig:
-    hamqth_user: str = ""
-    hamqth_pass: str = ""
-    qrz_user: str = ""
-    qrz_pass: str = ""
     program_id: str = "qslcards"  # HamQTH verlangt prg-Kennung
     address_export: bool = False  # Adress-/Label-CSV für alle Stationen
     # Kein `lookup_addresses` mehr: der Lookup läuft automatisch beim Log-Laden,
-    # sobald Credentials gesetzt sind (siehe docs/SPECIFICATION.md §6).
+    # sobald Zugangsdaten eingegeben sind (siehe docs/SPECIFICATION.md §6).
+    #
+    # Die Zugangsdaten (HamQTH-/QRZ-Benutzer und -Passwort) stehen bewusst NICHT
+    # hier: `save` schriebe sie im Klartext in die config.yaml. Sie leben nur zur
+    # Laufzeit in `lookup.LookupCredentials` und werden in jeder Sitzung neu
+    # eingegeben. `program_id` bleibt die einzige konfigurierte Angabe; die GUI
+    # kopiert sie beim Lookup in die Credentials.
 
 
 @dataclass

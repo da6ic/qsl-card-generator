@@ -49,11 +49,13 @@ python -m qslcards               # startet die GUI
 Absenderdaten, Zugangsdaten und alles Weitere trägt man **im Programmfenster**
 ein; die `config.yaml` entsteht dabei von selbst und wird bei jeder Änderung
 gespeichert. Von Hand bearbeitet wird sie nicht — `config.example.yaml` zeigt
-nur, wie sie aussieht.
+nur, wie sie aussieht. Die **Lookup-Zugangsdaten sind die Ausnahme**: sie werden
+nirgends gespeichert und gelten nur für die laufende Sitzung.
 
 ## Ablauf in der GUI
-1. (Einmalig) HamQTH-/QRZ-Konto in Abschnitt 6 eintragen — sonst kann die App die
-   Versandart nicht nachschlagen (alle Karten fallen auf `default_via`).
+1. HamQTH-/QRZ-Konto in Abschnitt 6 eintragen — sonst kann die App die
+   Versandart nicht nachschlagen (alle Karten fallen auf `default_via`). Das ist
+   bei **jedem Start** nötig, die Zugangsdaten werden bewusst nicht gespeichert.
 2. Logbuch wählen und laden — der Lookup startet automatisch im Hintergrund
    und füllt Via/Manager/Adresse; „PDF erzeugen" ist gesperrt, bis er fertig ist.
 3. Frontbild wählen, Absenderdaten prüfen (läuft parallel zum Lookup).
@@ -139,6 +141,10 @@ Für die **Implementierung**:
   Versandart (Büro/Direkt-Flags, Manager). QRZ liefert ohne bezahltes XML-Abo nur
   eingeschränkte Daten (im Wesentlichen den Manager); Lookup-Fehler brechen die
   Erzeugung nie ab — betroffene Stationen fallen dann auf `default_via`.
+- Die Zugangsdaten beider Anbieter leben nur zur Laufzeit
+  (`lookup.LookupCredentials`) und werden nie in die `config.yaml` geschrieben —
+  ein Passwort im Klartext auf der Platte wäre für jeden lesbar, der an den
+  Rechner kommt.
 - Der Signalrapport auf der Karte ist `RST_SENT` (wie wir die Gegenstation gehört
   haben). In einem Contest-Log fehlt er oft ganz — viele Contests tauschen statt
   eines Rapports einen Locator oder eine Sektion aus; die Spalte bleibt dann leer.

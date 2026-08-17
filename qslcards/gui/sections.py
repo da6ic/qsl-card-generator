@@ -85,6 +85,11 @@ PROVIDER_FIELDS: dict[str, tuple[str, ...]] = {
     PROVIDER_QRZ: ("qrz_user", "qrz_pass"),
 }
 
+# Hinweiszeile unter den Zugangsdaten (Abschnitt 6). Die Werte landen nie in der
+# config.yaml — ohne diesen Satz wirkten die leeren Felder beim nächsten Start
+# wie ein Fehler. Bewusste Ausnahme von „keine Erklärtexte in den Abschnitten".
+LOOKUP_SESSION_HINT = "Gilt nur für diese Sitzung — wird nicht gespeichert."
+
 QSL_MARK_CHOICES = ["Leer lassen", "PSE QSL", "TNX QSL"]
 CONFIRM_MARK_CHOICES = ["Leer lassen", "Confirming QSO", "Confirming SWL-Report"]
 
@@ -599,6 +604,12 @@ class ModeSection:
 class LookupSection:
     """6. Lookups (optional).
 
+    Die Zugangsdaten werden **nirgends** gespeichert: sie leben nur in diesen
+    Variablen und sind beim nächsten Start wieder leer (siehe
+    `lookup.LookupCredentials`). Deshalb steht hier — als bewusste Ausnahme von
+    „keine Erklärtexte in den Abschnitten" — eine Hinweiszeile darunter; ohne
+    sie sähen die leeren Felder beim zweiten Start wie ein Fehler aus.
+
     Lehnt ein Anbieter die Anmeldung ab, umrandet `mark_auth_failed` sein
     Feldpaar rot — dieselbe Sprache wie bei den Pflichtfeldern in Abschnitt 3.
     Die Markierung geht weg, sobald der Nutzer das Feld ändert.
@@ -640,11 +651,18 @@ class LookupSection:
             self.entries[field] = entry
             var.trace_add("write", lambda *_a, f=field: self._unmark(f))
 
+        self.session_hint = ttk.Label(
+            self.frame,
+            text=LOOKUP_SESSION_HINT,
+            style="Muted.TLabel",
+        )
+        self.session_hint.grid(row=4, column=0, columnspan=2, pady=(GAP_ROW, 0), sticky="w")
+
         ttk.Checkbutton(
             self.frame,
             text="Adress-/Label-Export erzeugen",
             variable=self.address_export,
-        ).grid(row=4, column=0, columnspan=2, pady=(PAD_INNER, GAP_ROW), sticky="w")
+        ).grid(row=5, column=0, columnspan=2, pady=(PAD_INNER, GAP_ROW), sticky="w")
         self.frame.columnconfigure(1, weight=1)
 
     def mark_auth_failed(self, providers: Iterable[str]) -> None:

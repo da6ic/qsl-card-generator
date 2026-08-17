@@ -16,7 +16,8 @@ Was du dafür brauchst:
   über welchen Weg jede Station QSLs annimmt.
 
 Deine Absenderangaben und alle Einstellungen werden für die nächste Benutzung
-**automatisch gespeichert**.
+**automatisch gespeichert**. Nur die Zugangsdaten für die Lookups
+([Kapitel 6](#abschnitt-6)) nicht — die trägst du bei jedem Start neu ein.
 
 Pflichtangaben sind mit einem roten `*` markiert. Fehlt eine davon, sagt dir das
 Programm beim Klick auf „PDF erzeugen" in einem einzigen Hinweisfenster, was
@@ -227,7 +228,7 @@ du kannst noch keine Karten erzeugen.
 **HamQTH** ist die erste Wahl: Ein Konto auf
 [hamqth.com](https://www.hamqth.com) ist kostenlos und liefert alle vier
 Zustellwege, Manager und Adresse. Trage Benutzername und Passwort in die beiden
-HamQTH-Felder ein.
+HamQTH-Felder ein — bei jedem Programmstart neu, siehe unten.
 
 **QRZ** ist optional und ein Zusatz für Stationen, die HamQTH nicht kennt. Ohne
 bezahltes XML-Abo liefert QRZ im Wesentlichen nur den Manager, keine
@@ -250,9 +251,12 @@ eine CSV-Datei mit den gefundenen Anschriften an — praktisch für Adressetiket
 bei Direktversand. Auf der Karte selbst steht die Anschrift des Empfängers
 grundsätzlich nicht, dort erscheint nur sein Rufzeichen.
 
-Ein Hinweis zur Sicherheit: Benutzername und Passwort stehen im Klartext in der
-`config.yaml` (siehe [Wo liegen meine Dateien?](#dateien)). Wenn andere Zugriff
-auf deinen Rechner haben, ist das zu bedenken.
+**Die Zugangsdaten werden nicht gespeichert.** Sie gelten nur für die laufende
+Sitzung und stehen in keiner Datei — weder in der `config.yaml` noch sonst wo
+(siehe [Wo liegen meine Dateien?](#dateien)). Beim nächsten Start sind die vier
+Felder deshalb wieder leer und du trägst sie erneut ein. Das ist Absicht: ein
+Passwort im Klartext auf der Platte wäre für jeden lesbar, der an deinen Rechner
+kommt. Alle übrigen Einstellungen bleiben natürlich erhalten.
 
 ## 7. Bemerkungen {#abschnitt-7}
 
@@ -443,7 +447,9 @@ Darin liegen drei Dateien:
 - `config.yaml` — alle deine Einstellungen. Das Programm schreibt sie bei jeder
   Änderung selbst; bearbeite sie nicht von Hand, sonst überschreibt der nächste
   Klick deine Änderung. Zum Sichern oder Umziehen auf einen neuen Rechner
-  kopierst du einfach diese eine Datei.
+  kopierst du einfach diese eine Datei. Die Zugangsdaten für die Lookups stehen
+  **nicht** darin ([Kapitel 6](#abschnitt-6)) — die gibst du auf dem neuen
+  Rechner einmal neu ein.
 - `lookup_cache.json` — die gemerkten Antworten der Lookups
   ([Kapitel 6](#abschnitt-6)).
 - `qslcards.log` — das Protokoll. Klemmt etwas, steht hier der Grund.
@@ -485,7 +491,8 @@ Zustellwege an ([Kapitel 4](#abschnitt-4)). Zieh die Trennlinie tiefer oder
 setze die Karte in der Vorschau von Hand auf „Drucken: Ja".
 
 **Alle Karten stehen auf Büro** — dann gibt es keine Lookup-Zugangsdaten oder
-die Abfrage ist fehlgeschlagen. Prüfe [Abschnitt 6](#abschnitt-6).
+die Abfrage ist fehlgeschlagen. Prüfe [Abschnitt 6](#abschnitt-6). Nach jedem
+Programmstart sind die vier Felder leer; sie werden bewusst nicht gespeichert.
 
 **Der Manager stimmt nicht** — die Datenbank ist nicht immer aktuell. Korrigiere
 das Feld „Route/Manager" in der Vorschau, oder leere den Cache und frage neu ab.

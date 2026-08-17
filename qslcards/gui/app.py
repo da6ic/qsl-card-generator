@@ -32,6 +32,7 @@ from qslcards.config import (
 from qslcards.logbook import LogFormatError, parse_file
 from qslcards.lookup import (
     DEFAULT_CACHE_PATH,
+    LookupCredentials,
     active_via_priority,
     has_lookup_credentials,
     lookup_calls,
@@ -457,10 +458,9 @@ class App(tk.Tk):
             for field, _ in SENDER_FIELDS:
                 self.sender_section.vars[field].set(getattr(config.sender, field))
 
-            self.lookup_section.hamqth_user.set(config.lookup.hamqth_user)
-            self.lookup_section.hamqth_pass.set(config.lookup.hamqth_pass)
-            self.lookup_section.qrz_user.set(config.lookup.qrz_user)
-            self.lookup_section.qrz_pass.set(config.lookup.qrz_pass)
+            # Die Zugangsdaten stehen bewusst NICHT in der Config und werden
+            # hier deshalb auch nicht gesetzt: ein Neuladen der Datei (externe
+            # Änderung) darf nicht löschen, was der Nutzer gerade getippt hat.
             self.lookup_section.address_export.set(config.lookup.address_export)
 
             self.filter_section.set_priority(
@@ -499,10 +499,6 @@ class App(tk.Tk):
             **{field: self.sender_section.vars[field].get() for field, _ in SENDER_FIELDS}
         )
         lookup = LookupConfig(
-            hamqth_user=self.lookup_section.hamqth_user.get(),
-            hamqth_pass=self.lookup_section.hamqth_pass.get(),
-            qrz_user=self.lookup_section.qrz_user.get(),
-            qrz_pass=self.lookup_section.qrz_pass.get(),
             program_id=self.base_config.lookup.program_id,
             address_export=self.lookup_section.address_export.get(),
         )
@@ -573,10 +569,9 @@ class App(tk.Tk):
             self.sender_section.qsl_mark,
             self.sender_section.confirm_mark,
             self.remarks_section.remarks,
-            self.lookup_section.hamqth_user,
-            self.lookup_section.hamqth_pass,
-            self.lookup_section.qrz_user,
-            self.lookup_section.qrz_pass,
+            # Die Zugangsdaten fehlen hier mit Absicht: sie werden nicht
+            # gespeichert, ein Tastendruck im Passwortfeld darf keinen
+            # Schreibvorgang auslösen.
             self.lookup_section.address_export,
             self.mode_section.card_mode,
             self.printmode_section.print_mode,
@@ -803,6 +798,20 @@ class App(tk.Tk):
             self.preview.set_row_included(iid, included)
 
     # ------------------------------------------------------- Lookup (async)
+    def _lookup_credentials(self) -> LookupCredentials:
+        """Zugangsdaten aus Abschnitt 6 — nur zur Laufzeit, nie aus der Config.
+
+        `program_id` ist der einzige Teil, der in der Config steht (siehe
+        `config.LookupConfig`).
+        """
+        return LookupCredentials(
+            hamqth_user=self.lookup_section.hamqth_user.get(),
+            hamqth_pass=self.lookup_section.hamqth_pass.get(),
+            qrz_user=self.lookup_section.qrz_user.get(),
+            qrz_pass=self.lookup_section.qrz_pass.get(),
+            program_id=self.base_config.lookup.program_id,
+        )
+
     def _start_lookups(self, calls: list[str], *, force: bool = False) -> None:
         """Schlägt `calls` im Hintergrund nach (Via/Manager/Adresse).
 
@@ -812,8 +821,8 @@ class App(tk.Tk):
         if self._lookup_running or not calls:
             self._rebuild_cards()
             return
-        config = self._gather_config()
-        if not has_lookup_credentials(config.lookup):
+        credentials = self._lookup_credentials()
+        if not has_lookup_credentials(credentials):
             self._rebuild_cards()
             self.preview.set_status("Keine Lookup-Zugangsdaten – Via = Standard.")
             self._update_generate_state()
@@ -828,7 +837,7 @@ class App(tk.Tk):
 
         thread = threading.Thread(
             target=self._lookups_worker,
-            args=(list(calls), config.lookup, force),
+            args=(list(calls), credentials, force),
             daemon=True,
         )
         thread.start()
@@ -843,7 +852,7 @@ class App(tk.Tk):
         ]
         self._start_lookups(unresolved or [q.call for q in self.qsos], force=True)
 
-    def _lookups_worker(self, calls, lookup_config, force) -> None:
+    def _lookups_worker(self, calls, credentials, force) -> None:
         def progress(done: int, total: int) -> None:
             self.after(0, self.preview.set_status, f"Schlage Stationen nach… {done}/{total}")
 
@@ -856,7 +865,7 @@ class App(tk.Tk):
         # lookup_calls fängt Netz-/Auth-Fehler ab (nie fatal).
         results = lookup_calls(
             calls,
-            lookup_config,
+            credentials,
             force=force,
             progress_cb=progress,
             auth_error_cb=auth_error,

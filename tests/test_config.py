@@ -28,13 +28,12 @@ def test_load_example_all_fields():
     assert c.sender.itu == ""
 
     # Lookup
-    assert c.lookup.hamqth_user == ""
-    assert c.lookup.hamqth_pass == ""
-    assert c.lookup.qrz_user == ""
-    assert c.lookup.qrz_pass == ""
     assert c.lookup.program_id == "qslcards"
     assert c.lookup.address_export is False
     assert not hasattr(c.lookup, "lookup_addresses")
+    # Zugangsdaten gehören nicht in die Config (siehe LookupCredentials).
+    for field in ("hamqth_user", "hamqth_pass", "qrz_user", "qrz_pass"):
+        assert not hasattr(c.lookup, field)
 
     # Generation
     assert c.generation.card_mode == "per_qso"
@@ -207,7 +206,50 @@ def test_example_contains_no_personal_sample_data():
     """Die Vorlage ist leer, nicht mit erfundenen Absenderdaten gefüllt."""
     c = cfg.load(EXAMPLE)
     assert c.sender == cfg.SenderConfig()
-    assert c.lookup.hamqth_user == "" and c.lookup.hamqth_pass == ""
+
+
+# -- Zugangsdaten stehen nie in der Datei -----------------------------------
+
+
+def test_credentials_are_never_written(tmp_path: Path):
+    """Die geschriebene Config enthält keinen der vier Zugangsdaten-Schlüssel.
+
+    Sie standen dort einmal im Klartext. Jetzt leben sie nur zur Laufzeit in
+    `LookupCredentials`; der Nutzer gibt sie in jeder Sitzung neu ein.
+    """
+    path = tmp_path / "config.yaml"
+    cfg.save(cfg.AppConfig(), path)
+
+    text = path.read_text(encoding="utf-8")
+    for key in ("hamqth_user", "hamqth_pass", "qrz_user", "qrz_pass"):
+        assert key not in text
+
+
+def test_old_config_with_credentials_still_loads(tmp_path: Path):
+    """Eine Datei aus der Zeit davor lädt ohne Fehler; die Felder verfallen.
+
+    Kein Migrationscode — dasselbe Muster wie beim entfernten `portable_mark`:
+    `_from_dict` ignoriert unbekannte Schlüssel, der nächste Auto-Save schreibt
+    die Datei ohne sie neu.
+    """
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        "lookup:\n"
+        "  hamqth_user: dl1abc\n"
+        "  hamqth_pass: geheim\n"
+        "  qrz_user: dl1abc\n"
+        "  qrz_pass: geheim\n"
+        "  program_id: qslcards\n"
+        "  address_export: true\n",
+        encoding="utf-8",
+    )
+
+    c = cfg.load(path)
+    assert c.lookup.address_export is True
+    assert not hasattr(c.lookup, "hamqth_user")
+
+    cfg.save(c, path)
+    assert "geheim" not in path.read_text(encoding="utf-8")
 
 
 if __name__ == "__main__":  # pragma: no cover

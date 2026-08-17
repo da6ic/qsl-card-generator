@@ -1,6 +1,7 @@
 """Lookup-Interface und gemeinsame Datentypen (siehe docs/SPECIFICATION.md §6).
 
 `LookupResult` ist das einheitliche Ergebnis aller Provider (HamQTH, QRZ, Cache).
+`LookupCredentials` hält die Zugangsdaten — nur zur Laufzeit, nie in der Config.
 `LookupProvider` ist das Protokoll, das jeder Provider erfüllt. `ChainedLookup`
 verdrahtet Cache + mehrere Provider zu einer Fassade für die GUI: erst Cache,
 dann die Provider in Reihenfolge; Ergebnisse (auch negative) werden gecacht.
@@ -59,6 +60,26 @@ class LookupResult:
         kwargs = {k: v for k, v in data.items() if k in known}
         kwargs.setdefault("call", "")
         return cls(**kwargs)  # type: ignore[arg-type]
+
+
+@dataclass
+class LookupCredentials:
+    """Zugangsdaten der Lookup-Anbieter — ausschließlich zur Laufzeit.
+
+    Bewusst **nicht** Teil von `AppConfig`: `config.save` würde sie im Klartext
+    in die `config.yaml` schreiben. Der Nutzer trägt sie in jeder Sitzung neu in
+    GUI-Abschnitt 6 ein; beim Beenden sind sie weg.
+
+    `program_id` reist hier mit (HamQTH verlangt eine prg-Kennung), damit
+    `build_lookup`/`lookup_calls` genau ein Objekt brauchen. Den Wert füllt die
+    GUI aus `config.LookupConfig.program_id` — dort steht er weiterhin.
+    """
+
+    hamqth_user: str = ""
+    hamqth_pass: str = ""
+    qrz_user: str = ""
+    qrz_pass: str = ""
+    program_id: str = "qslcards"
 
 
 class LookupProvider(Protocol):

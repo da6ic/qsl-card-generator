@@ -8,6 +8,7 @@ im Test durchläuft. Braucht ein funktionierendes Tk — sonst wird übersprunge
 from __future__ import annotations
 
 import tkinter as tk
+from pathlib import Path
 from tkinter import ttk
 from unittest import mock
 
@@ -15,6 +16,7 @@ import pytest
 
 from qslcards import config as cfg
 from qslcards.gui import app as appmod
+from qslcards.gui import sections
 from qslcards.lookup.base import LookupResult
 from qslcards.pdf.geometry import PRINT_MARGIN_MAX
 
@@ -205,6 +207,48 @@ def test_successful_lookup_clears_earlier_marks(app, tmp_path):
     for entry in app.lookup_section.entries.values():
         assert str(entry.cget("style")) != "Invalid.TEntry"
     assert "Lookup fertig" in app.status.status_var.get()
+
+
+def test_credentials_never_reach_the_config_file(app, tmp_path):
+    """Zugangsdaten gelten nur für die laufende Sitzung.
+
+    Sie standen einmal im Klartext in der config.yaml — jetzt darf sie kein
+    Schreibvorgang mehr dorthin tragen.
+    """
+    app.lookup_section.hamqth_user.set("dl1abc")
+    app.lookup_section.hamqth_pass.set("geheim")
+    app.lookup_section.qrz_user.set("dl1abc")
+    app.lookup_section.qrz_pass.set("auchgeheim")
+    app.sender_section.vars["callsign"].set("DN5MT")  # damit es etwas zu speichern gibt
+    app._auto_save()
+
+    text = Path(appmod.CONFIG_PATH).read_text(encoding="utf-8")
+    assert "DN5MT" in text  # der Auto-Save lief wirklich
+    assert "geheim" not in text and "auchgeheim" not in text
+    assert "hamqth" not in text and "qrz" not in text
+
+
+def test_reloading_the_config_keeps_typed_credentials(app, tmp_path):
+    """Eine extern geänderte config.yaml darf die getippten Zugangsdaten nicht
+    wegräumen — sie stehen dort gar nicht drin."""
+    app.lookup_section.hamqth_user.set("dl1abc")
+    app.lookup_section.hamqth_pass.set("geheim")
+    app._write_config()
+
+    app._reload_from_file()
+
+    assert app.lookup_section.hamqth_user.get() == "dl1abc"
+    assert app.lookup_section.hamqth_pass.get() == "geheim"
+
+
+def test_lookup_section_shows_the_session_hint(app):
+    """Der Hinweis erklärt die beim nächsten Start leeren Felder.
+
+    Die Farbe kommt aus dem Style (Themenwechsel!), nicht aus dem Widget.
+    """
+    hint = app.lookup_section.session_hint
+    assert hint.cget("text") == sections.LOOKUP_SESSION_HINT
+    assert str(hint.cget("style")) == "Muted.TLabel"
 
 
 def test_without_credentials_all_default_via(app, tmp_path):

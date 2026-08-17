@@ -1,11 +1,11 @@
 """Lookups für QSL-Empfänger: Versandart (Via) + Manager + Adresse (§6).
 
 Öffentliche API:
-  - `LookupResult`, `LookupProvider`, `ChainedLookup` (base)
+  - `LookupResult`, `LookupCredentials`, `LookupProvider`, `ChainedLookup` (base)
   - `HamQTHClient`, `QRZClient`, `LookupCache`
-  - `build_lookup(config, cache_path)` — Cache + Provider → `ChainedLookup`.
-  - `has_lookup_credentials(config)` — sind HamQTH- oder QRZ-Zugangsdaten gesetzt?
-  - `lookup_calls(calls, config, ...)` — schlägt alle (eindeutigen) Rufzeichen
+  - `build_lookup(credentials, cache_path)` — Cache + Provider → `ChainedLookup`.
+  - `has_lookup_credentials(credentials)` — HamQTH- oder QRZ-Zugangsdaten gesetzt?
+  - `lookup_calls(calls, credentials, ...)` — schlägt alle (eindeutigen) Rufzeichen
     nach und liefert eine Map `CALL -> LookupResult | None`.
   - `accepted_routes(result, default_via)` — Menge der Zustellwege einer Station.
   - `resolve_route(accepted, active_priority)` — höchstpriorisierter aktiver Weg.
@@ -17,21 +17,23 @@ import logging
 import re
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from qslcards import paths
-from qslcards.lookup.base import ChainedLookup, LookupProvider, LookupResult
+from qslcards.lookup.base import (
+    ChainedLookup,
+    LookupCredentials,
+    LookupProvider,
+    LookupResult,
+)
 from qslcards.lookup.cache import LookupCache
 from qslcards.lookup.hamqth import HamQTHClient
 from qslcards.lookup.qrz import QRZClient
-
-if TYPE_CHECKING:
-    from qslcards.config import LookupConfig
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "LookupResult",
+    "LookupCredentials",
     "LookupProvider",
     "ChainedLookup",
     "LookupCache",
@@ -75,15 +77,16 @@ VIA_LABELS: dict[str, str] = {
 }
 
 
-def has_lookup_credentials(config: LookupConfig) -> bool:
+def has_lookup_credentials(credentials: LookupCredentials) -> bool:
     """True, wenn HamQTH- **oder** QRZ-Zugangsdaten vollständig gesetzt sind."""
     return bool(
-        (config.hamqth_user and config.hamqth_pass) or (config.qrz_user and config.qrz_pass)
+        (credentials.hamqth_user and credentials.hamqth_pass)
+        or (credentials.qrz_user and credentials.qrz_pass)
     )
 
 
 def build_lookup(
-    config: LookupConfig,
+    credentials: LookupCredentials,
     cache_path: str | Path = DEFAULT_CACHE_PATH,
     *,
     auth_error_cb: Callable[[str, str], None] | None = None,
@@ -104,20 +107,20 @@ def build_lookup(
         return lambda message: auth_error_cb(provider, message)
 
     clients: list[HamQTHClient | QRZClient] = []
-    if config.hamqth_user and config.hamqth_pass:
+    if credentials.hamqth_user and credentials.hamqth_pass:
         clients.append(
             HamQTHClient(
-                config.hamqth_user,
-                config.hamqth_pass,
-                config.program_id,
+                credentials.hamqth_user,
+                credentials.hamqth_pass,
+                credentials.program_id,
                 on_auth_error=reporter(PROVIDER_HAMQTH),
             )
         )
-    if config.qrz_user and config.qrz_pass:
+    if credentials.qrz_user and credentials.qrz_pass:
         clients.append(
             QRZClient(
-                config.qrz_user,
-                config.qrz_pass,
+                credentials.qrz_user,
+                credentials.qrz_pass,
                 on_auth_error=reporter(PROVIDER_QRZ),
             )
         )
@@ -242,7 +245,7 @@ def active_via_priority(priority: Sequence[str] | None, cut: int) -> list[str]:
 
 def lookup_calls(
     calls: Iterable[str],
-    config: LookupConfig,
+    credentials: LookupCredentials,
     *,
     cache_path: str | Path = DEFAULT_CACHE_PATH,
     force: bool = False,
@@ -273,7 +276,7 @@ def lookup_calls(
         return results
 
     try:
-        lookup = build_lookup(config, cache_path, auth_error_cb=auth_error_cb)
+        lookup = build_lookup(credentials, cache_path, auth_error_cb=auth_error_cb)
     except Exception as exc:  # nie fatal
         logger.warning("Lookup konnte nicht initialisiert werden: %s", exc)
         return {call: None for call in unique}

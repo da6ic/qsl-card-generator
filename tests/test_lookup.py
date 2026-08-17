@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 import requests
 
-from qslcards.config import LookupConfig
 from qslcards.lookup import (
+    LookupCredentials,
     accepted_routes,
     active_via_priority,
     build_lookup,
@@ -487,7 +487,7 @@ def test_chain_empty_call_returns_none():
 
 
 def test_build_lookup_without_credentials_is_cache_only(tmp_path: Path):
-    chain = build_lookup(LookupConfig(), cache_path=tmp_path / "cache.json")
+    chain = build_lookup(LookupCredentials(), cache_path=tmp_path / "cache.json")
     assert isinstance(chain, ChainedLookup)
     # Ohne Credentials keine Provider → nur Cache; unbekanntes Call = None
     assert chain.lookup("DL1ABC") is None
@@ -551,7 +551,7 @@ def test_lookup_calls_forwards_auth_errors(tmp_path: Path, monkeypatch):
     errors: list[tuple[str, str]] = []
     results = lookup_calls(
         ["DL1ABC", "DL2XYZ"],
-        LookupConfig(hamqth_user="u", hamqth_pass="falsch"),
+        LookupCredentials(hamqth_user="u", hamqth_pass="falsch"),
         cache_path=tmp_path / "cache.json",
         auth_error_cb=lambda provider, message: errors.append((provider, message)),
     )
@@ -566,7 +566,7 @@ def test_lookup_calls_forwards_auth_errors(tmp_path: Path, monkeypatch):
 
 
 def test_build_lookup_wires_providers(tmp_path: Path):
-    cfg = LookupConfig(
+    cfg = LookupCredentials(
         hamqth_user="u",
         hamqth_pass="p",
         qrz_user="qu",
@@ -717,7 +717,7 @@ def test_lookup_calls_dedupes_and_returns_map(tmp_path: Path):
         tmp_path,
         {"DL1ABC": LookupResult(call="DL1ABC", name="Hans", manager="OH2BH", source="hamqth")},
     )
-    cfg = LookupConfig()  # keine Credentials → nur Cache
+    cfg = LookupCredentials()  # keine Credentials → nur Cache
     progress: list[tuple[int, int]] = []
     results = lookup_calls(
         ["DL1ABC", "dl1abc", "XX0XXX"],
@@ -733,12 +733,14 @@ def test_lookup_calls_dedupes_and_returns_map(tmp_path: Path):
 
 
 def test_lookup_calls_empty_input(tmp_path: Path):
-    assert lookup_calls([], LookupConfig(), cache_path=tmp_path / "c.json") == {}
-    assert lookup_calls(["", "   "], LookupConfig(), cache_path=tmp_path / "c.json") == {}
+    assert lookup_calls([], LookupCredentials(), cache_path=tmp_path / "c.json") == {}
+    assert lookup_calls(["", "   "], LookupCredentials(), cache_path=tmp_path / "c.json") == {}
 
 
 def test_lookup_calls_without_credentials_all_none(tmp_path: Path):
-    results = lookup_calls(["DL1ABC", "DL2XYZ"], LookupConfig(), cache_path=tmp_path / "c.json")
+    results = lookup_calls(
+        ["DL1ABC", "DL2XYZ"], LookupCredentials(), cache_path=tmp_path / "c.json"
+    )
     assert results == {"DL1ABC": None, "DL2XYZ": None}
 
 
@@ -746,11 +748,11 @@ def test_lookup_calls_without_credentials_all_none(tmp_path: Path):
 
 
 def test_has_lookup_credentials():
-    assert has_lookup_credentials(LookupConfig()) is False
-    assert has_lookup_credentials(LookupConfig(hamqth_user="u", hamqth_pass="p")) is True
-    assert has_lookup_credentials(LookupConfig(qrz_user="u", qrz_pass="p")) is True
+    assert has_lookup_credentials(LookupCredentials()) is False
+    assert has_lookup_credentials(LookupCredentials(hamqth_user="u", hamqth_pass="p")) is True
+    assert has_lookup_credentials(LookupCredentials(qrz_user="u", qrz_pass="p")) is True
     # unvollständig → False
-    assert has_lookup_credentials(LookupConfig(hamqth_user="u")) is False
+    assert has_lookup_credentials(LookupCredentials(hamqth_user="u")) is False
 
 
 if __name__ == "__main__":  # pragma: no cover

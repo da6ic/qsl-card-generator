@@ -14,10 +14,6 @@ sender:
   antenna: ''
   power: ''
 lookup:
-  hamqth_user: ''
-  hamqth_pass: ''
-  qrz_user: ''
-  qrz_pass: ''
   program_id: qslcards
   address_export: false
 generation:

@@ -58,7 +58,9 @@ Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
    musste diese Fälle auseinanderhalten, ohne etwas zu gewinnen.
    Kein „Untertitel"/„Responsive" mehr. Keine Speichern/Laden-Buttons: die
    Config wird **automatisch** gespeichert (debounced) und bei externer Änderung
-   von `config.yaml` **automatisch neu geladen**.
+   von `config.yaml` **automatisch neu geladen**. Ausgenommen sind die
+   Lookup-Zugangsdaten (Abschnitt 6) — sie werden weder gespeichert noch beim
+   Neuladen überschrieben.
 4. **Zustellwege**: eine priorisierbare **Liste** (Listbox) der Wege `Büro` (B),
    `Direkt` (D), `eQSL` (Q), `LOTW` (L) plus eine verschiebbare **Trennlinie**
    (`via_cut`). Buttons ▲/▼ verschieben den ausgewählten Eintrag (Trennlinie
@@ -70,9 +72,17 @@ Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
 5. **Kartenmodus**: Radiobuttons `Eine Karte pro QSO` / `Eine Karte pro Station`.
    (Die globalen Markierungen QSL/Bestätigung stehen in Abschnitt 3.)
 6. **Lookups (optional)**: HamQTH-Benutzer/Passwort, QRZ-Benutzer/Passwort,
-   Checkbox „Adress-/Label-Export erzeugen". **Kein** Schalter „Adressen
-   nachschlagen" mehr — der Lookup läuft **automatisch beim Log-Laden** (§6),
-   sofern Credentials gesetzt sind.
+   darunter die Hinweiszeile `sections.LOOKUP_SESSION_HINT` („Gilt nur für diese
+   Sitzung — wird nicht gespeichert.", Style `Muted.TLabel`), dann die Checkbox
+   „Adress-/Label-Export erzeugen". **Kein** Schalter „Adressen nachschlagen"
+   mehr — der Lookup läuft **automatisch beim Log-Laden** (§6), sofern
+   Zugangsdaten eingetragen sind.
+   Die vier Zugangsdaten-Felder werden **nicht persistiert** (§3,
+   `LookupCredentials`): sie starten jedes Mal leer, ihr Inhalt löst keinen
+   Auto-Save aus und ein Neuladen der `config.yaml` lässt sie unangetastet. Die
+   Hinweiszeile ist die bewusste Ausnahme von „keine Erklärtexte in den
+   Abschnitten" — ohne sie wirkten die leeren Felder beim zweiten Start wie ein
+   Fehler.
 7. **Bemerkungen**: ein Textfeld „Text für alle Karten" (global, `generation.
    remarks`). Steht Text drin, erscheint auf der Rückseite der REMARKS-Kasten
    (dynamisch, §7); leer → kein Kasten. Max. **80 Zeichen**. Je Karte in der
@@ -327,14 +337,14 @@ class SenderConfig:
 
 @dataclass
 class LookupConfig:
-    hamqth_user: str = ""
-    hamqth_pass: str = ""
-    qrz_user: str = ""
-    qrz_pass: str = ""
     program_id: str = "qslcards"   # HamQTH verlangt prg-Kennung
     address_export: bool = False   # Adress-/Label-Export erzeugen (alle Stationen)
     # Hinweis: KEIN `lookup_addresses` mehr — der Lookup läuft automatisch beim
-    # Log-Laden, sobald Credentials gesetzt sind (siehe §6).
+    # Log-Laden, sobald Zugangsdaten eingetragen sind (siehe §6).
+    # Die Zugangsdaten selbst stehen bewusst NICHT hier, sondern in
+    # `lookup.LookupCredentials` (nur zur Laufzeit) — `config.save` schriebe sie
+    # sonst im Klartext in die config.yaml. `program_id` bleibt die einzige
+    # konfigurierte Angabe; die GUI kopiert sie in die Credentials.
 
 @dataclass
 class GenerationConfig:
@@ -724,6 +734,24 @@ zusätzlich die QSL-Routing-Felder:
 - `accepts_direct: str | None` — HamQTH `qsldirect` („Y"/„N"/„?").
 - `lotw: str | None`, `eqsl: str | None` — HamQTH `lotw`/`eqsl` („Y"/„N"/„?").
 
+### 6.1a `LookupCredentials` (`lookup/base.py`)
+```python
+@dataclass
+class LookupCredentials:
+    hamqth_user: str = ""
+    hamqth_pass: str = ""
+    qrz_user: str = ""
+    qrz_pass: str = ""
+    program_id: str = "qslcards"   # füllt die GUI aus LookupConfig.program_id
+```
+Die Zugangsdaten leben **ausschließlich zur Laufzeit**: sie sind kein Teil von
+`AppConfig`, werden nie in die `config.yaml` geschrieben und sind bei jedem
+Programmstart wieder leer (§2.6). `has_lookup_credentials`, `build_lookup` und
+`lookup_calls` nehmen dieses Objekt entgegen — `program_id` reist darin mit,
+damit es bei genau **einem** Parameter bleibt. In der GUI baut
+`App._lookup_credentials()` es aus den Widgets von Abschnitt 6 plus
+`base_config.lookup.program_id`.
+
 ### 6.2 Wege-Ableitung `accepted_routes(result, default_via="B") -> tuple[str,...]`
 Der Lookup liefert je Station die **Menge** akzeptierter Zustellwege (kanonisch
 geordnet B, D, Q, L) — nicht einen einzelnen Code:
@@ -747,6 +775,7 @@ kapselt das inkl. `via_override` und ist die **einzige** Quelle der Wahrheit fü
 Vorschau **und** Export.
 
 ### 6.3 HamQTH (primär, kostenlos — kostenloses Konto nötig)
+> `USER`/`PASS` kommen aus `LookupCredentials` (§6.1a), nie aus der Config.
 - Session holen: `https://www.hamqth.com/xml.php?u=USER&p=PASS`
   → XML mit `<session_id>`. Session ~1 Stunde gültig.
 - Abfrage: `https://www.hamqth.com/xml.php?id=SESSION&callsign=CALL&prg=PROGRAMID`
@@ -776,8 +805,10 @@ Vorschau **und** Export.
 ### 6.6 Wann/wie wird gelookt?
 - **Automatisch beim Log-Laden**, für **alle** Stationen (eindeutige Rufzeichen),
   im Hintergrund-Thread. Kein `lookup_addresses`-Schalter mehr.
-- Läuft nur, wenn HamQTH- **oder** QRZ-Credentials gesetzt sind. Ohne Credentials:
-  keine Netzcalls, alle Via = `default_via`, Adressen leer.
+- Läuft nur, wenn HamQTH- **oder** QRZ-Zugangsdaten eingetragen sind. Ohne sie:
+  keine Netzcalls, alle Via = `default_via`, Adressen leer. Da sie nicht
+  gespeichert werden (§6.1a), gilt das nach jedem Start erneut, bis der Nutzer
+  sie eingibt.
 - Manueller **„Neu abrufen"**-Button holt fehlende/abgebrochene Stationen nach.
 - **Adresse**: wird für alle nachgeschlagenen Stationen geholt und (wenn
   `address_export`) für **alle** exportiert — sie steht **nicht** auf der Karte.
@@ -925,7 +956,7 @@ gefunden" und die Meldung stünde allein im Log. Deshalb:
 | einzelne kaputte Cabrillo-Zeile        | überspringen + loggen, Import läuft weiter  |
 | Lookup ohne Treffer/„?"                | `via_routes = (default_via,)`, Karte trotzdem |
 | Station nur elektronisch (LoTW/eQSL)   | Wege = `Q`/`L`; unter der Trennlinie standardmäßig nicht gedruckt (manuell aktivierbar) |
-| keine Lookup-Credentials               | kein Netzcall, alle `via_routes = (default_via,)` |
+| keine Lookup-Zugangsdaten eingetragen  | kein Netzcall, alle `via_routes = (default_via,)` |
 | Frontbild fehlt                        | Erzeugung blockieren, Popup + roter Rahmen ums Vorschaufeld (§2.4) |
 | Pflichtfeld leer / kein Log geladen     | Erzeugung blockieren, **ein** Popup mit allen fehlenden Angaben, Felder rot markiert (§2.4) |
 | Lookup schlägt fehl / kein Konto       | Via = `default_via`, Adressfelder leer, kein Abbruch |

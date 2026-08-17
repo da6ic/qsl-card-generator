@@ -180,7 +180,9 @@ Jede `Card` erzeugt genau zwei Seiten: `layout_front` + `layout_back`.
    nur in den **optionalen Adress-/Label-Export** (für **alle** Stationen).
 5. **Lookup läuft automatisch** beim Log-Laden für **alle** Stationen im
    Hintergrund-Thread (kein `lookup_addresses`-Schalter), sofern HamQTH-/QRZ-
-   Credentials gesetzt sind; sonst kein Netzcall und alle Via = `default_via`.
+   Zugangsdaten eingetragen sind; sonst kein Netzcall und alle Via =
+   `default_via`. Die **Zugangsdaten stehen nicht in der Config** — sie leben nur
+   zur Laufzeit in `LookupCredentials` und werden je Sitzung neu eingegeben (§11).
    Ergebnisse (auch negative) werden gecacht (`lookup/cache.py`). „PDF erzeugen"
    ist gesperrt, bis der Lookup fertig ist; „Neu abrufen" holt Fehlende nach.
 6. **Karte pro QSO vs. pro Station**: Bei „pro Station" werden alle QSOs mit
@@ -260,6 +262,14 @@ class LookupResult:
     eqsl: str | None            # HamQTH eqsl
     source: str          # "hamqth" | "qrz" | "cache" | "none"
 
+@dataclass
+class LookupCredentials:   # NUR zur Laufzeit — nie in AppConfig/config.yaml
+    hamqth_user: str = ""
+    hamqth_pass: str = ""
+    qrz_user: str = ""
+    qrz_pass: str = ""
+    program_id: str = "qslcards"   # füllt die GUI aus LookupConfig.program_id
+
 class LookupProvider(Protocol):
     def lookup(self, call: str) -> LookupResult | None: ...
 
@@ -274,9 +284,11 @@ def active_via_priority(priority, cut) -> list[str]: ...
 ```
 - HamQTH: Session per `u`/`p` holen, dann `id`+`callsign` abfragen; Session ~1h
   gültig, bei Ablauf neu anmelden. Endpunkte/Details in `docs/SPECIFICATION.md`.
-- QRZ: nur wenn Credentials gesetzt; ohne bezahltes Abo liefert QRZ nur
+- QRZ: nur wenn Zugangsdaten gesetzt; ohne bezahltes Abo liefert QRZ nur
   eingeschränkte Felder → als „best effort" behandeln, Fehler nicht fatal.
-- `lookup_calls(calls, config, ...)` schlägt **alle** (eindeutigen) Rufzeichen
+- `has_lookup_credentials(credentials)` / `build_lookup(credentials, cache_path)`
+  / `lookup_calls(calls, credentials, ...)` nehmen alle **`LookupCredentials`**,
+  nicht `LookupConfig`. `lookup_calls` schlägt **alle** (eindeutigen) Rufzeichen
   nach → Map `CALL -> LookupResult|None`; der Builder füllt daraus je Karte
   `via_routes`/`via_text`/`recipient`. Netz-/Auth-Fehler nie fatal.
 
@@ -610,7 +622,26 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
 - **Keine Erklärtexte in den Abschnitten**: die Hinweiszeilen unter der
   Prioritätsliste (4) und den Zugangsdaten (6) sowie die Klammern
   „(optional)"/„(für alle Karten)" in Abschnitt 3 wurden vom Nutzer verworfen —
-  neue Erklärtexte nur auf ausdrücklichen Wunsch.
+  neue Erklärtexte nur auf ausdrücklichen Wunsch. **Eine** Ausnahme steht
+  wieder in Abschnitt 6 (`sections.LOOKUP_SESSION_HINT`, vom Nutzer ausdrücklich
+  gewünscht): ohne sie sähen die beim Start leeren Zugangsdaten-Felder wie ein
+  Fehler aus (siehe „Zugangsdaten nur zur Laufzeit").
+- **Zugangsdaten nur zur Laufzeit** (vom Nutzer so entschieden): HamQTH-/QRZ-
+  Benutzer und -Passwort standen im Klartext in der `config.yaml` und wurden bei
+  jedem Tastendruck neu hineingeschrieben. Jetzt gilt:
+  * `LookupConfig` behält nur `program_id` und `address_export`; die vier
+    Zugangsdaten leben in `lookup.LookupCredentials` (nur im Arbeitsspeicher).
+    `has_lookup_credentials`/`build_lookup`/`lookup_calls` nehmen dieses Objekt.
+  * Die Felder bleiben in GUI-Abschnitt 6, starten aber **jedes Mal leer**. Sie
+    hängen **nicht** am Auto-Save (`_wire_autosave`) und werden von
+    `_apply_config_to_widgets` **nicht** gesetzt — sonst löschte ein Neuladen der
+    `config.yaml` gerade Getipptes. `App._lookup_credentials()` baut das Objekt
+    beim Lookup aus den Widgets plus `base_config.lookup.program_id`.
+  * **Keine Migration alter Configs** (Muster `portable_mark`): `_from_dict`
+    ignoriert die vier Schlüssel, der nächste Auto-Save schreibt die Datei ohne
+    sie neu. *Verworfen:* aktives Ausputzen beim Start.
+  * Rote Markierung bei abgelehnter Anmeldung, Cache und „Neu abrufen" bleiben
+    unverändert — nur die Herkunft der Werte hat sich geändert.
 - **GUI-Abschnitte**: 1 Logbuch (ADIF/Cabrillo), 2 Frontbild, 3 Absender (inkl. Funk-Ausrüstung +
   globale Markierungen QSL/Bestätigung), 4 Zustellwege (priorisierbare
   Liste + Trennlinie), 5 Kartenmodus, 6 Lookups, **7 Bemerkungen**, 8 Vorschau,
@@ -703,8 +734,10 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   (debounced) und bei externer Datei-Änderung neu geladen (mtime-Poll, Loop-Schutz
   via `_suppress_save`). Enter in Eingabefeldern gibt den Fokus frei.
   **Achtung:** `_gather_config()` baut die Config aus den Widgets — Felder ohne
-  Widget (`appearance`, `recent`) müssen aus `base_config` übernommen werden,
-  sonst löscht der nächste Auto-Save sie.
+  Widget (`appearance`, `recent`, `lookup.program_id`) müssen aus `base_config`
+  übernommen werden, sonst löscht der nächste Auto-Save sie. Umgekehrt gilt für
+  die Zugangsdaten-Widgets: sie haben **kein** Config-Feld und dürfen in keiner
+  Richtung mitlaufen (siehe „Zugangsdaten nur zur Laufzeit").
 - **Farbthema „Funk-Blau"** (Akzent `#1F6FEB` hell / `#4C93FF` dunkel), hell +
   dunkel, Default folgt dem System. Bewusst **gleiches Aussehen auf allen
   Plattformen** statt nativem macOS-Look.
