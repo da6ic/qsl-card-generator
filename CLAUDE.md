@@ -644,8 +644,18 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
     unverändert — nur die Herkunft der Werte hat sich geändert.
 - **GUI-Abschnitte**: 1 Logbuch (ADIF/Cabrillo), 2 Frontbild, 3 Absender (inkl. Funk-Ausrüstung +
   globale Markierungen QSL/Bestätigung), 4 Zustellwege (priorisierbare
-  Liste + Trennlinie), 5 Kartenmodus, 6 Lookups, **7 Bemerkungen**, 8 Vorschau,
-  9 Druckmodus (inkl. Bogendruck + Druckrand), 10 Ausgabe.
+  Liste + Trennlinie), 5 Kartenmodus, 6 Lookups (nur Zugangsdaten + Hinweiszeile),
+  **7 Bemerkungen**, 8 Vorschau, 9 Druckmodus (inkl. Bogendruck + Druckrand),
+  10 Ausgabe (inkl. Adress-/Label-Export).
+- **Adress-/Label-Export steht bei der Ausgabe, nicht bei den Lookups** (vom
+  Nutzer so entschieden): die Checkbox sitzt in Abschnitt 10 **über** der
+  Zielwahl, weil die CSV erst beim Erzeugen entsteht und am Basis-Ausgabepfad
+  landet (`…_addresses.csv`). Der Config-Schlüssel bleibt bewusst
+  `lookup.address_export` — die Anschriften kommen aus dem Lookup, und ein
+  Umzug nach `generation` hätte (Muster `portable_mark`: keine Migration) ein
+  bestehendes `true` still auf `false` fallen lassen. Die Variable lebt jetzt auf
+  `OutputSection`; `_apply_config_to_widgets`/`_gather_config`/`_wire_autosave`
+  greifen entsprechend auf `output_section`.
 - **Druckrand: vier Werte, keine Verzerrung, Überschuss ins Layout** (iterativ mit
   dem Nutzer erarbeitet, alle drei Punkte bewusst so entschieden):
   * **Vier einzelne Kanten** (oben/unten/links/rechts), nicht ein Wert für alle —

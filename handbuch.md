@@ -246,10 +246,10 @@ wird gemerkt.
 - **Aktionen ▸ Lookup-Cache leeren…** wirft alles weg. Das ist der richtige
   Griff, wenn du weißt, dass sich Angaben geändert haben.
 
-Die Checkbox **Adress-/Label-Export erzeugen** legt beim Erzeugen zusätzlich
-eine CSV-Datei mit den gefundenen Anschriften an — praktisch für Adressetiketten
-bei Direktversand. Auf der Karte selbst steht die Anschrift des Empfängers
-grundsätzlich nicht, dort erscheint nur sein Rufzeichen.
+Die gefundenen Anschriften kannst du dir als Datei ausgeben lassen — die Checkbox
+dafür steht bei der Ausgabe ([Kapitel 10](#abschnitt-10)), weil die Datei dort
+entsteht. Auf der Karte selbst steht die Anschrift des Empfängers grundsätzlich
+nicht, dort erscheint nur sein Rufzeichen.
 
 **Die Zugangsdaten werden nicht gespeichert.** Sie gelten nur für die laufende
 Sitzung und stehen in keiner Datei — weder in der `config.yaml` noch sonst wo
@@ -349,13 +349,18 @@ Mit **Ziel…** wählst du, wohin die PDF geschrieben wird; voreingestellt ist
 `qsl_karten.pdf` in deinem Dokumentenordner. Dann **PDF erzeugen** — der Balken
 zeigt den Fortschritt.
 
+Die Checkbox **Adress-/Label-Export erzeugen** darüber legt zusätzlich eine
+CSV-Datei mit den Anschriften an, die der Lookup gefunden hat
+([Kapitel 6](#abschnitt-6)) — praktisch für Adressetiketten beim Direktversand.
+Sie landet neben der PDF; Stationen ohne gefundene Anschrift stehen nicht darin.
+
 Je nach Einstellung entstehen:
 
 - im Duplexmodus **eine** PDF unter dem gewählten Namen,
 - im getrennten Modus **zwei** PDFs mit den Zusätzen `_vorderseiten` und
   `_rueckseiten`,
 - zusätzlich eine CSV-Datei mit dem Zusatz `_addresses`, falls du den
-  Adressexport in [Abschnitt 6](#abschnitt-6) eingeschaltet hast.
+  Adressexport eingeschaltet hast.
 
 Ist alles fertig, öffnet das Programm die Dateien gleich in deinem
 PDF-Betrachter.

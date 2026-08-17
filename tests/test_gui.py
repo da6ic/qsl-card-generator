@@ -251,6 +251,29 @@ def test_lookup_section_shows_the_session_hint(app):
     assert str(hint.cget("style")) == "Muted.TLabel"
 
 
+def test_address_export_sits_above_the_output_target(app):
+    """Der Adress-/Label-Export gehört zur Ausgabe, nicht zu den Lookups.
+
+    Die CSV entsteht beim Erzeugen und landet neben der PDF — also über der
+    Zielwahl in Abschnitt 10 (und in Abschnitt 6 nicht mehr).
+    """
+    check = app.output_section.address_export_check
+    assert str(check.winfo_parent()) == str(app.output_section.frame)
+    assert check.grid_info()["row"] < app.output_section.browse_btn.grid_info()["row"]
+    assert not [
+        child
+        for child in app.lookup_section.frame.winfo_children()
+        if isinstance(child, ttk.Checkbutton)
+    ]
+
+
+def test_address_export_still_auto_saves(app):
+    """Der Umzug ändert nur den Ort in der Oberfläche, nicht den Config-Weg."""
+    app.output_section.address_export.set(True)
+    app._auto_save()
+    assert cfg.load(appmod.CONFIG_PATH).lookup.address_export is True
+
+
 def test_without_credentials_all_default_via(app, tmp_path):
     # Keine Zugangsdaten -> kein Netzcall, alle Via = default_via ("B" -> „Büro").
     _load(app, tmp_path)

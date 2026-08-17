@@ -621,7 +621,6 @@ class LookupSection:
         self.hamqth_pass = tk.StringVar()
         self.qrz_user = tk.StringVar()
         self.qrz_pass = tk.StringVar()
-        self.address_export = tk.BooleanVar(value=False)
 
         self.vars: dict[str, tk.StringVar] = {
             "hamqth_user": self.hamqth_user,
@@ -657,12 +656,6 @@ class LookupSection:
             style="Muted.TLabel",
         )
         self.session_hint.grid(row=4, column=0, columnspan=2, pady=(GAP_ROW, 0), sticky="w")
-
-        ttk.Checkbutton(
-            self.frame,
-            text="Adress-/Label-Export erzeugen",
-            variable=self.address_export,
-        ).grid(row=5, column=0, columnspan=2, pady=(PAD_INNER, GAP_ROW), sticky="w")
         self.frame.columnconfigure(1, weight=1)
 
     def mark_auth_failed(self, providers: Iterable[str]) -> None:
@@ -875,24 +868,39 @@ DEFAULT_OUTPUT_NAME = "qsl_karten.pdf"
 
 
 class OutputSection:
-    """10. Ausgabe. Der Status steht in der Fußzeile (`StatusBar`)."""
+    """10. Ausgabe. Der Status steht in der Fußzeile (`StatusBar`).
+
+    Der **Adress-/Label-Export** steht hier (über der Zielwahl) und nicht mehr
+    bei den Lookups: die CSV entsteht erst beim Erzeugen und landet neben der
+    PDF (`pdf/generator._export_addresses`) — also genau an dem Ort, der eine
+    Zeile darunter gewählt wird. Der Config-Schlüssel bleibt
+    `lookup.address_export`: die Anschriften kommen aus dem Lookup.
+    """
 
     def __init__(self, parent: tk.Misc) -> None:
         self.frame = ttk.LabelFrame(parent, text="10. Ausgabe")
         # Absoluter Pfad, kein bloßer Dateiname: ein relativer landete beim
         # gebündelten Programm im Arbeitsverzeichnis des Systems.
         self.output_var = tk.StringVar(value=str(paths.default_output_dir() / DEFAULT_OUTPUT_NAME))
+        self.address_export = tk.BooleanVar(value=False)
+
+        self.address_export_check = ttk.Checkbutton(
+            self.frame,
+            text="Adress-/Label-Export erzeugen",
+            variable=self.address_export,
+        )
+        self.address_export_check.grid(row=0, column=0, columnspan=3, pady=GAP_ROW, sticky="w")
 
         self.browse_btn = ttk.Button(self.frame, text="Ziel…")
-        self.browse_btn.grid(row=0, column=0, pady=GAP_ROW, sticky="w")
+        self.browse_btn.grid(row=1, column=0, pady=GAP_ROW, sticky="w")
         ttk.Entry(self.frame, textvariable=self.output_var, width=40).grid(
-            row=0, column=1, padx=GAP_COL, pady=GAP_ROW, sticky="we"
+            row=1, column=1, padx=GAP_COL, pady=GAP_ROW, sticky="we"
         )
         self.generate_btn = ttk.Button(self.frame, text="PDF erzeugen", style="Accent.TButton")
-        self.generate_btn.grid(row=0, column=2, pady=GAP_ROW)
+        self.generate_btn.grid(row=1, column=2, pady=GAP_ROW)
 
         self.progress = ttk.Progressbar(self.frame, mode="determinate")
-        self.progress.grid(row=1, column=0, columnspan=3, pady=(GAP_ROW, 0), sticky="we")
+        self.progress.grid(row=2, column=0, columnspan=3, pady=(GAP_ROW, 0), sticky="we")
         self.frame.columnconfigure(1, weight=1)
 
 

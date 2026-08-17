@@ -73,10 +73,13 @@ Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
    (Die globalen Markierungen QSL/Bestätigung stehen in Abschnitt 3.)
 6. **Lookups (optional)**: HamQTH-Benutzer/Passwort, QRZ-Benutzer/Passwort,
    darunter die Hinweiszeile `sections.LOOKUP_SESSION_HINT` („Gilt nur für diese
-   Sitzung — wird nicht gespeichert.", Style `Muted.TLabel`), dann die Checkbox
-   „Adress-/Label-Export erzeugen". **Kein** Schalter „Adressen nachschlagen"
-   mehr — der Lookup läuft **automatisch beim Log-Laden** (§6), sofern
-   Zugangsdaten eingetragen sind.
+   Sitzung — wird nicht gespeichert.", Style `Muted.TLabel`). **Kein** Schalter
+   „Adressen nachschlagen" mehr — der Lookup läuft **automatisch beim Log-Laden**
+   (§6), sofern Zugangsdaten eingetragen sind. Die Checkbox
+   „Adress-/Label-Export erzeugen" stand hier einmal und steht jetzt in
+   Abschnitt 10 (die CSV entsteht beim Erzeugen und landet neben der PDF); der
+   Config-Schlüssel bleibt `lookup.address_export`, weil die Anschriften aus dem
+   Lookup kommen.
    Die vier Zugangsdaten-Felder werden **nicht persistiert** (§3,
    `LookupCredentials`): sie starten jedes Mal leer, ihr Inhalt löst keinen
    Auto-Save aus und ein Neuladen der `config.yaml` lässt sie unangetastet. Die
@@ -143,7 +146,10 @@ Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
    Ein-/Ausblenden schiebt die Abschnitte darunter nicht weg.
    Erklärtexte unter Checkbox und Randblock gab es zwischenzeitlich; sie wurden
    vom Nutzer wieder entfernt.
-10. **Ausgabe**: Zielpfad der PDF, Button `PDF erzeugen` (Primärbutton,
+10. **Ausgabe**: **über** der Zielwahl die Checkbox „Adress-/Label-Export
+   erzeugen" (`lookup.address_export`, §7) — sie steht hier, weil die CSV beim
+   Erzeugen entsteht und neben der gewählten PDF landet; darunter Zielpfad,
+   Button `PDF erzeugen` (Primärbutton,
    `Accent.TButton`) und Fortschrittsbalken (`ttk.Progressbar`). Die Statuszeile
    steht **nicht** mehr hier, sondern in der Fußleiste (§2.3). `PDF erzeugen` ist
    **deaktiviert**, solange der Lookup nach dem Log-Laden noch läuft, und wird erst
@@ -338,7 +344,8 @@ class SenderConfig:
 @dataclass
 class LookupConfig:
     program_id: str = "qslcards"   # HamQTH verlangt prg-Kennung
-    address_export: bool = False   # Adress-/Label-Export erzeugen (alle Stationen)
+    address_export: bool = False   # Adress-/Label-Export erzeugen (alle Stationen);
+                                   # Widget in GUI-Abschnitt 10 (§2.2), Daten aus dem Lookup
     # Hinweis: KEIN `lookup_addresses` mehr — der Lookup läuft automatisch beim
     # Log-Laden, sobald Zugangsdaten eingetragen sind (siehe §6).
     # Die Zugangsdaten selbst stehen bewusst NICHT hier, sondern in
@@ -942,6 +949,8 @@ gefunden" und die Meldung stünde allein im Log. Deshalb:
 - **Adress-/Label-Export (optional)**: zusätzlich zu den Karten eine CSV mit
   Empfängeradressen **aller** nachgeschlagenen Stationen erzeugen, wenn
   `address_export == True`. Format simpel (Adressblöcke), separat von den Karten.
+  Sie hängt am **Basis-Ausgabepfad** (`…_addresses.csv`), unabhängig vom
+  Druckmodus — deshalb steht ihre Checkbox in GUI-Abschnitt 10 bei der Zielwahl.
 
 ---
 

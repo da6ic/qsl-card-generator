@@ -461,7 +461,7 @@ class App(tk.Tk):
             # Die Zugangsdaten stehen bewusst NICHT in der Config und werden
             # hier deshalb auch nicht gesetzt: ein Neuladen der Datei (externe
             # Änderung) darf nicht löschen, was der Nutzer gerade getippt hat.
-            self.lookup_section.address_export.set(config.lookup.address_export)
+            self.output_section.address_export.set(config.lookup.address_export)
 
             self.filter_section.set_priority(
                 config.generation.via_priority, config.generation.via_cut
@@ -500,7 +500,7 @@ class App(tk.Tk):
         )
         lookup = LookupConfig(
             program_id=self.base_config.lookup.program_id,
-            address_export=self.lookup_section.address_export.get(),
+            address_export=self.output_section.address_export.get(),
         )
         via_priority, via_cut = self.filter_section.get_priority()
         generation = GenerationConfig(
@@ -572,7 +572,7 @@ class App(tk.Tk):
             # Die Zugangsdaten fehlen hier mit Absicht: sie werden nicht
             # gespeichert, ein Tastendruck im Passwortfeld darf keinen
             # Schreibvorgang auslösen.
-            self.lookup_section.address_export,
+            self.output_section.address_export,
             self.mode_section.card_mode,
             self.printmode_section.print_mode,
             self.printmode_section.sheet_mode,
