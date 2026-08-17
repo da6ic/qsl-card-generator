@@ -235,8 +235,8 @@ Zustellwege.
 vier Zustellwege. Trage auch diese Zugangsdaten ein, wenn du keine QRZ-Daten hast
 — **oder gerade zusätzlich zu ihnen**: Was QRZ zu einer Station nicht weiß, holt
 das Programm dann bei HamQTH nach und setzt beides zu einer Antwort zusammen.
-Angaben von QRZ haben dabei Vorrang. Mit beiden Konten dauert der Lookup etwa
-doppelt so lange, weil fast jede Station bei beiden Anbietern angefragt wird.
+Angaben von QRZ haben dabei Vorrang. Mit beiden Konten dauert der Lookup etwas
+länger, weil für viele Stationen beide Anbieter gefragt werden.
 
 Ohne Zugangsdaten schaut das Programm nicht nach. Alle Stationen bekommen dann
 den Standardweg Büro, Adressen bleiben leer.
