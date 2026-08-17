@@ -1,4 +1,4 @@
-"""QRZ-XML-Client (optional, best effort; siehe docs/SPECIFICATION.md §6.2).
+"""QRZ-XML-Client (erste Wahl, best effort; siehe docs/SPECIFICATION.md §6.3).
 
 Ablauf:
   1. Session: `xml/current/?username=U;password=P;agent=…` → `<Key>`.
@@ -12,6 +12,9 @@ und wird namespace-agnostisch gelesen (`{*}tag`).
 Ohne bezahltes XML-Abo liefert QRZ oft nur eingeschränkte/leere Adressfelder →
 als „best effort" behandeln. Alle Fehler (Netz, HTTP, Parse, Auth) werden
 abgefangen, geloggt und als `None` zurückgegeben.
+
+QRZ ist die **erste** Wahl der Kette, kennt aber keine Zustellweg-Flags: die
+holt `ChainedLookup` anschließend bei HamQTH nach (§6.2a).
 """
 
 from __future__ import annotations

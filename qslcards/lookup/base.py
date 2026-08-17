@@ -19,6 +19,23 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from qslcards.lookup.cache import LookupCache
 
+# Die inhaltlichen Felder eines Treffers — alles außer `call` und `source`.
+# Maßgeblich fürs Zusammenführen zweier Anbieter (`LookupResult.merged_with`)
+# und für die Frage, ob sich der nächste Anbieter überhaupt noch lohnt.
+DATA_FIELDS = (
+    "name",
+    "street",
+    "zip",
+    "city",
+    "country",
+    "grid",
+    "manager",
+    "accepts_bureau",
+    "accepts_direct",
+    "lotw",
+    "eqsl",
+)
+
 
 @dataclass
 class LookupResult:
@@ -50,6 +67,37 @@ class LookupResult:
             flag == "Y" for flag in (self.accepts_bureau, self.accepts_direct, self.lotw, self.eqsl)
         )
         return not (has_address or has_routing)
+
+    def missing_fields(self) -> tuple[str, ...]:
+        """Datenfelder, die dieser Treffer nicht füllt (leer oder `None`).
+
+        `call` und `source` zählen nicht mit — sie sind immer gesetzt. Solange
+        etwas fehlt, lohnt sich für `ChainedLookup` der nächste Anbieter.
+        """
+        return tuple(name for name in DATA_FIELDS if not getattr(self, name))
+
+    def merged_with(self, other: LookupResult) -> LookupResult:
+        """Füllt die eigenen Lücken aus `other`; **eigene** Werte gewinnen immer.
+
+        Nötig, weil die Anbieter Verschiedenes können: QRZ liefert Adresse und
+        Manager, aber **keine** Zustellweg-Flags (§6.3) — die kommen nur von
+        HamQTH. Ohne Zusammenführen bliebe jede von QRZ gefundene Station ohne
+        akzeptierte Wege und fiele auf `default_via` zurück.
+
+        `source` nennt beide Anbieter (z. B. „qrz+hamqth"), sobald wirklich
+        etwas übernommen wurde — sonst bleibt die eigene Herkunft stehen.
+        """
+        taken = False
+        merged = LookupResult(**asdict(self))
+        for name in DATA_FIELDS:
+            if not getattr(merged, name):
+                value = getattr(other, name)
+                if value:
+                    setattr(merged, name, value)
+                    taken = True
+        if taken and other.source and other.source != merged.source:
+            merged.source = f"{merged.source}+{other.source}"
+        return merged
 
     def to_dict(self) -> dict[str, str | None]:
         return asdict(self)
@@ -91,8 +139,16 @@ class ChainedLookup:
 
     Ablauf pro Rufzeichen:
       1. Cache befragen. Treffer (positiv **oder** negativ) → sofort zurück.
-      2. Sonst Provider der Reihe nach fragen; erster nicht-leerer Treffer gewinnt.
+      2. Sonst Provider der Reihe nach fragen. Der **erste** nicht-leere Treffer
+         gewinnt bei jedem Feld, das er füllt; die folgenden Provider füllen nur
+         noch die Lücken (`LookupResult.merged_with`). Ist nichts mehr offen,
+         wird der Rest der Kette gar nicht erst gefragt.
       3. Ergebnis cachen (auch „nichts gefunden" als negativer Eintrag).
+
+    Punkt 2 ist bewusst „ergänzen" statt „abbrechen": QRZ steht vorn, liefert
+    aber keine Zustellweg-Flags — die kommen von HamQTH. Ein reines Abbrechen
+    beim ersten Treffer würde jede von QRZ gefundene Station ohne akzeptierte
+    Wege lassen (§6.2/§6.2a).
 
     Der Cache ist optional; ohne ihn wird jedes Mal frisch abgefragt.
 
@@ -131,10 +187,13 @@ class ChainedLookup:
 
         result: LookupResult | None = None
         for provider in self._providers:
-            found = provider.lookup(call)
-            if found is not None and not found.is_empty():
-                result = found
+            if result is not None and not result.missing_fields():
+                # Nichts mehr nachzufüllen → kein weiterer Netz-Call.
                 break
+            found = provider.lookup(call)
+            if found is None or found.is_empty():
+                continue
+            result = found if result is None else result.merged_with(found)
 
         if self._cache is not None and not self._degraded():
             self._cache.set(call, result or LookupResult(call=call, source="none"))

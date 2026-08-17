@@ -406,12 +406,79 @@ class StubProvider:
 
 
 def test_chain_prefers_first_provider():
-    a = StubProvider({"DL1ABC": LookupResult(call="DL1ABC", name="A", source="hamqth")})
-    b = StubProvider({"DL1ABC": LookupResult(call="DL1ABC", name="B", source="qrz")})
+    """Bei gemeinsamen Feldern gewinnt der erste Anbieter."""
+    a = StubProvider({"DL1ABC": LookupResult(call="DL1ABC", name="A", source="qrz")})
+    b = StubProvider({"DL1ABC": LookupResult(call="DL1ABC", name="B", source="hamqth")})
     chain = ChainedLookup([a, b])
 
     result = chain.lookup("DL1ABC")
     assert result is not None and result.name == "A"
+
+
+def test_chain_fills_gaps_from_second_provider():
+    """Der zweite Anbieter füllt nur die Lücken — genau der Fall QRZ + HamQTH:
+    QRZ liefert Adresse/Manager, die Zustellweg-Flags kommen von HamQTH."""
+    qrz = StubProvider(
+        {
+            "DL1ABC": LookupResult(
+                call="DL1ABC",
+                name="Hans",
+                street="Musterweg 1",
+                manager="DK1XY",
+                source="qrz",
+            )
+        }
+    )
+    hamqth = StubProvider(
+        {
+            "DL1ABC": LookupResult(
+                call="DL1ABC",
+                name="H. Mustermann",  # verliert gegen QRZ
+                city="Musterstadt",  # füllt eine Lücke
+                accepts_bureau="Y",
+                accepts_direct="Y",
+                lotw="Y",
+                source="hamqth",
+            )
+        }
+    )
+    chain = ChainedLookup([qrz, hamqth])
+
+    result = chain.lookup("DL1ABC")
+    assert result is not None
+    assert result.name == "Hans"  # erster Anbieter gewinnt
+    assert result.street == "Musterweg 1"
+    assert result.city == "Musterstadt"  # Lücke aus HamQTH
+    assert result.manager == "DK1XY"
+    assert (result.accepts_bureau, result.accepts_direct, result.lotw) == ("Y", "Y", "Y")
+    assert result.source == "qrz+hamqth"
+    # Ohne die Flags wäre die Station auf default_via zurückgefallen.
+    assert accepted_routes(result, "B") == ("B", "D", "L")
+
+
+def test_chain_skips_second_provider_when_nothing_is_missing():
+    """Ein vollständiger Treffer erspart den zweiten Netz-Call."""
+    complete = LookupResult(
+        call="DL1ABC",
+        name="Hans",
+        street="Musterweg 1",
+        zip="12345",
+        city="Musterstadt",
+        country="Germany",
+        grid="JO62",
+        manager="DK1XY",
+        accepts_bureau="Y",
+        accepts_direct="Y",
+        lotw="Y",
+        eqsl="Y",
+        source="qrz",
+    )
+    a = StubProvider({"DL1ABC": complete})
+    b = StubProvider({"DL1ABC": LookupResult(call="DL1ABC", name="B", source="hamqth")})
+    chain = ChainedLookup([a, b])
+
+    result = chain.lookup("DL1ABC")
+    assert result is not None and result.source == "qrz"
     assert b.calls == []  # zweiter Provider gar nicht befragt
 
 
@@ -573,7 +640,25 @@ def test_build_lookup_wires_providers(tmp_path: Path):
         qrz_pass="qp",
     )
     chain = build_lookup(cfg, cache_path=tmp_path / "cache.json")
-    assert len(chain._providers) == 2  # HamQTH + QRZ
+    assert len(chain._providers) == 2
+    # Reihenfolge = Priorität: QRZ ist erste Wahl, HamQTH kommt danach.
+    assert isinstance(chain._providers[0], QRZClient)
+    assert isinstance(chain._providers[1], HamQTHClient)
+
+
+def test_build_lookup_without_qrz_credentials_uses_hamqth(tmp_path: Path):
+    """Ohne QRZ-Zugangsdaten ist HamQTH die zweite Wahl — und die einzige."""
+    cfg = LookupCredentials(hamqth_user="u", hamqth_pass="p")
+    chain = build_lookup(cfg, cache_path=tmp_path / "cache.json")
+    assert len(chain._providers) == 1
+    assert isinstance(chain._providers[0], HamQTHClient)
+
+
+def test_build_lookup_without_hamqth_credentials_uses_qrz(tmp_path: Path):
+    cfg = LookupCredentials(qrz_user="qu", qrz_pass="qp")
+    chain = build_lookup(cfg, cache_path=tmp_path / "cache.json")
+    assert len(chain._providers) == 1
+    assert isinstance(chain._providers[0], QRZClient)
 
 
 def _seeded_cache(tmp_path: Path, entries: dict[str, LookupResult]) -> Path:

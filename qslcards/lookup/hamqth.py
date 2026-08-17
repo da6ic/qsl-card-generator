@@ -1,4 +1,7 @@
-"""HamQTH-XML-Client (siehe docs/SPECIFICATION.md §6.1).
+"""HamQTH-XML-Client (zweite Wahl; siehe docs/SPECIFICATION.md §6.4).
+
+Zweite Wahl der Kette, aber die **einzige** Quelle der Zustellweg-Flags: steht
+QRZ davor, füllt HamQTH dessen Lücken (§6.2a).
 
 Ablauf:
   1. Session holen: `xml.php?u=USER&p=PASS` → `<session_id>` (≈1 h gültig).

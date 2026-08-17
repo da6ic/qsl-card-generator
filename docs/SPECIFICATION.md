@@ -71,7 +71,8 @@ Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
    Drucken-Markierung. Kein Via-Filter (B/D/M) mehr.
 5. **Kartenmodus**: Radiobuttons `Eine Karte pro QSO` / `Eine Karte pro Station`.
    (Die globalen Markierungen QSL/Bestätigung stehen in Abschnitt 3.)
-6. **Lookups (optional)**: HamQTH-Benutzer/Passwort, QRZ-Benutzer/Passwort,
+6. **Lookups (optional)**: QRZ-Benutzer/Passwort, HamQTH-Benutzer/Passwort (in
+   dieser Reihenfolge — sie spiegelt die Abfragekette aus §6.3),
    darunter die Hinweiszeile `sections.LOOKUP_SESSION_HINT` („Gilt nur für diese
    Sitzung — wird nicht gespeichert.", Style `Muted.TLabel`). **Kein** Schalter
    „Adressen nachschlagen" mehr — der Lookup läuft **automatisch beim Log-Laden**
@@ -741,6 +742,10 @@ zusätzlich die QSL-Routing-Felder:
 - `accepts_direct: str | None` — HamQTH `qsldirect` („Y"/„N"/„?").
 - `lotw: str | None`, `eqsl: str | None` — HamQTH `lotw`/`eqsl` („Y"/„N"/„?").
 
+Fürs Zusammenführen zweier Anbieter (§6.2a) zusätzlich `missing_fields()` (welche
+Datenfelder dieser Treffer offen lässt) und `merged_with(other)` (füllt die
+eigenen Lücken aus `other`; **eigene** Werte gewinnen immer).
+
 ### 6.1a `LookupCredentials` (`lookup/base.py`)
 ```python
 @dataclass
@@ -781,8 +786,39 @@ akzeptierten Menge liegt; gibt es keinen, wird die Karte **nicht** gedruckt
 kapselt das inkl. `via_override` und ist die **einzige** Quelle der Wahrheit für
 Vorschau **und** Export.
 
-### 6.3 HamQTH (primär, kostenlos — kostenloses Konto nötig)
+### 6.2a Reihenfolge der Anbieter und Zusammenführen (`ChainedLookup`)
+`build_lookup` hängt die Provider in **fester Priorität** ein: **QRZ zuerst**
+(§6.3), **HamQTH danach** (§6.4). Eingehängt wird nur, wer Zugangsdaten hat —
+ohne QRZ-Zugangsdaten ist HamQTH die einzige Quelle und umgekehrt.
+
+Die Kette **bricht nicht beim ersten Treffer ab**, sondern **ergänzt**:
+- Der erste nicht-leere Treffer gewinnt bei jedem Feld, das er selbst füllt.
+- Die folgenden Anbieter füllen nur noch die **Lücken**
+  (`LookupResult.merged_with`, Feldliste `base.DATA_FIELDS` = alles außer `call`
+  und `source`). `source` nennt dann beide, z. B. `"qrz+hamqth"`.
+- Ist nach einem Treffer nichts mehr offen (`missing_fields()` leer), wird der
+  Rest der Kette **nicht** mehr gefragt.
+
+**Warum ergänzen statt abbrechen:** QRZ steht vorn, liefert aber prinzipiell
+keine Zustellweg-Flags (§6.4). Bei reinem Abbruch bekäme jede von QRZ gefundene
+Station eine leere Wegemenge und fiele auf `default_via` zurück — die Priorisierung
+in GUI-Abschnitt 4 liefe leer. **Preis:** Sind beide Zugangsdaten gesetzt, wird
+fast jede Station bei **beiden** Anbietern angefragt, der Lookup dauert rund
+doppelt so lange (§11 „Der Lookup ist die eigentliche Geduldsprobe").
+
+### 6.3 QRZ (erste Wahl, best effort)
 > `USER`/`PASS` kommen aus `LookupCredentials` (§6.1a), nie aus der Config.
+- Session: `https://xmldata.qrz.com/xml/current/?username=USER;password=PASS;agent=qslcards1.0`
+  → `<Key>`. Query-Parameter mit `;` (nicht `&`) trennen; Namespace beachten.
+- Abfrage: `https://xmldata.qrz.com/xml/current/?s=KEY;callsign=CALL`.
+- Liefert Adresse + Manager (`qslmgr`), aber **keine** Büro/Direkt/LoTW/eQSL-Flags
+  → diese bleiben `None` und werden, sofern vorhanden, aus HamQTH nachgefüllt
+  (§6.2a). Ohne HamQTH-Zugangsdaten landen solche Stationen (ohne Manager) auf
+  `default_via`.
+- **Ohne bezahltes XML-Abo** sind Felder oft leer/limitiert → „best effort".
+
+### 6.4 HamQTH (zweite Wahl — kostenloses Konto nötig)
+> Einzige Quelle der Zustellweg-Flags; auch als Ergänzung zu QRZ sinnvoll (§6.2a).
 - Session holen: `https://www.hamqth.com/xml.php?u=USER&p=PASS`
   → XML mit `<session_id>`. Session ~1 Stunde gültig.
 - Abfrage: `https://www.hamqth.com/xml.php?id=SESSION&callsign=CALL&prg=PROGRAMID`
@@ -790,14 +826,6 @@ Vorschau **und** Export.
   `nick`/`adr_name`, `adr_street1`, `adr_city`, `adr_zip`, `country`/`adr_country`,
   `grid`, sowie fürs Routing `qsl_via`, `qsl`, `qsldirect`, `lotw`, `eqsl`.
 - Bei „session does not exist / expired" → neu anmelden, einmal wiederholen.
-
-### 6.4 QRZ (optional, best effort)
-- Session: `https://xmldata.qrz.com/xml/current/?username=USER;password=PASS;agent=qslcards1.0`
-  → `<Key>`. Query-Parameter mit `;` (nicht `&`) trennen; Namespace beachten.
-- Abfrage: `https://xmldata.qrz.com/xml/current/?s=KEY;callsign=CALL`.
-- Liefert Adresse + Manager (`qslmgr`), aber **keine** Büro/Direkt/LoTW/eQSL-Flags
-  → diese bleiben `None`, solche Stationen landen (ohne Manager) auf `default_via`.
-- **Ohne bezahltes XML-Abo** sind Felder oft leer/limitiert → „best effort".
 
 ### 6.5 Cache (`lookup/cache.py`)
 - JSON-Datei `lookup_cache.json`: `{ "CALL": {result, queried_at}, ... }`.
@@ -812,7 +840,7 @@ Vorschau **und** Export.
 ### 6.6 Wann/wie wird gelookt?
 - **Automatisch beim Log-Laden**, für **alle** Stationen (eindeutige Rufzeichen),
   im Hintergrund-Thread. Kein `lookup_addresses`-Schalter mehr.
-- Läuft nur, wenn HamQTH- **oder** QRZ-Zugangsdaten eingetragen sind. Ohne sie:
+- Läuft nur, wenn QRZ- **oder** HamQTH-Zugangsdaten eingetragen sind. Ohne sie:
   keine Netzcalls, alle Via = `default_via`, Adressen leer. Da sie nicht
   gespeichert werden (§6.1a), gilt das nach jedem Start erneut, bis der Nutzer
   sie eingibt.
@@ -993,6 +1021,9 @@ in `geometry.py` referenzieren.
   `default_via`), `resolve_route`/`active_via_priority`/`normalize_via_priority`,
   `extract_manager_callsign`, Parsing der Routing-Felder (HamQTH inkl. lotw/eqsl,
   QRZ-Manager), Enrichment über alle Stationen, Cache, Reauth — HTTP gemockt.
+  Dazu die Anbieter-Reihenfolge (§6.2a): QRZ vor HamQTH, jede Kombination von
+  Zugangsdaten, Lückenfüllung QRZ+HamQTH (inkl. der daraus folgenden Wegemenge)
+  und dass ein vollständiger Treffer den zweiten Anbieter erspart.
 - `test_config.py`: Laden/Speichern, fehlende Felder → Defaults, `appearance`/
   `recent` (Roundtrip, defensives Laden, Kappung, `push_recent`), `sheet_mode`
   (Default `single`, Roundtrip, alte Config ohne das Feld).

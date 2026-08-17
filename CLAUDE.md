@@ -16,7 +16,8 @@ Cabrillo) automatisch **QSL-Karten** erzeugt und als **eine große PDF** ausgibt
   (Vorlage: DARC-QSL-Karte, Rückseite von DN5MT).
 - Ein **einziges Frontbild** wird für **alle** Karten verwendet.
 - Absenderdaten kommen aus der **Config**, QSO-Daten aus dem **Log**,
-  Empfänger-/Routing-Daten aus **HamQTH** (primär) bzw. **QRZ** (optional).
+  Empfänger-/Routing-Daten aus **QRZ** (erste Wahl) bzw. **HamQTH** (zweite Wahl,
+  einzige Quelle der Zustellweg-Flags; ergänzt QRZ, siehe §5.7).
 - **Zwei Logformate, ein Datenmodell**: ADIF (Alltags-Logbuch) und Cabrillo
   (Contest). Das Format wird am **Inhalt** erkannt; alles hinter `logbook/`
   kennt den Unterschied nicht mehr.
@@ -179,7 +180,7 @@ Jede `Card` erzeugt genau zwei Seiten: `layout_front` + `layout_back`.
    „Via:". Name/Adresse des Empfängers stehen **nicht** auf der Karte — sie gehen
    nur in den **optionalen Adress-/Label-Export** (für **alle** Stationen).
 5. **Lookup läuft automatisch** beim Log-Laden für **alle** Stationen im
-   Hintergrund-Thread (kein `lookup_addresses`-Schalter), sofern HamQTH-/QRZ-
+   Hintergrund-Thread (kein `lookup_addresses`-Schalter), sofern QRZ-/HamQTH-
    Zugangsdaten eingetragen sind; sonst kein Netzcall und alle Via =
    `default_via`. Die **Zugangsdaten stehen nicht in der Config** — sie leben nur
    zur Laufzeit in `LookupCredentials` und werden je Sitzung neu eingegeben (§11).
@@ -189,6 +190,14 @@ Jede `Card` erzeugt genau zwei Seiten: `layout_front` + `layout_back`.
    demselben Call (innerhalb desselben Via) zu **einer** Karte zusammengefasst;
    die Tabelle bekommt dann **mehrere Zeilen** (max. Zeilenzahl aus
    `CARD_LAYOUT.md`, Rest ggf. Folge-Karte).
+7. **Anbieter-Reihenfolge: QRZ zuerst, HamQTH danach** — und die Kette
+   **ergänzt**, statt beim ersten Treffer abzubrechen. QRZ liefert Adresse und
+   Manager, aber prinzipiell **keine** Zustellweg-Flags; die kommen nur von
+   HamQTH. Bei reinem Abbruch hätte jede von QRZ gefundene Station eine leere
+   Wegemenge und fiele auf `default_via` — Abschnitt 4 liefe leer. Der erste
+   Treffer gewinnt bei seinen Feldern, die folgenden Anbieter füllen die Lücken
+   (`source` = z. B. `"qrz+hamqth"`). Preis: mit beiden Zugangsdaten wird fast
+   jede Station **zweimal** abgefragt, der Lookup dauert rund doppelt so lange.
 
 ---
 
@@ -282,10 +291,15 @@ def extract_manager_callsign(text) -> str: ...
 # Aktive Wege (über der Trennlinie) = die ersten `cut` der normalisierten Liste
 def active_via_priority(priority, cut) -> list[str]: ...
 ```
+- **Reihenfolge: QRZ zuerst, HamQTH danach** (§5.7). Eingehängt wird nur, wer
+  Zugangsdaten hat. `ChainedLookup` **ergänzt**: der erste Treffer gewinnt bei
+  seinen Feldern, die folgenden Anbieter füllen nur die Lücken
+  (`LookupResult.merged_with`, Feldliste `base.DATA_FIELDS`); ist nichts mehr
+  offen (`missing_fields()`), wird der Rest nicht gefragt.
+- QRZ: ohne bezahltes Abo nur eingeschränkte Felder → „best effort", Fehler nicht
+  fatal. Liefert **nie** Zustellweg-Flags.
 - HamQTH: Session per `u`/`p` holen, dann `id`+`callsign` abfragen; Session ~1h
   gültig, bei Ablauf neu anmelden. Endpunkte/Details in `docs/SPECIFICATION.md`.
-- QRZ: nur wenn Zugangsdaten gesetzt; ohne bezahltes Abo liefert QRZ nur
-  eingeschränkte Felder → als „best effort" behandeln, Fehler nicht fatal.
 - `has_lookup_credentials(credentials)` / `build_lookup(credentials, cache_path)`
   / `lookup_calls(calls, credentials, ...)` nehmen alle **`LookupCredentials`**,
   nicht `LookupConfig`. `lookup_calls` schlägt **alle** (eindeutigen) Rufzeichen
@@ -363,7 +377,7 @@ Baue in dieser Reihenfolge, jeweils mit Tests, bevor es weitergeht:
    mit `docs/CARD_LAYOUT.md`/Referenzbild vergleichen, Konstanten anpassen.
 6. **`pdf/layout_front.py`** — Bild einpassen (Seitenverhältnis wahren, zentriert).
 7. **`pdf/generator.py`** — Gesamt-PDF, `progress_cb` für die GUI.
-8. **`lookup/*`** — HamQTH zuerst, dann Cache, QRZ optional.
+8. **`lookup/*`** — QRZ zuerst, HamQTH danach, dazu der Cache.
 9. **`gui/*`** — zuletzt; verdrahtet die fertigen Bausteine.
 
 So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
@@ -642,9 +656,25 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
     sie neu. *Verworfen:* aktives Ausputzen beim Start.
   * Rote Markierung bei abgelehnter Anmeldung, Cache und „Neu abrufen" bleiben
     unverändert — nur die Herkunft der Werte hat sich geändert.
+- **QRZ ist erste Wahl, HamQTH zweite — und beide werden zusammengeführt** (vom
+  Nutzer so entschieden, siehe §5.7):
+  * `build_lookup` hängt QRZ vor HamQTH; nur Anbieter mit Zugangsdaten kommen in
+    die Kette. In GUI-Abschnitt 6 stehen die QRZ-Felder deshalb **oben**
+    (`sections.LookupSection.rows`, `PROVIDER_FIELDS`).
+  * `ChainedLookup` bricht **nicht** beim ersten Treffer ab: die folgenden
+    Anbieter füllen die Lücken (`LookupResult.merged_with`, `missing_fields`,
+    `base.DATA_FIELDS`), eigene Werte des ersten gewinnen immer. *Verworfen:*
+    „strikt QRZ gewinnt, HamQTH nur bei Fehltreffer" — dann liefert QRZ keine
+    Flags, jede gefundene Station fällt auf `default_via` und die Priorisierung
+    in Abschnitt 4 hat nichts mehr zu entscheiden.
+  * **Bewusst unverändert:** `degraded()` gilt weiter für die **ganze** Kette —
+    lehnt einer der beiden Anbieter die Anmeldung ab, wird gar nichts gecacht,
+    auch wenn der andere funktioniert. Vom Nutzer geprüft und so gelassen (die
+    Karten entstehen trotzdem, nur der Cache bleibt leer).
 - **GUI-Abschnitte**: 1 Logbuch (ADIF/Cabrillo), 2 Frontbild, 3 Absender (inkl. Funk-Ausrüstung +
   globale Markierungen QSL/Bestätigung), 4 Zustellwege (priorisierbare
-  Liste + Trennlinie), 5 Kartenmodus, 6 Lookups (nur Zugangsdaten + Hinweiszeile),
+  Liste + Trennlinie), 5 Kartenmodus, 6 Lookups (nur Zugangsdaten — QRZ oben,
+  HamQTH darunter — + Hinweiszeile),
   **7 Bemerkungen**, 8 Vorschau, 9 Druckmodus (inkl. Bogendruck + Druckrand),
   10 Ausgabe (inkl. Adress-/Label-Export).
 - **Adress-/Label-Export steht bei der Ausgabe, nicht bei den Lookups** (vom
@@ -795,7 +825,9 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   122 ms, PDF 4,6 s. Alles linear, die GUI bleibt bedienbar. Der Engpass war die
   PDF-Erzeugung (308 s) und lag am `ImageReader` (siehe oben), nicht am Umfang.
 - **Der Lookup ist die eigentliche Geduldsprobe** und bleibt es: 3500 eindeutige
-  Rufzeichen bedeuten 3500 HamQTH-Abfragen. `LookupCache.set()` schreibt dabei
+  Rufzeichen bedeuten 3500 Abfragen — mit QRZ **und** HamQTH-Zugangsdaten das
+  Doppelte, weil QRZ keine Zustellweg-Flags liefert und HamQTH sie fast immer
+  nachfüllen muss (§5.7). `LookupCache.set()` schreibt dabei
   je Rufzeichen die ganze JSON-Datei neu (quadratisch: 0,7 s bei 700, 16,4 s bei
   3500 Einträgen) — das **bleibt bewusst so**: neben zwanzig Minuten Netzzeit
   fällt es nicht ins Gewicht, und das sofortige Schreiben macht den Cache

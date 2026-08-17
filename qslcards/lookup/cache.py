@@ -1,4 +1,4 @@
-"""Lokaler JSON-Cache für Lookups (siehe docs/SPECIFICATION.md §6.3).
+"""Lokaler JSON-Cache für Lookups (siehe docs/SPECIFICATION.md §6.5).
 
 Speichert positive **und** negative Ergebnisse, damit API-Limits geschont
 werden und dieselbe Abfrage nicht wiederholt ins Netz geht. Optional altern

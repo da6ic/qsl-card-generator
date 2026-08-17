@@ -81,8 +81,8 @@ VIA_DIVIDER_LABEL = "──── nicht drucken ────"
 # Zugangsdaten-Felder je Anbieter (Abschnitt 6) — welche Felder rot werden,
 # wenn dieser Anbieter die Anmeldung ablehnt.
 PROVIDER_FIELDS: dict[str, tuple[str, ...]] = {
-    PROVIDER_HAMQTH: ("hamqth_user", "hamqth_pass"),
     PROVIDER_QRZ: ("qrz_user", "qrz_pass"),
+    PROVIDER_HAMQTH: ("hamqth_user", "hamqth_pass"),
 }
 
 # Hinweiszeile unter den Zugangsdaten (Abschnitt 6). Die Werte landen nie in der
@@ -237,7 +237,7 @@ def show_about_dialog(
         text=(
             "Erzeugt aus einem ADIF-Logbuch QSL-Karten als PDF\n"
             "(A6, Bild-Vorderseite + Rückseite im DARC-Layout).\n\n"
-            "Versandart je Station über HamQTH/QRZ.\n"
+            "Versandart je Station über QRZ/HamQTH.\n"
             "Absenderdaten aus config.yaml."
         ),
         justify="left",
@@ -617,25 +617,27 @@ class LookupSection:
 
     def __init__(self, parent: tk.Misc) -> None:
         self.frame = ttk.LabelFrame(parent, text="6. Lookups")
-        self.hamqth_user = tk.StringVar()
-        self.hamqth_pass = tk.StringVar()
         self.qrz_user = tk.StringVar()
         self.qrz_pass = tk.StringVar()
+        self.hamqth_user = tk.StringVar()
+        self.hamqth_pass = tk.StringVar()
 
         self.vars: dict[str, tk.StringVar] = {
-            "hamqth_user": self.hamqth_user,
-            "hamqth_pass": self.hamqth_pass,
             "qrz_user": self.qrz_user,
             "qrz_pass": self.qrz_pass,
+            "hamqth_user": self.hamqth_user,
+            "hamqth_pass": self.hamqth_pass,
         }
         self.entries: dict[str, ttk.Entry] = {}
         self._marked: set[str] = set()
 
+        # Reihenfolge wie die Abfragekette (`lookup.build_lookup`): QRZ zuerst,
+        # HamQTH danach.
         rows = [
-            ("hamqth_user", "HamQTH Benutzer", False),
-            ("hamqth_pass", "HamQTH Passwort", True),
             ("qrz_user", "QRZ Benutzer", False),
             ("qrz_pass", "QRZ Passwort", True),
+            ("hamqth_user", "HamQTH Benutzer", False),
+            ("hamqth_pass", "HamQTH Passwort", True),
         ]
         for i, (field, label, secret) in enumerate(rows):
             var = self.vars[field]

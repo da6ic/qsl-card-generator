@@ -91,10 +91,11 @@ def build_lookup(
     *,
     auth_error_cb: Callable[[str, str], None] | None = None,
 ) -> ChainedLookup:
-    """Baut die Lookup-Fassade: HamQTH zuerst, QRZ als Fallback, mit JSON-Cache.
+    """Baut die Lookup-Fassade: QRZ zuerst, HamQTH als Fallback, mit JSON-Cache.
 
     Nur Provider mit Credentials werden eingehängt. Fehlen alle, bleibt eine
-    reine Cache-Fassade übrig (liefert nur bereits gecachte Treffer).
+    reine Cache-Fassade übrig (liefert nur bereits gecachte Treffer). Sind keine
+    QRZ-Zugangsdaten gesetzt, ist HamQTH die einzige Quelle.
 
     `auth_error_cb(anbieter, meldung)` wird gerufen, wenn ein Anbieter die
     Anmeldung ablehnt — die GUI warnt damit den Nutzer, statt ihn mit „0
@@ -106,7 +107,18 @@ def build_lookup(
             return None
         return lambda message: auth_error_cb(provider, message)
 
-    clients: list[HamQTHClient | QRZClient] = []
+    # Reihenfolge = Priorität: QRZ zuerst, HamQTH danach (vom Nutzer so
+    # entschieden). `ChainedLookup` fragt den zweiten Anbieter nur, wenn der
+    # erste nichts liefert.
+    clients: list[QRZClient | HamQTHClient] = []
+    if credentials.qrz_user and credentials.qrz_pass:
+        clients.append(
+            QRZClient(
+                credentials.qrz_user,
+                credentials.qrz_pass,
+                on_auth_error=reporter(PROVIDER_QRZ),
+            )
+        )
     if credentials.hamqth_user and credentials.hamqth_pass:
         clients.append(
             HamQTHClient(
@@ -114,14 +126,6 @@ def build_lookup(
                 credentials.hamqth_pass,
                 credentials.program_id,
                 on_auth_error=reporter(PROVIDER_HAMQTH),
-            )
-        )
-    if credentials.qrz_user and credentials.qrz_pass:
-        clients.append(
-            QRZClient(
-                credentials.qrz_user,
-                credentials.qrz_pass,
-                on_auth_error=reporter(PROVIDER_QRZ),
             )
         )
 

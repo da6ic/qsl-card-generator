@@ -12,8 +12,8 @@ Was du dafür brauchst:
   oder im Cabrillo-Format (`.cbr`, `.log`) aus einem Contest,
 - ein **Frontbild**, das auf allen Karten vorne erscheint,
 - deine **Absenderdaten** (Rufzeichen, Name, Locator, DOK, CQ-Zone, ITU),
-- optional ein kostenloses **HamQTH-Konto**, damit das Programm herausfindet,
-  über welchen Weg jede Station QSLs annimmt.
+- optional ein **QRZ-** und/oder ein (kostenloses) **HamQTH-Konto**, damit das
+  Programm herausfindet, über welchen Weg jede Station QSLs annimmt.
 
 Deine Absenderangaben und alle Einstellungen werden für die nächste Benutzung
 **automatisch gespeichert**. Nur die Zugangsdaten für die Lookups
@@ -33,7 +33,7 @@ Reihenfolge arbeitest du sie ab:
 3. [Absender ausfüllen](#abschnitt-3) — deine Stationsdaten.
 4. [Zustellwege ordnen](#abschnitt-4) — welche QSLs überhaupt gedruckt werden.
 5. [Kartenmodus wählen](#abschnitt-5) — eine Karte pro QSO oder pro Station.
-6. [Lookups einrichten](#abschnitt-6) — Zugangsdaten für HamQTH/QRZ (optional).
+6. [Lookups einrichten](#abschnitt-6) — Zugangsdaten für QRZ/HamQTH (optional).
 7. [Bemerkung eintragen](#abschnitt-7) — ein kurzer Text auf der Karte
    (optional).
 8. [Vorschau prüfen](#abschnitt-8) — Liste aller Karten, hier korrigierst du
@@ -225,14 +225,18 @@ Der Lookup startet **automatisch**, sobald du ein Logbuch lädst, und läuft im
 Hintergrund für alle Stationen. Solange er läuft, steht in der Vorschau `…` und
 du kannst noch keine Karten erzeugen.
 
-**HamQTH** ist die erste Wahl: Ein Konto auf
-[hamqth.com](https://www.hamqth.com) ist kostenlos und liefert alle vier
-Zustellwege, Manager und Adresse. Trage Benutzername und Passwort in die beiden
-HamQTH-Felder ein — bei jedem Programmstart neu, siehe unten.
-
-**QRZ** ist optional und ein Zusatz für Stationen, die HamQTH nicht kennt. Ohne
-bezahltes XML-Abo liefert QRZ im Wesentlichen nur den Manager, keine
+**QRZ** wird zuerst gefragt. Trage Benutzername und Passwort in die beiden
+QRZ-Felder ein — bei jedem Programmstart neu, siehe unten. Ohne bezahltes
+XML-Abo liefert QRZ allerdings eingeschränkte Angaben und in keinem Fall die
 Zustellwege.
+
+**HamQTH** ist die zweite Wahl: Ein Konto auf
+[hamqth.com](https://www.hamqth.com) ist kostenlos und liefert als einziges alle
+vier Zustellwege. Trage auch diese Zugangsdaten ein, wenn du keine QRZ-Daten hast
+— **oder gerade zusätzlich zu ihnen**: Was QRZ zu einer Station nicht weiß, holt
+das Programm dann bei HamQTH nach und setzt beides zu einer Antwort zusammen.
+Angaben von QRZ haben dabei Vorrang. Mit beiden Konten dauert der Lookup etwa
+doppelt so lange, weil fast jede Station bei beiden Anbietern angefragt wird.
 
 Ohne Zugangsdaten schaut das Programm nicht nach. Alle Stationen bekommen dann
 den Standardweg Büro, Adressen bleiben leer.

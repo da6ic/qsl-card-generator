@@ -24,7 +24,7 @@ Rückseite im DARC-QSL-Layout.
 - **Bogendruck**: wahlweise eine Karte je A6-Seite oder **vier Karten auf einem
   A4-Bogen** (quer, 2×2) mit gestrichelten Schnitt-Hilfslinien; der einstellbare
   Druckrand gilt dabei je Karte, jede geschnittene Karte hat ihn ringsum.
-- Lookup über HamQTH (kostenlos) / QRZ (optional) — **automatisch beim Log-Laden**
+- Lookup über QRZ (erste Wahl) / HamQTH (kostenlos) — **automatisch beim Log-Laden**
   im Hintergrund, gecacht. Liefert Via, QSL-Manager (aufs Feld „Via:") und Adresse
   (nur für optionalen Kuvert-/Label-Export, nicht auf der Karte).
 - **Menüleiste** (Datei / Bearbeiten / Aktionen / Ansicht / Hilfe) mit den
@@ -53,7 +53,7 @@ nur, wie sie aussieht. Die **Lookup-Zugangsdaten sind die Ausnahme**: sie werden
 nirgends gespeichert und gelten nur für die laufende Sitzung.
 
 ## Ablauf in der GUI
-1. HamQTH-/QRZ-Konto in Abschnitt 6 eintragen — sonst kann die App die
+1. QRZ-/HamQTH-Konto in Abschnitt 6 eintragen — sonst kann die App die
    Versandart nicht nachschlagen (alle Karten fallen auf `default_via`). Das ist
    bei **jedem Start** nötig, die Zugangsdaten werden bewusst nicht gespeichert.
 2. Logbuch wählen und laden — der Lookup startet automatisch im Hintergrund
@@ -137,9 +137,12 @@ Für die **Implementierung**:
 - `docs/CARD_LAYOUT.md` — exaktes Rückseiten-Layout.
 
 ## Hinweise
-- HamQTH benötigt ein kostenloses Konto und ist die primäre Quelle für die
-  Versandart (Büro/Direkt-Flags, Manager). QRZ liefert ohne bezahltes XML-Abo nur
-  eingeschränkte Daten (im Wesentlichen den Manager); Lookup-Fehler brechen die
+- **QRZ wird zuerst gefragt, HamQTH danach.** QRZ liefert ohne bezahltes XML-Abo
+  nur eingeschränkte Daten und in keinem Fall die Zustellweg-Flags; HamQTH
+  (kostenloses Konto) ist die einzige Quelle dafür. Sind beide Zugangsdaten
+  gesetzt, **füllt HamQTH die Lücken** des QRZ-Treffers — QRZ hat bei jedem Feld
+  Vorrang, das es selbst füllt. Der Lookup dauert dann etwa doppelt so lange, weil
+  fast jede Station bei beiden Anbietern angefragt wird. Lookup-Fehler brechen die
   Erzeugung nie ab — betroffene Stationen fallen dann auf `default_via`.
 - Die Zugangsdaten beider Anbieter leben nur zur Laufzeit
   (`lookup.LookupCredentials`) und werden nie in die `config.yaml` geschrieben —
