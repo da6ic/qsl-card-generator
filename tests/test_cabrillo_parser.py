@@ -338,3 +338,43 @@ def test_multiple_qsos_same_call():
     qsos = parse_text(text)
     assert [q.call for q in qsos] == ["XT2DX", "XT2DX"]
     assert [q.band for q in qsos] == ["20m", "40m"]
+
+
+def test_the_split_does_not_depend_on_the_header_callsign():
+    """`CALLSIGN:` aus dem Kopf beeinflusst die Trennstelle **nicht**.
+
+    Es stand einmal mit `+1` im Scoring von `_find_split` und wurde entfernt: das
+    erste Feld jeder Seite ist per Invariante das Rufzeichen, unser eigenes liegt
+    also immer auf `rest[0]` und damit für **jeden** Kandidaten links der
+    Trennstelle. Der Term war für alle `cut` derselbe Summand und konnte das
+    Maximum nie verschieben.
+
+    Der Test hält das Ergebnis fest, damit niemand die Zeile „zur Sicherheit"
+    zurückholt: dieselbe QSO-Zeile muss mit passendem, fremdem und fehlendem
+    Kopf-Rufzeichen identisch zerlegt werden.
+    """
+    line = "QSO: 14000 CW 2001-11-24 2209 DL0MT 599 14 XT2DX 599 35"
+    headers = (
+        "START-OF-LOG: 3.0\nCALLSIGN: DL0MT\n",  # passt zur Zeile
+        "START-OF-LOG: 3.0\nCALLSIGN: XX9XXX\n",  # passt nicht
+        "START-OF-LOG: 3.0\n",  # gar keines
+    )
+    results = [parse_text(_log(line, header=h))[0] for h in headers]
+    for q in results:
+        assert q.call == "XT2DX"
+        assert q.rst_sent == "599"
+        assert q.raw["cabrillo_exch_sent"] == "599 14"
+        assert q.raw["cabrillo_exch_rcvd"] == "599 35"
+
+
+def test_shortwave_frequency_in_mhz_is_accepted():
+    """Manche Logger schreiben Kurzwelle schon in MHz statt in kHz.
+
+    Die Regel steht **nach** der Bandbezeichner-Tabelle: „10" ist dort 10 GHz
+    (ARRL-UHF-Template), „14.025" dagegen kann nur 20 m sein.
+    """
+    assert _norm_freq("14.025") == "14.025"
+    assert _norm_freq("1.83") == "1.83"
+    assert _norm_freq("10") == "10000"  # Bandbezeichner, nicht 10 MHz
+    assert _norm_freq("0.5") is None  # unterhalb aller Amateurbänder
+    assert _band(_norm_freq("14.025")) == "20m"

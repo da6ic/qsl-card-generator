@@ -133,14 +133,13 @@ def parse_text(text: str) -> list[QSO]:
     `raw["cabrillo_x_qso"]` markiert.
     """
     header = _parse_header(text)
-    my_call = _base_call(header.get("CALLSIGN", ""))
 
     qsos: list[QSO] = []
     for number, line in enumerate(text.splitlines(), start=1):
         tag, sep, rest = line.strip().partition(":")
         if not sep or tag.strip().upper() not in _QSO_TAGS:
             continue
-        parsed = _split_qso_line(rest.split(), my_call)
+        parsed = _split_qso_line(rest.split())
         if parsed is None:
             logger.warning("Cabrillo-Zeile %d nicht verwertbar: %s", number, line.strip())
             continue
@@ -180,11 +179,6 @@ def _parse_header(text: str) -> dict[str, str]:
     return header
 
 
-def _base_call(call: str) -> str:
-    """Rufzeichen ohne Portabel-Zusatz — nur zum Vergleichen, nie zum Anzeigen."""
-    return call.strip().upper().split("/", 1)[0]
-
-
 # ----------------------------------------------------------- QSO-Zeile
 
 
@@ -201,7 +195,7 @@ class _QsoLine:
     transmitter: str | None
 
 
-def _split_qso_line(tokens: Sequence[str], my_call: str) -> _QsoLine | None:
+def _split_qso_line(tokens: Sequence[str]) -> _QsoLine | None:
     """Zerlegt die Tokens hinter `QSO:`/`X-QSO:`. Unverwertbare Zeile -> None."""
     # Das Datum ist der Anker: davor stehen genau Frequenz und Modus. Über die
     # Position statt über feste Indizes zu gehen macht das Ganze unempfindlich
@@ -218,7 +212,7 @@ def _split_qso_line(tokens: Sequence[str], my_call: str) -> _QsoLine | None:
     # Seriennummern die letzte Nummer (9A-CW: „… 599 001 9A2UE 599 101").
     transmitter = rest.pop() if len(rest) % 2 and rest[-1] in ("0", "1") else None
 
-    cut = _find_split(rest, my_call)
+    cut = _find_split(rest)
     if cut is None:
         return None
     return _QsoLine(
@@ -232,12 +226,20 @@ def _split_qso_line(tokens: Sequence[str], my_call: str) -> _QsoLine | None:
     )
 
 
-def _find_split(rest: list[str], my_call: str) -> int | None:
+def _find_split(rest: list[str]) -> int | None:
     """Trennstelle zwischen Sende- und Empfangsteil (Index des Gegen-Rufzeichens).
 
-    Vier unabhängige Signale, deren Summe entscheidet. Im Normalfall gewinnt
+    Drei unabhängige Signale, deren Summe entscheidet. Im Normalfall gewinnt
     ohnehin die Mitte; das Scoring rettet zusätzlich Contests mit asymmetrischem
     Austausch, statt die Zeile zu verwerfen.
+
+    **Das eigene Rufzeichen aus `CALLSIGN:` taugt hier nicht als Signal** — es
+    stand einmal mit `+1` drin und wurde entfernt. Der Grund ist die Invariante,
+    auf der die ganze Zerlegung steht: das erste Feld jeder Seite ist das
+    Rufzeichen. Damit liegt unser eigenes immer auf `rest[0]`, also für **jeden**
+    Kandidaten links der Trennstelle — der Term war für alle `cut` derselbe
+    Summand und konnte das Maximum nie verschieben. Ein Signal, das nichts
+    unterscheidet, ist keines.
     """
     if len(rest) < 2:
         return None
@@ -249,8 +251,6 @@ def _find_split(rest: list[str], my_call: str) -> int | None:
             score += 4
         if _is_call(rest[cut]):  # rechts beginnt ein Rufzeichen
             score += 3
-        if my_call and _base_call(rest[0]) == my_call:  # links steht unser Call
-            score += 1
         score += _shape_match(rest[1:cut], rest[cut + 1 :])
         if score > best_score:
             best, best_score = cut, score
