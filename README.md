@@ -9,7 +9,9 @@ Rückseite im DARC-QSL-Layout.
   **Cabrillo** (`.cbr`, `.log`) aus dem Contest. Das Format wird am Inhalt
   erkannt, nicht an der Endung. Eigene Parser, kein Fremd-Package.
 - Ein Frontbild (png/jpg/…) für alle Karten.
-- Rückseite exakt nach Referenz-Layout (`docs/CARD_LAYOUT.md`).
+- Rückseite exakt nach Referenz-Layout (`docs/CARD_LAYOUT.md`). Zu lange Werte
+  (Name, Antennenbezeichnung, Rufzeichen mit Präfix) werden **kleiner gesetzt,
+  nie abgeschnitten** — nichts läuft über seinen Nachbarn.
 - Absenderdaten aus der Config (im Programm eingetragen, nie aus dem Log).
 - QSO-Daten (Datum, UTC, Frequenz, Mode, Rapport) aus dem Log.
 - **Versandart (Via) je Station automatisch per Lookup bestimmt** (steht nicht im

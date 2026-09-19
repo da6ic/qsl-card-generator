@@ -160,6 +160,12 @@ zusammen (`F/DL0MT/P`), `/QRP` oder `/MM`. Was im Feld steht, steht auf der Kart
 klein Getipptes wird dabei großgeschrieben, sobald du das Feld verlässt (das gilt
 auch für Locator und DOK).
 
+**Lange Angaben werden kleiner gedruckt, nie abgeschnitten.** Auf der Karte hat
+jedes Feld seinen festen Platz — ein sehr langer Name oder eine ausführliche
+Antennenbezeichnung wird deshalb so weit verkleinert, bis sie hineinpasst, statt
+über den Nachbarn zu laufen. Wirkt eine Zeile auf der fertigen Karte
+auffällig klein, ist das der Hinweis, sie kürzer zu fassen.
+
 Alles, was du hier eintippst, wird kurz darauf automatisch gespeichert. Beim
 nächsten Start steht es wieder da.
 
@@ -250,6 +256,13 @@ wird gemerkt.
 - **Aktionen ▸ Lookup-Cache leeren…** wirft alles weg. Das ist der richtige
   Griff, wenn du weißt, dass sich Angaben geändert haben.
 
+**Wenn du Zugangsdaten nachträgst, drücke „Neu abrufen".** Ein Beispiel: Du hast
+eine Sitzung lang nur mit QRZ gearbeitet — dann stehen im Cache Antworten *ohne*
+Zustellwege, weil QRZ keine liefert. Trägst du später zusätzlich HamQTH ein,
+antwortet für diese Stationen weiterhin der Cache, und in Abschnitt 4 tut sich
+nichts. **Neu abrufen** (oder der Cache-Griff darüber) fragt frisch nach und
+holt die Wege dann nach.
+
 Die gefundenen Anschriften kannst du dir als Datei ausgeben lassen — die Checkbox
 dafür steht bei der Ausgabe ([Kapitel 10](#abschnitt-10)), weil die Datei dort
 entsteht. Auf der Karte selbst steht die Anschrift des Empfängers grundsätzlich
@@ -267,7 +280,8 @@ kommt. Alle übrigen Einstellungen bleiben natürlich erhalten.
 Der Text unter **Text für alle Karten** erscheint auf jeder Karte im
 REMARKS-Kasten, zum Beispiel „Vielen Dank für das nette QSO im 40-m-Band".
 
-- Maximal **80 Zeichen**
+- Maximal **80 Zeichen**. Ein gewöhnlicher Satz dieser Länge passt in die Zeile;
+  wird er breiter, druckt das Programm ihn kleiner, statt ihn abzuschneiden.
 - Lässt du das Feld leer, gibt es keinen Kasten und es passen wieder 6 QSOs auf
   eine Karte statt 3 ([Kapitel 5](#abschnitt-5)).
 - Der Text wird übernommen, sobald du das Feld verlässt oder Enter drückst.
@@ -356,7 +370,9 @@ zeigt den Fortschritt.
 Die Checkbox **Adress-/Label-Export erzeugen** darüber legt zusätzlich eine
 CSV-Datei mit den Anschriften an, die der Lookup gefunden hat
 ([Kapitel 6](#abschnitt-6)) — praktisch für Adressetiketten beim Direktversand.
-Sie landet neben der PDF; Stationen ohne gefundene Anschrift stehen nicht darin.
+Sie landet neben der PDF und enthält genau die Stationen, deren Karten auch
+gedruckt werden (Spalte **Drucken: Ja**); Stationen ohne gefundene Anschrift
+stehen nicht darin.
 
 Je nach Einstellung entstehen:
 

@@ -37,8 +37,12 @@ Woher Tk kommt, hängt davon ab, wie Python installiert wurde:
 
 | Herkunft | Was zählt |
 |---|---|
-| **Homebrew** | Das Paket `tcl-tk` (9.0), nicht die Python-Punktversion. `brew install python-tk` zieht es mit. Der Rechner, auf dem gebaut wurde, hat Python **3.14.6** und trotzdem Tk 9.0. |
+| **Homebrew** | Das Paket `tcl-tk` (9.0), nicht die Python-Punktversion. `brew install python-tk` zieht es mit. |
 | **python.org** | Die **Punktversion**: erst **3.14.7** bringt Tcl/Tk 9.0.4 mit, 3.14.0–3.14.6 und 3.13 liefern noch 8.6.15. |
+
+> **Für ein Archiv, das weitergegeben wird, ist python.org ab 3.14.7 Pflicht** —
+> nicht wegen Tk, sondern wegen des Deployment-Targets (nächster Abschnitt).
+> Homebrew genügt, solange nur auf dem eigenen Rechner ausprobiert wird.
 
 Prüfen, was das venv wirklich hat:
 
@@ -50,6 +54,82 @@ Prüfen, was das venv wirklich hat:
 etwas Kaputtes zu bauen. **PyInstaller 6.21.0 genügt hier** — den
 Entwicklungsstand braucht nur Windows, weil dort Tcl seine Bibliothek in die DLL
 legt (`//zipfs:/…`). Auf macOS liegen die Tcl-Daten weiterhin als Ordner vor.
+
+## Auf welchen macOS-Versionen das Ergebnis läuft
+
+**Die Herkunft des Interpreters entscheidet das — nicht eine Einstellung.**
+PyInstaller bündelt dessen Bibliotheken (CPython-Erweiterungen, Tcl/Tk, OpenSSL,
+zlib), und die tragen sein `MACOSX_DEPLOYMENT_TARGET`. `dyld` lehnt eine dylib
+ab, die für ein neueres System gebaut wurde als das laufende — das Programm
+startet auf einem älteren Mac also gar nicht.
+
+| Herkunft | Deployment-Target | Ergebnis läuft ab |
+|---|---|---|
+| **Homebrew** | das **gerade laufende** macOS | genau dieser Version |
+| **python.org** | fest (10.13 bzw. 11.0) | allen unterstützten Versionen |
+
+Das ist das macOS-Gegenstück zur glibc-Frage unter Linux, wo deshalb im ältesten
+unterstützten Fedora gebaut wird. Nur sieht man es hier **nie**: der Baurechner
+erfüllt seine eigene Anforderung per Definition.
+
+Nachsehen, wofür gebaut würde:
+
+```bash
+.venv/bin/python -c "import sysconfig; print(sysconfig.get_config_var('MACOSX_DEPLOYMENT_TARGET'))"
+```
+
+Am fertigen Bündel nachmessen (`minos` je Binärdatei):
+
+```bash
+APP="dist/QSL-Karten-Generator-<version>-macos-arm64/QSL-Karten-Generator.app"
+find "$APP/Contents/Frameworks" -name "*.dylib" -o -name "*.so" | while read -r f; do
+  otool -l "$f" | awk '/LC_BUILD_VERSION/{g=1} g&&/minos/{print $2; exit}'
+done | sort | uniq -c
+```
+
+`build_app.py` sagt beim Bauen, für welche Systeme das Ergebnis taugt, und
+`LSMinimumSystemVersion` in der `Info.plist` wird aus demselben Wert abgeleitet
+(`build_app.macos_minimum_system_version`). Das ist wichtiger, als es klingt:
+stünde dort wie früher fest `11.0`, ließe Launch Services das Programm auf jedem
+Mac starten — PyInstallers Bootloader (Ziel 11.0) liefe tatsächlich an, und erst
+das Nachladen bräche mit einer dyld-Meldung ab, mit der ein Anwender nichts
+anfangen kann. Mit dem echten Wert meldet macOS sauber „erfordert macOS X oder
+neuer".
+
+Bewusst nur eine **Warnung**, kein Abbruch: für welches Publikum gebaut wird,
+entscheidet, wer baut.
+
+### Die Auslieferungs-Umgebung einrichten
+
+Einmalig, und danach ist sie das, womit Archive entstehen:
+
+1. Von <https://www.python.org/downloads/macos/> den **„macOS 64-bit universal2
+   installer"** ab **3.14.7** laden und ausführen (braucht Administratorrechte).
+   Homebrew ist hier kein Ersatz — es baut immer gegen das laufende System.
+2. Gegenprobe: **beides** muss stimmen, sonst ist es die falsche Fassung.
+
+   ```bash
+   PY=/Library/Frameworks/Python.framework/Versions/3.14/bin/python3.14
+   "$PY" -c "import sysconfig, tkinter; \
+     print(sysconfig.get_config_var('MACOSX_DEPLOYMENT_TARGET'), tkinter.TkVersion)"
+   # erwartet: 10.13 9.0   (nicht: 26 9.0  und nicht: 10.13 8.6)
+   ```
+
+3. Eigenes venv dafür — `.venv` bleibt die Entwicklungsumgebung, `.venv-build`
+   ist die zum Ausliefern (beide sind in `.gitignore`, der Name ist derselbe wie
+   unter Windows):
+
+   ```bash
+   "$PY" -m venv .venv-build
+   .venv-build/bin/python -m pip install -e ".[dev,build]"
+   .venv-build/bin/python scripts/build_app.py --clean
+   ```
+
+   Bleibt die `Achtung:`-Meldung zum Deployment-Target aus, stimmt die Umgebung.
+
+Danach prüfen wie oben beschrieben: `LSMinimumSystemVersion` in der `Info.plist`,
+die `minos`-Zählung über die mitgelieferten Bibliotheken und die Zeile
+„Systemvoraussetzung" in der `LIESMICH.txt` im Archiv.
 
 ## Bauen
 

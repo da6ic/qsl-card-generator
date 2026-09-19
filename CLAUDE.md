@@ -106,6 +106,8 @@ tests/
   test_geometry.py        test_gui.py
   test_config.py          test_help.py
   test_generator.py       test_paths.py
+  test_layout_back.py     test_build_app.py
+  test_release.py
 scripts/
   preview_card.py         # Karten-Preview als PDF (`--4up [RAND_MM]` = A4-Bogen)
   make_icon.py            # app_icon.svg -> PNG (16–1024) + .ico + .icns
@@ -179,7 +181,9 @@ Jede `Card` erzeugt genau zwei Seiten: `layout_front` + `layout_back`.
 4. **Empfänger** auf der Karte = **nur das Rufzeichen** (`CALL`) im Feld
    „To Amateur Radio Station:". Der **Manager** (aus dem Lookup) steht im Feld
    „Via:". Name/Adresse des Empfängers stehen **nicht** auf der Karte — sie gehen
-   nur in den **optionalen Adress-/Label-Export** (für **alle** Stationen).
+   nur in den **optionalen Adress-/Label-Export**. Der umfasst genau die
+   **gedruckten** Karten (Spalte „Drucken: Ja"), nicht alle nachgeschlagenen
+   Stationen: die CSV liefert die Etiketten zum Stapel, der gerade entsteht.
 5. **Lookup läuft automatisch** beim Log-Laden für **alle** Stationen im
    Hintergrund-Thread (kein `lookup_addresses`-Schalter), sofern QRZ-/HamQTH-
    Zugangsdaten eingetragen sind; sonst kein Netzcall und alle Via =
@@ -335,6 +339,13 @@ def active_via_priority(priority, cut) -> list[str]: ...
   immer A6 bzw. im Bogen A4 (`setPageSize` wird nie aufgerufen, die Größe steht
   beim Anlegen des Canvas).
 
+### `pdf/layout_back.py`
+- `draw_back(c, card, config)` — zeichnet die Rückseite nach `CARD_LAYOUT.md`.
+- `fit_size(s, font, size, max_w) -> float` — Schriftgröße, bei der `s` in `max_w`
+  passt: **nur verkleinern, nie kürzen**. `text(...)`/`_text_in_band(...)` nehmen
+  die Grenze als `max_w=`; ohne Angabe ändert sich nichts. Die Grenzen selbst
+  stehen als Konstanten in `geometry.py` (siehe §11 „Layout-Wahrheit").
+
 ### `pdf/layout_sheet.py`
 - `page_size(config)`, `cards_per_page(config)`, `chunk_pages(items, config)`
 - `draw_page(c, config, items, draw_card, *, cut_guides=False)` — verschiebt das
@@ -433,9 +444,13 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
       `vX.Y.Z` — der Ersatz für `npm version`. Version **und** Anwendungsname
       stehen dafür in `qslcards/__init__.py` (`__version__`/`__app_name__`).
 - [x] **macOS-Bündel gebaut und geprüft** (arm64, ad-hoc signiert, ZIP via
-      `ditto`): startet aus dem Archiv, Tk 9 und alle Assets an Bord. Im Archiv
-      liegt die `.app` zusammen mit `LIESMICH.txt` in einem Ordner; Anleitung und
-      Prüfliste in `packaging/macos/README.md`.
+      `ditto`): startet aus dem Archiv, Tk 9.0.4 und alle Assets an Bord. Im
+      Archiv liegt die `.app` zusammen mit `LIESMICH.txt` in einem Ordner;
+      Anleitung und Prüfliste in `packaging/macos/README.md`. Gebaut wird mit dem
+      **python.org-Interpreter** (3.14.7, venv `.venv-build`) — mit Homebrew
+      liefe das Ergebnis nur auf dem macOS des Baurechners. Nachgemessen: alle 90
+      mitgelieferten Binärdateien `minos 11.0`, `LSMinimumSystemVersion` 11.0,
+      `LIESMICH.txt` nennt dieselbe Zahl.
 - [x] **Windows-Bündel gebaut und geprüft** (x64, Python 3.14.7/Tk 9.0.4,
       PyInstaller aus `develop` wegen eingebetteter Tcl-9-Daten, ZIP): startet
       aus dem Archiv ohne Konsolenfenster und läuft stabil. Drei Stolperfallen
@@ -456,7 +471,9 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
 - ADIF-Feldnamen/Enums: `docs/SPECIFICATION.md` §4.3.
 - Cabrillo-Zeilenformat, Modus-Codes, Bandbezeichner: `docs/SPECIFICATION.md`
   §4.5. Vor Änderungen gegen die WWROF-Spezifikation gegenprüfen — vor allem die
-  Notiz, dass die Spaltenpositionen **nicht** verbindlich sind.
+  Notiz, dass die Spaltenpositionen **nicht** verbindlich sind. Das Scoring in
+  `_find_split` hat **drei** Signale; das eigene Rufzeichen aus `CALLSIGN:`
+  gehört nicht dazu und darf nicht zurück (§4.5.2 nennt den Grund).
 - Exakte Layout-Koordinaten: `docs/CARD_LAYOUT.md`.
 - API-Endpunkte/Session-Flow: `docs/SPECIFICATION.md` §Lookups. Vor Implementierung
   gegen die **aktuelle** HamQTH-/QRZ-Doku gegenprüfen (APIs können sich ändern).
@@ -604,6 +621,18 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   Magic-Faktoren fürs Zentrieren.
 - **DejaVuSans** (regular+bold) liegt gebündelt in `qslcards/assets/fonts/` und wird
   in `geometry.py` registriert (Umlaute); Fallback Helvetica, Registrierung nie fatal.
+- **Kein Text ohne Höchstbreite.** Die Karte hat keinen Zeilenumbruch; vor der
+  Regel lief jeder zu lange Wert über seinen Nachbarn — ein langer Name über den
+  Stationsblock, die Antennenbezeichnung über die Spaltenlinie, und
+  „Confirming SWL-Report" über das „To Amateur Radio Station:"-Label, **ohne**
+  Zutun des Anwenders. Jeder freie Text bekommt deshalb `max_w=` und wird über
+  `layout_back.fit_size` proportional kleiner gesetzt. Die Grenzen stehen als
+  Konstanten in `geometry.py` (`SENDER_TEXT_W`, `CONFIRM_MARK_W`,
+  `SENDER_CALLSIGN_W[_PLAIN]`, `STATION_VALUE_W`, `BOX_TEXT_PAD`, `TEXT_GAP`) und
+  sind **Abstände zum Nachbarblock**, keine Positionen — verschiebt man eine
+  Spalte, wandert die Grenze mit. Was beim Druckrand mitwächst, kommt weiter aus
+  dem `PageLayout`, nicht von hier. Ein Aufnahme-Canvas in
+  `tests/test_layout_back.py` prüft die **gezeichneten** Kanten.
 - **Druckrand = `PageLayout`, nicht neue Konstanten.** Die Konstanten beschreiben
   weiter die Karte auf voller A6-Fläche; `geometry.page_layout(config)` leitet
   daraus den eingerückten Rahmen ab und `draw_back` reicht ihn an **alle** Helfer
@@ -696,6 +725,23 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   bestehendes `true` still auf `false` fallen lassen. Die Variable lebt jetzt auf
   `OutputSection`; `_apply_config_to_widgets`/`_gather_config`/`_wire_autosave`
   greifen entsprechend auf `output_section`.
+- **Zu langer Text wird kleiner gesetzt, nie abgeschnitten** (vom Nutzer so
+  entschieden, nachdem der Überlauf gefunden war):
+  * *Verworfen:* „nur kürzen mit `…`" (Schriftbild bliebe ruhig, aber lange Namen
+    und Antennenbezeichnungen verlören Text) und „schrumpfen bis 70 %, dann
+    kürzen". Begründung des Nutzers: lieber klein als unvollständig — auf einer
+    QSL-Karte ist ein halber Name schlimmer als ein kleiner.
+  * Folge: es gibt **kein** gestalterisches Minimum, nur `MIN_FONT_SIZE = 0.5 pt`
+    als technischen Boden. Ein absurd langer Wert wird eben winzig; das ist
+    sichtbar und damit korrigierbar, ein abgeschnittener Wert wäre es nicht.
+  * **Das eigene Rufzeichen bekommt mehr Platz ohne Bestätigungs-Markierung**
+    (`SENDER_CALLSIGN_W_PLAIN`, 83,5 statt 39,5 mm) — sonst würde `F/DL0MT/P`
+    verkleinert, obwohl der Platz daneben frei ist.
+  * **`Confirming SWL-Report` wird immer leicht verkleinert** (51,5 mm auf 42 mm
+    Band). Das ist kein Sonderfall, sondern der Auslöser der ganzen Regel.
+  * Das **Remarks-Limit bleibt bei 80 Zeichen** (Handbuch, GUI-Zähler); 80 breite
+    Zeichen passen nicht in eine Zeile und werden verkleinert. *Verworfen:*
+    zweizeiliger Kasten (rührt an `MAX_ROWS_WITH_REMARKS`) und ein Limit von 60.
 - **Druckrand: vier Werte, keine Verzerrung, Überschuss ins Layout** (iterativ mit
   dem Nutzer erarbeitet, alle drei Punkte bewusst so entschieden):
   * **Vier einzelne Kanten** (oben/unten/links/rechts), nicht ein Wert für alle —
@@ -923,7 +969,38 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   Kopiervorgang (nachstellen mit `xattr -w com.apple.quarantine …`).
 - **Homebrew-Python hängt nicht an der Punktversion.** Die Regel „erst 3.14.7
   bringt Tk 9" gilt für die Installer von python.org. Homebrew bindet das Paket
-  `tcl-tk` ein — dieser Rechner baut mit **3.14.6 und Tk 9.0**.
+  `tcl-tk` ein und liefert Tk 9.0 auch mit älteren Punktversionen — deshalb ist
+  `.venv` (Homebrew) zum Entwickeln völlig in Ordnung. Zum **Ausliefern** taugt
+  es trotzdem nicht, siehe den nächsten Punkt.
+- **…dafür hängt Homebrew am laufenden macOS — und das entscheidet, wer das
+  Bündel starten kann.** PyInstaller nimmt die Bibliotheken des bauenden
+  Interpreters mit (CPython-Erweiterungen, Tcl/Tk, OpenSSL, zlib), und die tragen
+  dessen `MACOSX_DEPLOYMENT_TARGET`; `dyld` lehnt eine dylib ab, die für ein
+  neueres System gebaut ist als das laufende. Homebrew baut **immer gegen das
+  gerade laufende macOS**: auf diesem Rechner (macOS 26) meldet `sysconfig`
+  `MACOSX_DEPLOYMENT_TARGET = 26`, und 59 der mitgelieferten Binärdateien tragen
+  `minos 26.0` (nachgemessen mit `otool -l` am Bündel in `dist/`). Das Ergebnis
+  läuft damit **nur auf macOS 26+**. Dasselbe Problem wie glibc unter Linux — nur
+  unsichtbar, weil der Baurechner es per Definition erfüllt. Prüfen:
+  `python -c "import sysconfig; print(sysconfig.get_config_var('MACOSX_DEPLOYMENT_TARGET'))"`.
+  Wer ältere Systeme bedienen will, baut mit dem **Installer von python.org**
+  (3.14.7+, Ziel 10.13/11.0) statt mit Homebrew.
+- **Ausgeliefert wird auf macOS mit python.org, entwickelt mit Homebrew.** Die
+  beiden hier vorhandenen Interpreter können je nur die Hälfte: python.org 3.13
+  hat Deployment-Target 10.13, aber Tk 8.6 (SVG-Icons fehlen); Homebrew 3.14.7
+  hat Tk 9.0, aber Ziel 26 (läuft nur auf macOS 26). Beides zugleich kann nur
+  der **python.org-Installer ab 3.14.7** (10.13 + Tk 9.0.4). Einrichtung in
+  `packaging/macos/README.md`; das venv dafür heißt `.venv-build` wie unter
+  Windows. Zum Entwickeln und Ausprobieren genügt weiterhin `.venv` (Homebrew).
+- **`LSMinimumSystemVersion` darf nie fest im Spec stehen.** Sie stand auf
+  `"11.0"`, während das Bündel 26 brauchte — die schlimmere Richtung: Launch
+  Services lässt das Programm los, PyInstallers Bootloader (Ziel 11.0) läuft
+  wirklich an, und erst das Nachladen stirbt mit einer dyld-Meldung, die dem
+  Anwender nichts sagt. Jetzt kommt der Wert aus
+  `build_app.macos_minimum_system_version()` (die Spec importiert ihn aus
+  `scripts/`, gleiche Begründung wie bei `__app_name__`), und
+  `build_app.check_warnings()` sagt beim Bauen, für welche Systeme das Ergebnis
+  taugt. Bewusst **Warnung statt Hürde**: das Zielpublikum wählt der Bauende.
 - **`LD_LIBRARY_PATH` vergiftet jeden Kindprozess.** PyInstaller stellt den
   Bibliothekspfad des Bündels nach vorn; ein davon geerbtes `xdg-open` oder
   `gsettings` lädt die gebündelten Bibliotheken statt der eigenen und stirbt mit

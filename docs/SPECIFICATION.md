@@ -120,6 +120,14 @@ Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
    führen sich wieder zusammen (max. 6 Zeilen) — so ist ein Remarks je Karte
    unabhängig möglich (§5.2). Die Korrekturen gelten für die Sitzung; ein
    erneuter Lookup („Neu abrufen"/Log neu laden) leitet Via/Remarks wieder ab.
+   **Sortierung**: ein Klick auf einen Spaltentitel rotiert `aufsteigend →
+   absteigend → keine`; immer nur **eine** Spalte ist aktiv (Pfeil ▲/▼ im Titel),
+   ohne Sortierung gilt wieder die Reihenfolge des Builders. Sortiert wird über
+   die **Card-Daten**, nicht über die Anzeigetexte (`#QSOs` numerisch, `Datum`
+   chronologisch) — die Datumsteile sind zweistellig und nullgefüllt und werden
+   deshalb als Strings verglichen: ein QSO **ohne** `QSO_DATE` hat leere Felder,
+   und ein `int("")` ließe den Tk-Callback platzen. Die erzeugte PDF folgt der
+   angezeigten Sortierung (`included_cards` liest die Baumreihenfolge).
    **Oben rechts** ein Button „Neu abrufen" (holt fehlende/abgebrochene Stationen
    nach) sowie eine Lookup-Statuszeile. Die gesamte Oberfläche ist scrollbar; die
    Tabelle zeigt mindestens ~5 Einträge.
@@ -345,7 +353,7 @@ class SenderConfig:
 @dataclass
 class LookupConfig:
     program_id: str = "qslcards"   # HamQTH verlangt prg-Kennung
-    address_export: bool = False   # Adress-/Label-Export erzeugen (alle Stationen);
+    address_export: bool = False   # Adress-/Label-Export der gedruckten Karten;
                                    # Widget in GUI-Abschnitt 10 (§2.2), Daten aus dem Lookup
     # Hinweis: KEIN `lookup_addresses` mehr — der Lookup läuft automatisch beim
     # Log-Laden, sobald Zugangsdaten eingetragen sind (siehe §6).
@@ -541,10 +549,11 @@ Version 3.0 (WWROF).
   gestrichen wird meist wegen eines Regelverstoßes auf der eigenen Seite) und in
   `raw["cabrillo_x_qso"]` markiert. Mit dem Nutzer so entschieden.
 - **`CALLSIGN`, `GRID-LOCATOR`, `NAME`, `ADDRESS*` sind Absenderdaten.** Sie
-  kommen laut §5.3 immer aus der Config. `CALLSIGN` wird ausschließlich intern
-  zur Zeilenzerlegung benutzt; beide landen nur informativ in `raw`
+  kommen laut §5.3 immer aus der Config und landen nur informativ in `raw`
   (`station_callsign`/`my_gridsquare`). `GRID-LOCATOR` darf **niemals** in
-  `qso.gridsquare` — das ist der Locator der *Gegen*station.
+  `qso.gridsquare` — das ist der Locator der *Gegen*station. `CALLSIGN` war
+  einmal zusätzlich ein Signal der Zeilenzerlegung und ist es **nicht mehr**
+  (§4.5.2).
 
 #### 4.5.2 Algorithmus (zwei Durchläufe)
 1. Kopfzeilen sammeln (eigener Durchlauf, weil die Reihenfolge beliebig ist).
@@ -563,12 +572,17 @@ falls vorhanden — **direkt dahinter**. Darauf baut die Zerlegung:
    verschwände bei einem Contest mit Seriennummern die letzte Nummer — 9A-CW
    schreibt `… 599 001 9A2UE 599 101`, und `101` ist keine Transmitter-ID.
 3. **Trennstelle per Score**, nicht blind die Mitte: Symmetrie (+4), rechts
-   beginnt ein Rufzeichen-Muster und *kein* Locator (+3), links steht das eigene
-   Rufzeichen (+1), die Austauschfelder beider Seiten passen paarweise in der
-   Form zusammen (0–2). Im Normalfall gewinnt ohnehin die Mitte; das Scoring
-   rettet zusätzlich asymmetrische Exoten, statt die Zeile zu verwerfen.
-   Das eigene Rufzeichen ist bewusst nur ein *Signal*, keine Bedingung —
-   Portabel-Zusätze und Multi-Op-Logs machen einen harten Vergleich unbrauchbar.
+   beginnt ein Rufzeichen-Muster und *kein* Locator (+3), die Austauschfelder
+   beider Seiten passen paarweise in der Form zusammen (0–2). Im Normalfall
+   gewinnt ohnehin die Mitte; das Scoring rettet zusätzlich asymmetrische
+   Exoten, statt die Zeile zu verwerfen.
+   **Das eigene Rufzeichen aus `CALLSIGN:` ist kein Signal** (es stand einmal
+   mit +1 dabei): nach Invariante 2 ist das erste Feld jeder Seite das
+   Rufzeichen, unseres liegt also immer auf `rest[0]` und damit für *jeden*
+   Kandidaten links der Trennstelle. Der Term war für alle `cut` derselbe
+   Summand und konnte das Maximum nie verschieben — ein Signal, das nichts
+   unterscheidet, ist keines. Ein Test hält fest, dass passendes, fremdes und
+   fehlendes Kopf-Rufzeichen dieselbe Zerlegung ergeben.
 4. **Rapport rein positionell** (`felder[1]`), validiert gegen `[1-5][1-9][1-9]?`
    plus die CW-Kurzform `5NN`. Genau diese Strenge ist der Trick: Seriennummern
    wie `001` (R=0) und `101` (S=0) fallen automatisch durch, ebenso `JEFF`,
@@ -593,14 +607,17 @@ wie `FN12FR` das Rufzeichen-Muster erfüllt (Präfix `FN1`, Ziffer `2`, Suffix `
 | Empfangs-Austausch | `gridsquare` | nur wenn er **genau einen** Locator enthält |
 | — | `qsl_sent_via`, `qsl_via`, `name`, `qth`, `country` | immer leer: Cabrillo kennt keine Versandart (§6) |
 
-Die Frequenz in drei Regeln, **in dieser Reihenfolge**:
+Die Frequenz in vier Regeln, **in dieser Reihenfolge**:
 1. **Bandbezeichner-Tabelle zuerst** (`1.2G`→1240, `2.3G`→2300, `10G`→10000, dazu
    die real vorkommenden Kurzformen ohne `G` — das ARRL-UHF-Template schreibt
    selbst `QSO: 1.2 PH …`). `2.3` ist 2,3 GHz und keine 2,3-MHz-Frequenz.
 2. **Zahl ≥ 1000 → kHz** (`3799`→`"3.799"`, `14000`→`"14"`). Die Schwelle ist
    sauber: die niedrigste kHz-Angabe auf Kurzwelle ist 1800, der höchste
    MHz-Bandbezeichner 902.
-3. **Sonst leer** — `LIGHT` hat keine Frequenz. Nichts raten; das Rohtoken bleibt
+3. **Zahl zwischen 1,8 und 30 → schon MHz** (`14.025`→`"14.025"`). Manche Logger
+   schreiben Kurzwelle so. Die Regel steht **nach** der Tabelle, sonst würde aus
+   dem Bandbezeichner `10` (10 GHz) eine 10-MHz-Frequenz.
+4. **Sonst leer** — `LIGHT` hat keine Frequenz. Nichts raten; das Rohtoken bleibt
    in `raw["cabrillo_freq"]`.
 
 `raw` trägt ADIF-Feldnamen, wo es sie gibt, plus `station_callsign`,
@@ -836,6 +853,14 @@ doppelt so lange (§11 „Der Lookup ist die eigentliche Geduldsprobe").
   falschem Passwort für jede Station ein negativer Eintrag in der Datei, und
   selbst mit korrigierten Zugangsdaten fände der nächste Start nichts mehr.
   Gelesen wird weiter — alte Treffer bleiben gültig.
+- **Ein Cache-Treffer beendet die Kette** (§6.2a wird gar nicht erst betreten).
+  Wer eine Sitzung lang nur QRZ-Zugangsdaten hatte, hat damit Einträge **ohne**
+  Zustellweg-Flags in der Datei; trägt er später HamQTH nach, antwortet weiter
+  der Cache und Abschnitt 4 bleibt wirkungslos. Das ist Absicht — die Alternative
+  („bei offenen Feldern trotzdem nachfragen") höbe den Cache für genau die
+  Stationen auf, die er am dringendsten schont. Ausweg ist „Neu abrufen"
+  (`force=True`) bzw. „Lookup-Cache leeren"; im Handbuch steht der Hinweis in
+  Kapitel 6.
 
 ### 6.6 Wann/wie wird gelookt?
 - **Automatisch beim Log-Laden**, für **alle** Stationen (eindeutige Rufzeichen),
@@ -845,8 +870,10 @@ doppelt so lange (§11 „Der Lookup ist die eigentliche Geduldsprobe").
   gespeichert werden (§6.1a), gilt das nach jedem Start erneut, bis der Nutzer
   sie eingibt.
 - Manueller **„Neu abrufen"**-Button holt fehlende/abgebrochene Stationen nach.
-- **Adresse**: wird für alle nachgeschlagenen Stationen geholt und (wenn
-  `address_export`) für **alle** exportiert — sie steht **nicht** auf der Karte.
+- **Adresse**: wird für **alle** nachgeschlagenen Stationen geholt, exportiert
+  wird (wenn `address_export`) aber nur, was auch **gedruckt** wird — die CSV
+  entsteht aus derselben Kartenliste wie die PDF und liefert die Etiketten zu
+  genau diesem Stapel. Auf der Karte steht die Adresse **nicht**.
 
 ### 6.7 Abgelehnte Zugangsdaten
 Lehnt ein Anbieter die Anmeldung ab, sähe der Nutzer sonst nur „0/N Stationen
@@ -956,6 +983,17 @@ gefunden" und die Meldung stünde allein im Log. Deshalb:
   > Nachweis: `test_front_image_is_passed_as_a_path`. Die *Wirkung* (ein
   > Bild-XObject fürs ganze Dokument) taugt nicht als Test — der Digest ist ja
   > jedes Mal derselbe, das Bild landet auch mit `ImageReader` nur einmal drin.
+- **Textbreiten** (`layout_back.fit_size`, Konstanten in `geometry.py`): Die Karte
+  kennt keinen Zeilenumbruch — jeder freie Text bekommt eine Höchstbreite und wird
+  **proportional verkleinert, nie abgeschnitten** (vom Nutzer so entschieden).
+  Betroffen sind Absenderadresse, eigenes Rufzeichen, Bestätigungs-Markierung,
+  Stationswerte, Funk-Tabelle, QSO-Tabellenzellen, Empfänger-/Via-Box, REMARKS und
+  der Footer-Text. Die Grenzen sind **Abstände zum Nachbarblock**
+  (`SENDER_TEXT_W`, `CONFIRM_MARK_W`, `SENDER_CALLSIGN_W[_PLAIN]`,
+  `STATION_VALUE_W`, `BOX_TEXT_PAD`, `TEXT_GAP`); was beim Druckrand mitwächst,
+  kommt weiter aus dem `PageLayout`. Passt ein Text, bleibt die Größe unverändert
+  — eine gewöhnliche Karte wird byteweise gezeichnet wie zuvor. Details und die
+  Tabelle der Grenzen in `CARD_LAYOUT.md` §1 „Textbreiten".
 - **Back** (`layout_back.py`): exakt nach `CARD_LAYOUT.md`. Alle Positionen/
   Größen aus `geometry.py`; die mitwachsenden Maße und die Y-Spiegelung kommen
   aus dem `PageLayout`, den `draw_back` einmal baut und an alle Helfer
@@ -975,10 +1013,15 @@ gefunden" und die Meldung stünde allein im Log. Deshalb:
   `progress_cb(done, total)` nach jeder Karte → GUI aktualisiert Balken via
   `root.after`.
 - **Adress-/Label-Export (optional)**: zusätzlich zu den Karten eine CSV mit
-  Empfängeradressen **aller** nachgeschlagenen Stationen erzeugen, wenn
-  `address_export == True`. Format simpel (Adressblöcke), separat von den Karten.
-  Sie hängt am **Basis-Ausgabepfad** (`…_addresses.csv`), unabhängig vom
-  Druckmodus — deshalb steht ihre Checkbox in GUI-Abschnitt 10 bei der Zielwahl.
+  den Empfängeradressen, wenn `address_export == True`. Exportiert werden genau
+  die Stationen der **erzeugten** Karten (je Rufzeichen einmal; Stationen ohne
+  gefundene Anschrift fallen heraus) — nicht alle nachgeschlagenen: Etiketten
+  braucht man für den Stapel, der gerade gedruckt wird. Format simpel
+  (Adressblöcke), separat von den Karten. Die Datei hängt am **Basis-Ausgabepfad**
+  (`…_addresses.csv`), unabhängig vom Druckmodus — deshalb steht ihre Checkbox in
+  GUI-Abschnitt 10 bei der Zielwahl. Schlägt **nur** das Schreiben der CSV fehl
+  (Schreibrechte, Datei im Tabellenprogramm geöffnet), wird das geloggt und der
+  Lauf gilt trotzdem als erfolgreich: die PDF ist zu dem Zeitpunkt fertig.
 
 ---
 
@@ -999,6 +1042,9 @@ gefunden" und die Meldung stünde allein im Log. Deshalb:
 | Lookup schlägt fehl / kein Konto       | Via = `default_via`, Adressfelder leer, kein Abbruch |
 | zu viele QSOs pro Station für Tabelle  | Folge-Karte(n) anlegen                      |
 | Umlaute/UTF-8 im Namen                 | korrekt kodieren (ReportLab-Font mit Umlauten) |
+| Wert zu lang für seinen Platz (Name, Antenne, Rufzeichen, Remarks) | kleiner setzen, **nie** abschneiden (§7 „Textbreiten") |
+| QSO ohne `QSO_DATE`, Sortierung nach „Datum" | leere Datumsteile sortieren vorn, kein `int("")` (§2 Abschnitt 8) |
+| Adress-CSV nicht schreibbar            | loggen; die fertige PDF gilt trotzdem als Erfolg (§7) |
 
 **Fonts/Umlaute**: Standard-PDF-Fonts (Helvetica) unterstützen Latin-1-Umlaute.
 Für saubere Umlaute ggf. eine TrueType-Font (z.B. DejaVu Sans) registrieren und
@@ -1038,6 +1084,13 @@ in `geometry.py` referenzieren.
   **Bogen** zusätzlich am fertigen PDF: A4-Seitengröße, 4 Karten je Bogen (auch
   angebrochen), Schnittlinien nur auf den Rückseiten, Fortschritt zählt Karten,
   Ränder je Karte, und `single` liefert byteweise die bisherige Ausgabe.
+- `test_layout_back.py`: die Breitenbegrenzung (§7 „Textbreiten") — `fit_size`
+  selbst (passt → Größe unverändert, sonst exakt bis zur Grenze verkleinert, nie
+  0 pt, nie gekürzt) und das **gezeichnete** Ergebnis über einen Aufnahme-Canvas,
+  der jeden Text mit Schrift, Größe und Ausrichtung mitschreibt: kein Wert läuft
+  über seinen Nachbarn, „Confirming SWL-Report" bleibt links vom
+  „To Amateur…"-Label, und eine gewöhnliche Karte wird weiter in den Größen aus
+  `geometry.py` gesetzt.
 - `test_gui.py`: Widget-Baum baut headless; Auto-Sync der Config (inkl. Erhalt von
   `appearance`/`recent`); Themenwechsel, Statusleiste, „Zuletzt verwendet",
   Icon-Reihenfolge, Zebra-/Icon-Hintergründe, Zeichenzähler, Seiten-Scroll;
@@ -1064,7 +1117,10 @@ in `geometry.py` referenzieren.
 - `test_build_app.py`: die Vorbedingungsprüfung des Build-Skripts (§10.5), vor
   allem die vier Kombinationen aus „Tcl-Daten eingebettet" × „PyInstaller kennt
   den Fall" — die falsche davon erzeugte ein Bündel, das erst beim Doppelklick
-  starb. Außerdem, dass der Tk-Hinweis die **Punktversion** 3.14.7 nennt.
+  starb. Außerdem, dass der Tk-Hinweis die **Punktversion** 3.14.7 nennt, und die
+  **macOS-Mindestversion**: Deployment-Target lesen, `LSMinimumSystemVersion`
+  daraus ableiten (samt Rückfall auf den zugesagten Boden), Warnung bei zu neuem
+  Ziel — und dass sie den Build **nicht** blockiert.
 
 ---
 
@@ -1145,6 +1201,27 @@ sonst erst beim Start ab. Das Skript prüft alle Punkte vorab und bricht mit
 Klartext ab, statt still etwas Kaputtes zu bauen — die PyInstaller-Fähigkeit
 dabei am Quelltext, weil die Fassung mit dem Fix sich weiterhin als 6.21.0
 meldet.
+
+**Auf macOS entscheidet der bauende Interpreter, wer das Ergebnis starten kann.**
+PyInstaller bündelt dessen Bibliotheken (CPython-Erweiterungen, Tcl/Tk, OpenSSL,
+zlib), und die tragen sein `MACOSX_DEPLOYMENT_TARGET`; `dyld` lehnt eine dylib
+ab, die für ein neueres System gebaut wurde als das laufende. **Homebrew baut
+immer gegen das gerade laufende macOS** — auf einem Mac mit macOS 26 entsteht
+also ein Bündel, das auf macOS 15 nicht startet. Das ist das macOS-Gegenstück zur
+glibc-Frage unter Linux (dort deshalb `fedora:42` als ältestes Ziel).
+
+Zwei Maßnahmen, weil man davon auf dem Baurechner **nichts** sieht:
+- `LSMinimumSystemVersion` wird nicht mehr fest eingetragen, sondern aus dem
+  Deployment-Target abgeleitet (`build_app.macos_minimum_system_version`, von der
+  Spec importiert). Ein zu niedriger Wert ist die schlimmere Sorte Fehler: Launch
+  Services lässt das Programm dann starten, PyInstallers Bootloader (Ziel 11.0)
+  läuft tatsächlich an, und erst das Nachladen bricht mit einer dyld-Meldung ab,
+  die dem Anwender nichts sagt. Steht die Wahrheit drin, meldet macOS sauber
+  „erfordert macOS X oder neuer".
+- `build_app.check_warnings()` sagt beim Bauen, für welche Systeme das Ergebnis
+  taugt, und nennt den Ausweg (Installer von python.org, 3.14.7+, Ziel 10.13/11.0).
+  Bewusst eine **Warnung**, keine Hürde: für welches Publikum gebaut wird,
+  entscheidet der Bauende, nicht das Skript.
 
 Verpackt wird plattformabhängig: Windows/Linux als ZIP bzw. `tar.gz` (letzteres
 erhält die Ausführungsrechte), macOS zwingend mit **`ditto`** — ein gewöhnliches

@@ -56,6 +56,51 @@ Ohne Druckrand ist der `PageLayout` die Identität (`scale = 1`, virtuelle Seite
 = A6, alle Maße = die Konstanten unten) — die Ausgabe ist dann byteweise
 dieselbe wie vor dem Feature.
 
+### Textbreiten (Einpassen statt Überlaufen)
+
+Die Karte kennt **keinen Zeilenumbruch**. Jeder freie Text — Name, Straße,
+Rufzeichen samt Präfix/Kennung, Antennenbezeichnung, Betriebsart, Remarks — hat
+deshalb eine **Höchstbreite**; passt er nicht, wird er **proportional kleiner
+gesetzt und nie abgeschnitten** (mit dem Nutzer so entschieden: lieber klein als
+unvollständig). Ohne diese Regel lief zu langer Text schlicht über den Nachbarn.
+
+- Gerechnet wird in `layout_back.fit_size(s, font, size, max_w)`:
+  `size · max_w / stringWidth(s, font, size)`, nach unten nur durch
+  `MIN_FONT_SIZE` begrenzt (technischer Boden, kein gestalterisches Minimum).
+- Übergeben wird die Grenze als `max_w=` an `text(...)` bzw. `_text_in_band(...)`.
+  Die Oberkante bleibt dabei bei `yt`, weil die Grundlinie aus der **verkleinerten**
+  Größe berechnet wird.
+- **Passt der Text — der Normalfall —, ändert sich nichts.** Die Ausgabe einer
+  gewöhnlichen Karte ist byteweise dieselbe wie vor der Regel.
+
+Die Grenzen stehen als Konstanten in `geometry.py` und sind **Abstände zum
+nächsten Block**, keine neuen Positionen — verschiebt man eine Spalte, wandert
+die Grenze mit:
+
+| Konstante | gilt für | Grenze |
+|---|---|---|
+| `SENDER_TEXT_W` | Adresszeilen Z1–Z4 | bis zum Stationsblock (`STATION_LABEL_X`) |
+| `SENDER_CALLSIGN_W` | eigenes Rufzeichen **mit** Bestätigungs-Markierung | bis zu deren Band |
+| `SENDER_CALLSIGN_W_PLAIN` | eigenes Rufzeichen **ohne** Markierung | bis zum „To Amateur…"-Label |
+| `CONFIRM_MARK_W` | Bestätigungs-Markierung | symmetrisch um `CONFIRM_MARK_X`, rechts bis `TO_LABEL_X` |
+| `STATION_VALUE_W` | Locator/DOK/CQ-Zone/ITU | bis zur Empfängerspalte |
+| `BOX_TEXT_PAD` | Call-/Via-Box, Funk- und QSO-Tabellenzellen | Innenabstand je Seite |
+| `REMARKS_TEXT_PAD` | REMARKS-Text | Innenabstand der Box |
+| `TEXT_GAP` | Luft zwischen zwei Textblöcken | (Basis der obigen Werte) |
+
+Zwei Feinheiten:
+
+- **Das Rufzeichen bekommt mehr Platz, wenn keine Bestätigungs-Markierung
+  gedruckt wird** (83,5 statt 39,5 mm). Sonst würde `F/DL0MT/P` verkleinert,
+  obwohl der Platz daneben frei ist.
+- **`Confirming SWL-Report` passt bei Bold 11 grundsätzlich nicht** (51,5 mm auf
+  42 mm Band) und wird immer leicht verkleinert. Das ist der Fall, der die Regel
+  überhaupt nötig gemacht hat: er überlappte vorher das „To Amateur Radio
+  Station:"-Label, **ohne** dass der Anwender etwas Ungewöhnliches eingetragen
+  hätte.
+- Was beim Druckrand mitwächst (Call-/Via-Box, Tabellenspalten, Remarks-Kasten),
+  kommt **nicht** aus diesen Konstanten, sondern aus dem `PageLayout`.
+
 ### Bogendruck (vier Karten auf A4)
 
 Ist `generation.sheet_mode == "a4_4up"`, liegen vier Karten auf einem A4-Bogen
@@ -143,6 +188,9 @@ Schrift = DejaVuSans (regular/bold). Linksbündig, sofern nicht anders angegeben
 
 Kein „Untertitel"/„Responsive" mehr (Feld `subtitle` entfernt).
 
+Alle vier Adresszeilen enden spätestens am Stationsblock (`SENDER_TEXT_W`);
+längere Werte werden verkleinert, nicht abgeschnitten (siehe §1 „Textbreiten").
+
 ### Eigenes Rufzeichen (Schreibweise)
 `sender.callsign` wird **großgeschrieben** und sonst unverändert gezeichnet — mit
 allem, was zum Rufzeichen gehört: Landespräfix (`F/DL0MT`), Portabel-Kennung
@@ -157,6 +205,11 @@ Nur der **gewählte** Text (kein Kästchen), an fester, zentrierter Position.
 |------------------------|------------------------------------------|----|----|-----------|
 | Confirming QSO         | Text, wenn `confirm_mark=="qso"`         | 66 | 8  | Bold 11   |
 | Confirming SWL-Report  | Text, wenn `confirm_mark=="swl"`         | 66 | 8  | Bold 11   |
+
+Das Band ist `CONFIRM_MARK_W` breit (symmetrisch um `CONFIRM_MARK_X`, rechts bis
+zum „To Amateur…"-Label). `Confirming SWL-Report` ist bei Bold 11 breiter und
+wird deshalb **immer** etwas verkleinert — vorher überlappte er das Label (§1
+„Textbreiten").
 
 ### Kopf rechts (Empfänger + Via)
 | Element              | Inhalt / Quelle          | x   | yt  | Font/Size |
@@ -243,8 +296,10 @@ PSE/TNX-QSL-Markierung steht **nicht** mehr im Fuß, sondern oben links (siehe
 | REMARKS-Text         | `card.remarks`, links, mittig-vert.| 8   | –  | Regular 9 |
 | Footer-Text          | `generation.static_footer`         | 6   | 96 | Bold 8    |
 
-Der Remarks-Text ist auf **80 Zeichen** begrenzt (passt in eine Zeile der Box);
-die Begrenzung sitzt in den Eingabefeldern der GUI (global + je Karte).
+Der Remarks-Text ist auf **80 Zeichen** begrenzt; die Begrenzung sitzt in den
+Eingabefeldern der GUI (global + je Karte). Eine Zeile fasst 80 Zeichen nur bei
+gewöhnlichem Text — 80 *breite* Zeichen wären 219 mm bei 138 mm Platz. Solche
+Texte werden verkleinert (§1 „Textbreiten"), die Zeichenzahl bleibt bei 80.
 
 ---
 
@@ -256,12 +311,17 @@ für die gewählte Aussage gedruckt).
 Alle Helfer bekommen als zweites Argument den `PageLayout` der Seite (`page`,
 siehe §1 „Druckrand"); er liefert die Seitenhöhe für die Y-Spiegelung. Ohne
 Druckrand ist `page.page_h == PAGE_H`.
-- Text-Helfer `text(c, page, x, yt, s, font, size, align="left")` mit interner
-  `y_pdf = page.page_h - yt - ascent`-Umrechnung, damit im Zeichencode nur
-  „von-oben"-mm benutzt werden.
-- `_text_in_band(c, page, x, yt_top, band_h, s, font, size, align)`: Text vertikal
-  mittig in einem Band (für Box-Inhalte und Tabellenzellen), über
+- `fit_size(s, font, size, max_w)`: Schriftgröße, bei der `s` in `max_w` passt —
+  **nur verkleinern, nie kürzen** (§1 „Textbreiten"). `max_w=None` schaltet die
+  Begrenzung ab (Texte ohne Nachbarn).
+- Text-Helfer `text(c, page, x, yt, s, font, size, align="left", max_w=None)` mit
+  interner `y_pdf = page.page_h - yt - ascent`-Umrechnung, damit im Zeichencode
+  nur „von-oben"-mm benutzt werden.
+- `_text_in_band(c, page, x, yt_top, band_h, s, font, size, align, max_w=None)`:
+  Text vertikal mittig in einem Band (für Box-Inhalte und Tabellenzellen), über
   `getAscent`/`getDescent`.
+- `_col_text_w(edges, idx)`: nutzbare Textbreite einer QSO-Tabellenspalte
+  (Spaltenbreite minus `BOX_TEXT_PAD` je Seite).
 - `_box`/`_hline`/`_vline`: Rahmen und Linien (Oberkante/Position als `yt`).
 
 ---

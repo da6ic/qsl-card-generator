@@ -25,8 +25,9 @@ class SenderConfig:
     dok: str = ""
     waz: str = ""
     itu: str = ""
-    # Funk-Ausrüstung: erscheinen dynamisch auf der Karte (nur der Wert, ohne
-    # Label), sobald gefüllt. Leer -> Zeile wird nicht gezeichnet.
+    # Funk-Ausrüstung: erscheint dynamisch auf der Karte, sobald mindestens eins
+    # der Felder gefüllt ist — als kleine Tabelle mit den Spaltenköpfen
+    # RIG/ANT/PWR. Alle leer -> der Block wird gar nicht gezeichnet.
     receiver: str = ""  # Empfänger/TRX
     antenna: str = ""  # Antenne
     power: str = ""  # Sendeleistung (Watt)
@@ -35,7 +36,7 @@ class SenderConfig:
 @dataclass
 class LookupConfig:
     program_id: str = "qslcards"  # HamQTH verlangt prg-Kennung
-    address_export: bool = False  # Adress-/Label-CSV für alle Stationen
+    address_export: bool = False  # Adress-/Label-CSV zu den gedruckten Karten
     # Kein `lookup_addresses` mehr: der Lookup läuft automatisch beim Log-Laden,
     # sobald Zugangsdaten eingegeben sind (siehe docs/SPECIFICATION.md §6).
     #
