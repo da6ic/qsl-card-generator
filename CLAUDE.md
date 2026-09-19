@@ -305,6 +305,10 @@ def active_via_priority(priority, cut) -> list[str]: ...
   fatal. Liefert **nie** Zustellweg-Flags.
 - HamQTH: Session per `u`/`p` holen, dann `id`+`callsign` abfragen; Session ~1h
   gültig, bei Ablauf neu anmelden. Endpunkte/Details in `docs/SPECIFICATION.md`.
+- Die Clients heißen `QRZClient` und `HamQTHClient` (`lookup/qrz.py`,
+  `lookup/hamqth.py`); `VIA_CODES` (kanonische Reihenfolge `B, D, Q, L`) und
+  `VIA_LABELS` (ausgeschriebene Namen für GUI und Vorschau) stehen im Paketkopf,
+  damit Prioritätsliste und Tabelle dieselbe Quelle benutzen.
 - `has_lookup_credentials(credentials)` / `build_lookup(credentials, cache_path)`
   / `lookup_calls(calls, credentials, ...)` nehmen alle **`LookupCredentials`**,
   nicht `LookupConfig`. `lookup_calls` schlägt **alle** (eindeutigen) Rufzeichen
@@ -870,9 +874,22 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
 - Enthält **kein** `QSL_SENT_VIA` (und keine Via-Info) — das ist der **Normalfall**:
   die Via kommt aus dem Lookup, nicht aus dem Log. Ohne Lookup-Credentials fallen
   alle Karten auf `default_via` (Default `B`); mit Credentials liefert der Lookup
-  je Station die akzeptierten Wege {B,D,Q,L}. Jede Station kommt nur 1× vor.
-- FT8-QSOs haben dB-Rapporte (z. B. `-07`), die **bewusst** nicht sinnvoll ins
-  R/S/T-Raster passen (so vom Nutzer akzeptiert).
+  je Station die akzeptierten Wege {B,D,Q,L}.
+- **40 QSOs, 36 eindeutige Rufzeichen**: `PA3BRB` kommt fünfmal vor, alle übrigen
+  einmal. Damit unterscheiden sich „pro QSO" (40 Karten) und „pro Station"
+  (36 Karten) sichtbar — genau dafür taugt die Datei.
+- **25 der 40 QSOs haben gar keinen Rapport** (`<RST_SENT:0>`, so schreibt HAMRS
+  es), die Spalte SIGNAL REPORT bleibt dort leer. Von den 33 FT8-QSOs tragen nur
+  8 einen dB-Wert (`+00`, `+14`, `-9`); der Rest ist leer. dB-Rapporte passen
+  **bewusst** nicht ins R/S/T-Raster, und ein leeres Feld bleibt leer — geraten
+  wird nie (so vom Nutzer akzeptiert).
+- **Drei Rapporte im Log tragen einen Zeilenumbruch in der deklarierten Länge**
+  (`<RST_SENT:3>+9\n`). Zwei davon sind formal korrekt — es gibt kein `<` im
+  Wert, der Wiederherstellungszweig greift also **nicht**. Deshalb schneidet
+  `_tokenize` abschließenden Leerraum generell ab (`value.rstrip()`, die einzige
+  bewusste Abweichung von „die Länge ist maßgeblich"); vorher stand `"+9\n"` in
+  `qso.rst_sent` und in `raw`. Auf der Karte fiel es nie auf, weil
+  `builder._make_row` ohnehin `strip()` — im Datenmodell schon.
 - Für Cabrillo gibt es **kein** Beispiel-Log im Repo: die Testfälle stehen inline
   in `tests/test_cabrillo_parser.py`, je einer pro Contest-Template. Zum
   Ausprobieren ein gemischtes Log im Scratchpad anlegen, nicht im Projekt-Root.
@@ -1102,7 +1119,10 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
     selben Prozess stünde dort noch die alte Nummer und das Archiv hieße nach
     der Vorgängerversion.
   * **Kein `git push`** und keine Vorabversionen (`0.2.0-rc1` wird abgelehnt);
-    Tags sind leichtgewichtig, `v0.1.0` ist rückwirkend auf `59ddca8` gesetzt.
+    Tags sind leichtgewichtig. Es gibt sie erst **ab `v0.2.0`** — die Fassung
+    0.1.0 entstand vor `release.py` und hat keinen; rückwirkend einen zu setzen
+    wurde verworfen (er stünde auf einem Commit, der nie als 0.1.0 ausgeliefert
+    wurde).
   * `release.py` baut nur für **sein** System (Cross-Compile gibt es nicht). Die
     anderen beiden Archive entstehen danach auf ihrem Rechner mit `git pull` +
     `build_app.py --clean` — die Versionszeile ist dann schon committet.

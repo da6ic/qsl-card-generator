@@ -88,6 +88,13 @@ Ergebnis in `dist/`: ein Programmordner plus ein Archiv, benannt nach Version un
 Plattform. Das Skript prüft vorher die Voraussetzungen und bricht mit Klartext ab,
 statt still etwas Kaputtes zu bauen.
 
+**Auf macOS entscheidet der Interpreter, wer das Ergebnis starten kann.**
+PyInstaller bündelt dessen Bibliotheken, und die tragen sein Deployment-Target;
+Homebrew baut immer gegen das laufende System. Für ein Archiv, das weitergegeben
+wird, gehört deshalb der Installer von **python.org ab 3.14.7** genommen
+(Einrichtung in `packaging/macos/README.md`). Zum Ausprobieren auf dem eigenen
+Rechner genügt Homebrew.
+
 ### Eine neue Version ausliefern
 
 Die Version steht an **einer** Stelle: `qslcards/__init__.py`. Von dort kommen

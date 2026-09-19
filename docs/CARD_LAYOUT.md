@@ -130,7 +130,7 @@ ist:
 ```
 (0,0) oben-links ───────────────────────────────────────────────► x
 │  ┌──────────────────────────────────────────────────────────┐
-│  │ DN5MT/p       Confirming QSO   To Amateur Radio Station:  │
+│  │ F/DL0MT/P     Confirming QSO   To Amateur Radio Station:  │
 │  │                                ┌────────────────────────┐ │
 │  │ Axel Tüner     Locator: JN48OM │ <CALL>                 │ │
 │  │ Wilhelmstr.76  DOK:     P31    └────────────────────────┘ │
@@ -180,11 +180,11 @@ Schrift = DejaVuSans (regular/bold). Linksbündig, sofern nicht anders angegeben
 ### Kopf links
 | Element        | Inhalt / Quelle            | x   | yt   | Font/Size   |
 |----------------|----------------------------|-----|------|-------------|
-| Rufzeichen     | `sender.callsign`          | 6   | 6    | Bold 22     |
-| Adresse Z1     | `sender.name`              | 6   | 18   | Regular 9   |
-| Adresse Z2     | `sender.street`            | 6   | 23.5 | Regular 9   |
-| Adresse Z3     | `sender.zip` + " " + `city`| 6   | 29   | Regular 9   |
-| Adresse Z4     | `sender.country`           | 6   | 34.5 | Regular 9   |
+| Rufzeichen     | `sender.callsign`          | 3   | 3    | Bold 22     |
+| Adresse Z1     | `sender.name`              | 3   | 15.5 | Regular 9   |
+| Adresse Z2     | `sender.street`            | 3   | 21.5 | Regular 9   |
+| Adresse Z3     | `sender.zip` + " " + `city`| 3   | 27.5 | Regular 9   |
+| Adresse Z4     | `sender.country`           | 3   | 33.5 | Regular 9   |
 
 Kein „Untertitel"/„Responsive" mehr (Feld `subtitle` entfernt).
 
@@ -203,8 +203,8 @@ von den vier eigenen Kennungen unterscheiden musste, ohne etwas zu gewinnen.
 Nur der **gewählte** Text (kein Kästchen), an fester, zentrierter Position.
 | Element                | Inhalt / Quelle                          | x  | yt | Font/Size |
 |------------------------|------------------------------------------|----|----|-----------|
-| Confirming QSO         | Text, wenn `confirm_mark=="qso"`         | 66 | 8  | Bold 11   |
-| Confirming SWL-Report  | Text, wenn `confirm_mark=="swl"`         | 66 | 8  | Bold 11   |
+| Confirming QSO         | Text, wenn `confirm_mark=="qso"`         | 65.5 | 5  | Bold 11   |
+| Confirming SWL-Report  | Text, wenn `confirm_mark=="swl"`         | 65.5 | 5  | Bold 11   |
 
 Das Band ist `CONFIRM_MARK_W` breit (symmetrisch um `CONFIRM_MARK_X`, rechts bis
 zum „To Amateur…"-Label). `Confirming SWL-Report` ist bei Bold 11 breiter und
@@ -214,43 +214,44 @@ wird deshalb **immer** etwas verkleinert — vorher überlappte er das Label (§
 ### Kopf rechts (Empfänger + Via)
 | Element              | Inhalt / Quelle          | x   | yt  | Font/Size |
 |----------------------|--------------------------|-----|-----|-----------|
-| Label „To Amateur…"  | statisch                 | 88  | 8   | Regular 10|
-| Box + Call           | `card.recipient_call`    | 88  | 12  | Bold 16   |
-|  Box-Maße            | b=54, h=15               |     |     | Rahmen 0.6pt |
-| Label „Via:"         | statisch                 | 88  | 31  | Regular 10|
-| Box + Via-Text       | `card.via_text`          | 88  | 35  | Regular 11|
-|  Box-Maße            | b=54, h=12               |     |     |           |
+| Label „To Amateur…"  | statisch                 | 88.5| 5   | Regular 10|
+| Box + Call           | `card.recipient_call`    | 88.5| 9.5 | Bold 16   |
+|  Box-Maße            | b=56.5, h=15           |     |     | Rahmen 0.6pt |
+| Label „Via:"         | statisch                 | 88.5| 29.5| Regular 10|
+| Box + Via-Text       | `card.via_text`          | 88.5| 34   | Regular 11|
+|  Box-Maße            | b=56.5, h=12           |     |     |           |
 
 ### Stationsblock (Absender-Stationsdaten, aus Config)
 Als Label/Wert-Spalte **neben** der Adresse, auf Höhe der Adresszeilen
-(yt = 18 / 23.5 / 29 / 34.5), Regular 9:
-Label-Spalte `x=50` (`STATION_LABEL_X`), Wert-Spalte `x=68` (`STATION_VALUE_X`);
+(yt = 15.5 / 21.5 / 27.5 / 33.5), Regular 9:
+Label-Spalte `x=49` (`STATION_LABEL_X`), Wert-Spalte `x=67.5` (`STATION_VALUE_X`);
 Zeilen `Locator:` / `DOK:` / `CQ-Zone:` (Wert = `sender.waz`) / `ITU:`.
 
 ### Funk-Block (RIG/ANT/PWR) — dynamisch, nur wenn gefüllt
 Kleine beschriftete Tabelle **direkt unter dem Stationsblock**, linksbündig, die
-Breite links der Via-Box ausschöpfend (`x=6 … RADIO_TABLE_X1=85`, oben
-`RADIO_TABLE_YT_TOP=38.5`, unten bündig zur Via-Box `=47`). Kopfzeile (Bold 6)
+Breite links der Via-Box ausschöpfend (`x=3 … RADIO_TABLE_X1=85.5`, oben
+`RADIO_TABLE_YT_TOP=37.5`, unten bündig zur Via-Box `=46`). Kopfzeile (Bold 6)
 `RIG`/`ANT`/`PWR`, Werte darunter (Regular 8). Nur **befüllte** Felder
 (`sender.receiver`/`antenna`/`power`) bekommen eine Spalte; die vorhandenen Spalten
 teilen sich die Breite gleichmäßig. Ist der Block sichtbar, rücken QSL-Markierung
 und QSO-Tabelle nach unten (`QSL_MARK_YT_RADIO` / `TABLE_YT_TOP_RADIO`).
 
 ### QSL-Markierung (PSE/TNX QSL)
-Links unter dem Stationsblock, nur der **gewählte** Text (kein Kästchen). `yt=44`
-(`QSL_MARK_YT`); ist der Funk-Block sichtbar, rutscht sie auf `yt=47.7`
+Links unter dem Stationsblock, nur der **gewählte** Text (kein Kästchen). `yt=43.5`
+(`QSL_MARK_YT`); ist der Funk-Block sichtbar, rutscht sie auf `yt=47.5`
 (`QSL_MARK_YT_RADIO`, unter die Funk-Tabelle).
 | Element   | Inhalt / Quelle              | x | yt   | Font/Size |
 |-----------|------------------------------|---|------|-----------|
-| PSE QSL   | Text, wenn `qsl_mark=="pse"` | 6 | 44   | Bold 11   |
-| TNX QSL   | Text, wenn `qsl_mark=="tnx"` | 6 | 44   | Bold 11   |
+| PSE QSL   | Text, wenn `qsl_mark=="pse"` | 3 | 43.5 | Bold 11   |
+| TNX QSL   | Text, wenn `qsl_mark=="tnx"` | 3 | 43.5 | Bold 11   |
 
 ### QSO-Tabelle
-- Bounding-Box: `x=6 … 142` (Breite 136), oben `yt=50`; die Unterkante ist
+- Bounding-Box: `x=3 … 145` (Breite 142), oben `yt=49.5`; die Unterkante ist
   **dynamisch** (`TABLE_YT_TOP + HEAD_H + n·ROW_H`). Ohne Remarks endet sie bei
-  voller Belegung (6 Zeilen) bei `yt=92` (`TABLE_YT_BOTTOM`, oberhalb des Footers);
-  mit Remarks bei voller Belegung (3 Zeilen) bei `yt=74`
+  voller Belegung (6 Zeilen) bei `yt=91.5` (`TABLE_YT_BOTTOM`, oberhalb des
+  Footers); mit Remarks bei voller Belegung (3 Zeilen) bei `yt=73.5`
   (`TABLE_YT_BOTTOM_WITH_REMARKS`, oberhalb des REMARKS-Blocks).
+  Ist der Funk-Block sichtbar, beginnt sie bei `yt=51.5` (`TABLE_YT_TOP_RADIO`).
 - **Kopfzeile einzeilig**, so hoch wie eine Datenzeile (`HEAD_H = ROW_H = 6`).
   **Datenzeilen**: feste Höhe `ROW_H = 6`. Die Tabelle wird **dynamisch** gezeichnet
   — genau so viele Zeilen, wie die Karte QSOs hat. Die Maximalzahl hängt vom
@@ -258,14 +259,14 @@ Links unter dem Stationsblock, nur der **gewählte** Text (kein Kästchen). `yt=
   bis `MAX_ROWS_WITH_REMARKS = 3` (der Remarks-Kasten braucht darunter Platz).
   Im Modus „pro Station" landen so viele QSOs derselben Station auf einer Karte,
   wie erlaubt; mehr → Folge-Karte(n). Remarks sind **je Karte** unabhängig.
-- Spalten (Breiten in mm, Summe = 136):
+- Spalten (Breiten in mm, Summe = 142):
   | Spalte            | Breite | Unterspalten                    |
   |-------------------|--------|---------------------------------|
-  | D M Y (Datum)     | 30     | D=10, M=10, Y=10                |
-  | UTC TIME          | 24     | –                               |
-  | FREQ MHZ          | 26     | –                               |
-  | 2-WAY QSO IN      | 26     | –                               |
-  | SIGNAL REPORT     | 30     | – (ein Wert je Zeile)           |
+  | D M Y (Datum)     | 31.5   | je 10.5 für D, M und Y          |
+  | UTC TIME          | 25     | –                               |
+  | FREQ MHZ          | 27.5   | –                               |
+  | 2-WAY QSO IN      | 27.5   | –                               |
+  | SIGNAL REPORT     | 30.5   | – (ein Wert je Zeile)           |
 - Kopftexte (zentriert, Bold 6.5, **einzeilig**): DATE-Spalte nur `D  M  Y`
   (kein DATE-Titel mehr, die D/M/Y-Trenner laufen durch die volle Höhe);
   `UTC TIME`; `FREQ MHZ`; `2-WAY QSO IN`; `SIGNAL REPORT`.
@@ -291,10 +292,10 @@ PSE/TNX-QSL-Markierung steht **nicht** mehr im Fuß, sondern oben links (siehe
 „QSL-Markierung").
 | Element              | Inhalt / Quelle                    | x   | yt | Font/Size |
 |----------------------|------------------------------------|-----|----|-----------|
-| Label „REMARKS"      | statisch (nur wenn Remarks)        | 6   | 79 | Regular 10 |
-| REMARKS-Box          | `card.remarks` (b=136, h=10)       | 6   | 83 | Rahmen 0.6pt |
-| REMARKS-Text         | `card.remarks`, links, mittig-vert.| 8   | –  | Regular 9 |
-| Footer-Text          | `generation.static_footer`         | 6   | 96 | Bold 8    |
+| Label „REMARKS"      | statisch (nur wenn Remarks)        | 3   | 80.5 | Regular 10 |
+| REMARKS-Box          | `card.remarks` (b=142, h=10)      | 3   | 84.5 | Rahmen 0.6pt |
+| REMARKS-Text         | `card.remarks`, links, mittig-vert.| 5   | –  | Regular 9 |
+| Footer-Text          | `generation.static_footer`         | 3   | 98.5 | Bold 8    |
 
 Der Remarks-Text ist auf **80 Zeichen** begrenzt; die Begrenzung sitzt in den
 Eingabefeldern der GUI (global + je Karte). Eine Zeile fasst 80 Zeichen nur bei
@@ -331,9 +332,9 @@ Druckrand ist `page.page_h == PAGE_H`.
 1. Alle Werte aus §3 als benannte Konstanten in `geometry.py` anlegen.
 2. `layout_back.py` implementieren, das ausschließlich diese Konstanten nutzt.
 3. Eine Testkarte mit Beispieldaten rendern.
-4. Neben die Referenz (`WhatsApp_Image…jpeg`, um 90° gedreht) legen und
-   vergleichen: Positionen/Größen in `geometry.py` nachziehen. **Nur dort**
-   ändern, nicht im Zeichencode.
+4. Neben die Referenzkarte legen und vergleichen: Positionen/Größen in
+   `geometry.py` nachziehen. **Nur dort** ändern, nicht im Zeichencode. (Das
+   Foto der Vorlage liegt nicht im Repository — es ist eine private Karte.)
 5. Wiederholen, bis das Layout passt. Danach mit echten ADIF-Daten testen
    (mehrere Zeilen bei „pro Station").
 

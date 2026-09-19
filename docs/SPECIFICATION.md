@@ -487,6 +487,15 @@ logbook/
      Feld-Specifiers → Wert dort abschneiden **und den Cursor dorthin
      zurücksetzen**, damit das folgende Tag nicht verschluckt wird. Bei korrekt
      angegebenen Längen ändert das nichts.
+   - **Abschließenden Leerraum abschneiden** (`value.rstrip()`) — die einzige
+     bewusste Abweichung von „die Länge ist maßgeblich". Derselbe Logger zählt
+     den Zeilenumbruch nämlich auch dann mit, wenn dadurch **kein** `<` in den
+     Wert gerät: `<RST_SENT:3>+9\n` sind formal korrekte drei Bytes, der Fall
+     läuft also gar nicht über die Regel darüber. Ohne das Schneiden stünde
+     `"+9\n"` in `qso.rst_sent` und in `raw`; auf der Karte fiele es nicht auf,
+     weil `builder._make_row` ohnehin `strip()`. **Führender** Leerraum bleibt
+     unangetastet — der Wert beginnt direkt hinter dem `>`, dort kann er nur
+     gewollt sein.
 3. Am Ende: falls Record nicht leer, ebenfalls übernehmen (toleranter Umgang mit
    fehlendem letzten `<EOR>`).
 
@@ -518,6 +527,10 @@ bestimmt (§6). Das Testlog enthält diese Felder ohnehin nicht.
 - Groß-/Kleinschreibung gemischt (`<Call:5>`, `<CALL:5>`).
 - Typ-Suffix (`<freq:6:N>14.074`).
 - Zeilenumbruch im Wert (z.B. Kommentarfeld).
+- Zu groß angegebene Länge — einmal mit `<` im Wert (Folgefeld darf nicht
+  verschluckt werden), einmal ohne (der Umbruch steckt in der Länge selbst).
+  Dazu am echten Logbuch: **kein** Rohwert trägt Leerraum am Ende, führender
+  bleibt erhalten.
 - Fehlendes letztes `<EOR>`.
 - Record ohne `call` → übersprungen.
 - Mehrere QSOs mit demselben Call (für Gruppierung).
@@ -1114,6 +1127,11 @@ in `geometry.py` referenzieren.
 - `test_paths.py`: §10 — Quellmodus zeigt in die Projektwurzel (auch aus fremdem
   Arbeitsverzeichnis), gebündelt Portable- vs. Benutzerordner, macOS-Sonderfall
   `.app/Contents/MacOS`, Config und Cache im selben Ordner, `subprocess_env`.
+- `test_release.py`: der Versionssprung (§10.5) — vor allem, was **nicht**
+  passieren darf: eine rückwärts laufende Nummer, ein Commit mit mehr als der
+  Versionszeile, und eine angehobene Version, die nach einem gescheiterten Build
+  stehen bleibt. Gebaut und committet wird dabei nie; die Schritte sind einzelne
+  Funktionen, genau damit sie sich austauschen lassen.
 - `test_build_app.py`: die Vorbedingungsprüfung des Build-Skripts (§10.5), vor
   allem die vier Kombinationen aus „Tcl-Daten eingebettet" × „PyInstaller kennt
   den Fall" — die falsche davon erzeugte ein Bündel, das erst beim Doppelklick
