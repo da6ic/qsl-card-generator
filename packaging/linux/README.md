@@ -14,6 +14,10 @@ eine Punkt, an dem dieser Build kippt.
 
 Ergebnis: `dist/QSL-Karten-Generator-<version>-linux-x86_64.tar.gz`
 
+`<version>` kommt aus `qslcards/__init__.py`. **Angehoben wird sie hier nicht** —
+das macht `scripts/release.py` einmal auf dem Entwicklungsrechner (samt Commit
+und Tag, siehe `README.md`); hier wird nur derselbe Stand gebaut.
+
 ## Im Container (auch vom Mac aus)
 
 Grundlage ist `fedora:42`, das offizielle Abbild von Docker Hub.

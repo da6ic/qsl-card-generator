@@ -110,6 +110,7 @@ scripts/
   preview_card.py         # Karten-Preview als PDF (`--4up [RAND_MM]` = A4-Bogen)
   make_icon.py            # app_icon.svg -> PNG (16–1024) + .ico + .icns
   build_app.py            # auslieferbare Anwendung bauen + verpacken
+  release.py              # Version anheben -> Tests -> bauen -> Commit + Tag
 packaging/
   qslcards.spec           # PyInstaller: eine Spec für alle drei Plattformen
   linux/                  # .desktop, install.sh, LIESMICH.txt, Dockerfile.fedora,
@@ -427,6 +428,10 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
 - [x] **`scripts/build_app.py` + `packaging/qslcards.spec`** bauen die
       auslieferbare Anwendung für die Plattform, auf der sie laufen, prüfen
       vorher Tk 9 / PyInstaller ≥ 6.21 und verpacken das Ergebnis.
+- [x] **`scripts/release.py`** hebt die Version an (`patch`/`minor`/`major` oder
+      `X.Y.Z`), lässt die Tests laufen, baut, verpackt und setzt Commit und Tag
+      `vX.Y.Z` — der Ersatz für `npm version`. Version **und** Anwendungsname
+      stehen dafür in `qslcards/__init__.py` (`__version__`/`__app_name__`).
 - [x] **macOS-Bündel gebaut und geprüft** (arm64, ad-hoc signiert, ZIP via
       `ditto`): startet aus dem Archiv, Tk 9 und alle Assets an Bord. Im Archiv
       liegt die `.app` zusammen mit `LIESMICH.txt` in einem Ordner; Anleitung und
@@ -467,6 +472,11 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
   (das ist `-e .[dev]`); zum Bündeln zusätzlich `pip install -e ".[build]"`.
 - Auslieferbare Anwendung: `.venv/bin/python scripts/build_app.py --clean`
   → `dist/`. Auf diesem Rechner entsteht nur das macOS-Bündel (siehe §11).
+- Neue Version ausliefern: `.venv/bin/python scripts/release.py patch|minor|major`
+  (auch `X.Y.Z`, `--show`, `--dry-run`; abschaltbar `--no-tests`/`--no-build`/
+  `--no-git`). Das ist der ganze Vorgang — Version anheben, Tests, bauen,
+  `git commit` + `git tag vX.Y.Z`. **Die Versionszeile nie von Hand ändern**,
+  sonst fehlen Tag und Prüfungen.
 - Vor jedem Commit: `.venv/bin/python -m black qslcards/ tests/ scripts/` und
   `.venv/bin/python -m ruff check ...` und `.venv/bin/python -m pytest tests/ -q`.
 - `ruff`/`black` schreiben gelegentlich nach dem Write nach (Trailing-Newline,
@@ -988,6 +998,37 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
 - **Version nur in `qslcards/__init__.py`**; `pyproject.toml` liest sie über
   `[tool.setuptools.dynamic]`. `requirements.txt` ist nur noch `-e .[dev]`, die
   Abhängigkeiten stehen in `pyproject.toml` (Extras `dev` und `build`).
+- **Auch der Anwendungsname steht dort** (`__app_name__`): `scripts/build_app.py`
+  und `packaging/qslcards.spec` lasen ihn vorher je aus einer **eigenen**
+  Konstante. Laufen die auseinander, sucht das Bauskript das Ergebnis von
+  PyInstaller unter dem falschen Namen und bricht mit „… fehlt" ab, obwohl
+  gebaut wurde. Die Texte in der **Oberfläche** (Fenstertitel, „Über", Menü,
+  `paths.APP_DIR_NAME`) bleiben bewusst ausgeschrieben dort, wo sie stehen —
+  `APP_DIR_NAME` ist sogar ein eigener Vertrag: er benennt den Datenordner des
+  Anwenders und darf sich nicht ändern, nur weil das Bündel anders heißt.
+- **Ein Versionssprung ist ein Skriptlauf, kein Handgriff**
+  (`scripts/release.py`, vom Nutzer als Ersatz für `npm version patch`
+  gewünscht; alle drei Punkte bewusst so entschieden):
+  * **Kein npm, keine `package.json`.** Das Projekt hat kein Node, und eine
+    `package.json` wäre eine zweite Versionsquelle neben `__init__.py`.
+    *Verworfen:* ebenso `bump-my-version` (neue Abhängigkeit für eine Regex)
+    und `setuptools-scm` (Version aus dem Git-Tag — im Bündel gibt es kein
+    `.git`, und `__init__.py` soll die eine Wahrheit bleiben).
+  * **Gebaut wird VOR Commit und Tag** — anders als `npm version`, das den Build
+    in einen `postversion`-Hook hängt. Am Ergebnis ändert das nichts (der Build
+    liest nur), am Aufräumen alles: scheitert er, wird die Versionszeile
+    zurückgeschrieben und die Arbeitskopie ist wieder sauber. Bei der
+    npm-Reihenfolge stünden Commit **und** Tag schon für eine Fassung, die es
+    nie gab. `tests/test_release.py` hält das fest.
+  * **Gebaut wird in einem eigenen Prozess** (`subprocess`, nicht
+    `build_app.main()`): `build_app` liest `__version__` beim **Import** — im
+    selben Prozess stünde dort noch die alte Nummer und das Archiv hieße nach
+    der Vorgängerversion.
+  * **Kein `git push`** und keine Vorabversionen (`0.2.0-rc1` wird abgelehnt);
+    Tags sind leichtgewichtig, `v0.1.0` ist rückwirkend auf `59ddca8` gesetzt.
+  * `release.py` baut nur für **sein** System (Cross-Compile gibt es nicht). Die
+    anderen beiden Archive entstehen danach auf ihrem Rechner mit `git pull` +
+    `build_app.py --clean` — die Versionszeile ist dann schon committet.
 - **Kein „Schließen" im „Über"-Dialog** — wie beim Handbuchfenster macht das die
   Fenstersteuerung des Systems (Escape bleibt gebunden).
 

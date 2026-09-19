@@ -86,6 +86,44 @@ Ergebnis in `dist/`: ein Programmordner plus ein Archiv, benannt nach Version un
 Plattform. Das Skript prüft vorher die Voraussetzungen und bricht mit Klartext ab,
 statt still etwas Kaputtes zu bauen.
 
+### Eine neue Version ausliefern
+
+Die Version steht an **einer** Stelle: `qslcards/__init__.py`. Von dort kommen
+der Archivname, `CFBundleShortVersionString` des macOS-Bündels, die
+Windows-Dateieigenschaften, der „Über"-Dialog und die pip-Metadaten — und
+daneben mit `__app_name__` der Name, unter dem das Programm ausgeliefert wird.
+
+Angehoben wird sie nicht von Hand, sondern mit `scripts/release.py` — dem, was
+in einem Node-Projekt `npm version patch` täte (Node und eine `package.json`
+gibt es hier nicht; sie wären eine zweite Versionsquelle):
+
+```bash
+python scripts/release.py patch       # 0.1.0 -> 0.1.1
+python scripts/release.py minor       # 0.1.0 -> 0.2.0
+python scripts/release.py major       # 0.1.0 -> 1.0.0
+python scripts/release.py 1.2.3       # genau diese Version
+python scripts/release.py --show      # nur nachsehen, was gerade gilt
+python scripts/release.py patch --dry-run   # den Ablauf zeigen, nichts tun
+```
+
+Ein Lauf macht der Reihe nach: **Vorbedingungen** prüfen (saubere Arbeitskopie,
+Tag noch frei, neue Version größer als die alte, dazu die Bauprüfungen aus
+`build_app.py`) → **Tests** → **Versionszeile** schreiben → **bauen und
+verpacken** → **`git commit`** und **`git tag vX.Y.Z`**. Jeder Schritt ist
+einzeln abschaltbar (`--no-tests`, `--no-build`, `--no-git`). Ein `git push`
+macht das Skript nicht — das bleibt eine bewusste Handlung.
+
+**Gebaut wird vor dem Commit**, anders als bei `npm version` (das den Build in
+einen `postversion`-Hook hängt). Am Ergebnis ändert das nichts, am Aufräumen
+viel: scheitert der Build, wird die Versionszeile zurückgesetzt und die
+Arbeitskopie ist wieder sauber — statt eines Tags für eine Fassung, die es nie
+gab.
+
+Für die **anderen Plattformen** gilt weiter: Cross-Compile gibt es nicht.
+`release.py` baut nur für das System, auf dem es läuft; die übrigen Archive
+entstehen danach dort mit `git pull` und `python scripts/build_app.py --clean`,
+die Versionszeile ist dann ja schon committet.
+
 **Cross-Compile gibt es nicht** — PyInstaller bündelt den Interpreter, unter dem
 es läuft. Jedes Ziel braucht sein eigenes Betriebssystem:
 

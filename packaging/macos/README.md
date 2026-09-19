@@ -18,6 +18,14 @@ Zeile Fassade um den Aufruf, der ohnehin für alle Plattformen gilt:
 speziell macOS betrifft, steht dort in `macos_delivery_folder` und
 `package_macos`; was ins Bündel wandert, in `packaging/qslcards.spec`.
 
+Soll dabei zugleich die **Version** steigen, ist `scripts/release.py
+patch|minor|major` der richtige Aufruf: er hebt die Zeile in
+`qslcards/__init__.py` an, läuft durch die Tests, ruft genau das obige Bauskript
+und setzt Commit und Tag (Einzelheiten in `README.md`). Der Versionssprung
+gehört auf **einen** Rechner — Windows und Fedora bauen danach denselben Stand
+mit `build_app.py`, nicht mit `release.py`, sonst entstünden drei Tags für eine
+Version.
+
 ## Python besorgen
 
 Die Bedingung ist **Tk ≥ 9**, nicht eine bestimmte Python-Version: die

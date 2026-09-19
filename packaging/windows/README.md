@@ -85,6 +85,10 @@ weiterbauen.
 
 Ergebnis: `dist\QSL-Karten-Generator-<version>-windows-x64.zip`.
 
+`<version>` kommt aus `qslcards/__init__.py`. **Angehoben wird sie hier nicht** —
+das macht `scripts/release.py` einmal auf dem Entwicklungsrechner (samt Commit
+und Tag, siehe `README.md`); hier wird nur derselbe Stand gebaut.
+
 ## Warum es kein 32-Bit-Bündel gibt
 
 Mit dem Nutzer so entschieden, nachdem sich im Bauversuch drei voneinander

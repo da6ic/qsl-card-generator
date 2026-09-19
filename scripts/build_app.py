@@ -38,12 +38,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from qslcards import __app_name__ as APP_NAME  # noqa: E402
 from qslcards import __version__  # noqa: E402
 
 SPEC = ROOT / "packaging" / "qslcards.spec"
 BUILD_DIR = ROOT / "build"
 DIST_DIR = ROOT / "dist"
-APP_NAME = "QSL-Karten-Generator"
 
 # Untergrenzen, mit Begründung im Modul-Docstring.
 MIN_PYTHON = (3, 11)  # wie `requires-python` in pyproject.toml
@@ -210,11 +210,11 @@ def write_version_resource() -> None:
                     OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
   kids=[
     StringFileInfo([StringTable('040704b0', [
-        StringStruct('FileDescription', 'QSL-Karten-Generator'),
+        StringStruct('FileDescription', '{APP_NAME}'),
         StringStruct('FileVersion', '{__version__}'),
         StringStruct('InternalName', 'qslcards'),
         StringStruct('OriginalFilename', '{APP_NAME}.exe'),
-        StringStruct('ProductName', 'QSL-Karten-Generator'),
+        StringStruct('ProductName', '{APP_NAME}'),
         StringStruct('ProductVersion', '{__version__}')])]),
     VarFileInfo([VarStruct('Translation', [1031, 1200])])
   ]
