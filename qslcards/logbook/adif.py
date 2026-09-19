@@ -89,7 +89,16 @@ def _tokenize(text: str) -> list[dict[str, str]]:
         else:
             value = raw_value.decode("utf-8", errors="replace")
             cursor += length
-        current[name] = value
+        # Abschließenden Leerraum abschneiden — die einzige bewusste Abweichung
+        # von „die Länge ist maßgeblich". Dieselben Logger, die Längen zu groß
+        # angeben, zählen auch den Zeilenumbruch mit: HAMRS schreibt für den Wert
+        # „+9" ein `<RST_SENT:3>+9\n`. Das sind formal korrekte drei Bytes, der
+        # Umbruch steht also **nicht** im Wiederherstellungszweig oben, sondern im
+        # Normalfall — und landete bisher in `qso.rst_sent` und in `raw`. Auf der
+        # Karte fiel das nicht auf (`builder._make_row` macht `.strip()`), im
+        # Datenmodell schon. Führender Leerraum bleibt unangetastet: er kann nur
+        # im Wert stehen, direkt hinter dem `>` beginnt dieser ja.
+        current[name] = value.rstrip()
 
     if current:  # fehlendes letztes <EOR>
         records.append(current)

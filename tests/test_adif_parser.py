@@ -171,19 +171,36 @@ def test_overlong_length_does_not_swallow_next_tag():
     # Wert am '<' abschneiden und das Folgefeld korrekt lesen.
     text = "<CALL:6>PA3BRB<MODE:3>FT8<RST_SENT:3>0\n<RST_RCVD:3>0\n<EOR>"
     q = parse_text(text)[0]
-    assert q.rst_sent.strip() == "0"  # kein '<' / Zeilenumbruch mehr im Wert
+    assert q.rst_sent == "0"  # kein '<' / Zeilenumbruch mehr im Wert
     assert "<" not in q.rst_sent
-    assert q.rst_rcvd.strip() == "0"  # Folgefeld nicht verschluckt
+    assert q.rst_rcvd == "0"  # Folgefeld nicht verschluckt
 
 
-def test_overlong_length_only_newline_is_trimmed_by_consumer():
-    # `<RST_SENT:3>+9` (Wert "+9", Länge 3) liest den Zeilenumbruch mit; hier ist
-    # kein '<' im Wert, das Folgefeld bleibt korrekt. Der Wert selbst trägt den
-    # Zeilenumbruch, den die Weiterverarbeitung (builder) per strip() entfernt.
+def test_overlong_length_that_counts_the_newline():
+    """`<RST_SENT:3>+9\n` — der Umbruch steckt in der **deklarierten** Länge.
+
+    Formal sind das korrekte drei Bytes, es gibt also kein `<` im Wert und der
+    Wiederherstellungszweig greift gar nicht. Genau so schreibt HAMRS es, und
+    genau deshalb schneidet der Tokenizer abschließenden Leerraum ab: sonst
+    stünde `"+9\n"` im Datenmodell und in `raw`.
+    """
     text = "<CALL:6>PA3BRB<RST_SENT:3>+9\n<RST_RCVD:3>-1\n<EOR>"
     q = parse_text(text)[0]
-    assert q.rst_sent.strip() == "+9"
-    assert q.rst_rcvd.strip() == "-1"
+    assert q.rst_sent == "+9"
+    assert q.rst_rcvd == "-1"
+
+
+def test_no_value_keeps_trailing_whitespace():
+    """Sammelnetz am echten Logbuch: kein einziger Rohwert trägt Leerraum am Ende."""
+    for qso in parse_file(SAMPLE_LOG):
+        for feld, wert in qso.raw.items():
+            assert wert == wert.rstrip(), f"{feld}: {wert!r}"
+
+
+def test_leading_whitespace_is_part_of_the_value():
+    """Nur **hinten** wird geschnitten — vorn beginnt der Wert direkt hinter `>`."""
+    text = "<CALL:6>PA3BRB<COMMENT:8>  Hallo \n<EOR>"
+    assert parse_text(text)[0].raw["comment"] == "  Hallo"
 
 
 def test_parse_real_sample_log():
