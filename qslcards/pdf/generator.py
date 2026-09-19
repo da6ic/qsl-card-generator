@@ -21,6 +21,7 @@ bis zu vier Karten. Die Aufteilung selbst steht in `layout_sheet.py`.
 from __future__ import annotations
 
 import csv
+import logging
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -37,6 +38,8 @@ from .layout_sheet import chunk_pages, draw_page, page_size
 if TYPE_CHECKING:
     from qslcards.cards.models import Card
     from qslcards.config import AppConfig
+
+logger = logging.getLogger(__name__)
 
 # progress_cb(done, total): wird nach jeder fertigen Karte aufgerufen.
 ProgressCb = Callable[[int, int], None]
@@ -71,7 +74,14 @@ def generate(
     if config.lookup.address_export:
         gen = config.generation
         active = active_via_priority(gen.via_priority, gen.via_cut)
-        _export_addresses(cards, output_path, active)
+        try:
+            _export_addresses(cards, output_path, active)
+        except OSError as exc:
+            # Die PDF ist zu diesem Zeitpunkt fertig geschrieben. Scheitert
+            # danach nur die CSV (Schreibrechte, Datei im Tabellenprogramm
+            # geöffnet), darf das nicht als „PDF-Erzeugung fehlgeschlagen"
+            # beim Anwender ankommen — loggen und weitermachen.
+            logger.warning("Adress-/Label-Export fehlgeschlagen: %s", exc)
 
     return outputs
 
@@ -166,11 +176,14 @@ def _generate_separate(
 def _export_addresses(
     cards: list[Card], output_path: str | Path, active_priority: list[str]
 ) -> Path:
-    """Schreibt eine simple CSV mit Empfängeradressen **aller** Stationen, die
-    per Lookup eine Adresse haben (dedupliziert pro Rufzeichen).
+    """Schreibt eine simple CSV mit den Empfängeradressen der **gedruckten**
+    Karten (dedupliziert pro Rufzeichen).
 
-    Genutzt werden die per Lookup gefüllten `card.recipient`-Daten; Stationen
-    ohne jegliche Adressdaten werden übersprungen. Datei liegt neben der PDF.
+    Bewusst nicht „alle nachgeschlagenen Stationen": `cards` ist dieselbe Liste,
+    aus der gerade die PDF entstanden ist — die CSV liefert also die Etiketten zu
+    genau diesem Stapel. Genutzt werden die per Lookup gefüllten
+    `card.recipient`-Daten; Stationen ohne jegliche Adressdaten werden
+    übersprungen. Die Datei liegt neben der PDF.
     """
     out = Path(output_path)
     export_path = out.with_name(f"{out.stem}_addresses.csv")
