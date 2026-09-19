@@ -162,6 +162,41 @@ STATION_Z3_YT = ADDR_Z3_YT  # CQ-Zone (WAZ)
 STATION_Z4_YT = ADDR_Z4_YT  # ITU
 
 # --------------------------------------------------------------------------- #
+# Höchstbreiten freier Texte
+#
+# Die Karte kennt keinen Zeilenumbruch: ein langer Name, eine ausführliche
+# Antennenbezeichnung oder ein Rufzeichen mit Präfix und Kennung lief bisher
+# ungebremst über seinen Nachbarn (schon „Confirming SWL-Report" überlappte das
+# „To Amateur Radio Station:"-Label). Jeder freie Text bekommt deshalb hier eine
+# Höchstbreite; `layout_back.fit_size` setzt ihn dann so weit kleiner, bis er
+# hineinpasst — **abgeschnitten wird nie** (vom Nutzer so entschieden: lieber
+# klein als unvollständig).
+#
+# Die Werte sind Abstände zum jeweils nächsten Block, nicht neue Positionen —
+# verschiebt man eine Spalte, wandert die Grenze automatisch mit. Was beim
+# Druckrand mitwächst (Call-/Via-Box, Tabellenspalten, Remarks-Kasten), kommt
+# dagegen aus dem `PageLayout` und steht deshalb nicht hier.
+# --------------------------------------------------------------------------- #
+
+TEXT_GAP = mm(2)  # Luft zwischen zwei benachbarten Textblöcken
+BOX_TEXT_PAD = mm(2)  # Innenabstand eines Kastens/einer Tabellenzelle
+# Technische Untergrenze der Schriftgröße, damit kein Wert auf 0 pt fällt (ein
+# sinnvolles Minimum gibt es bewusst nicht — es würde wieder zu Überlauf führen).
+MIN_FONT_SIZE = 0.5
+
+# Absenderadresse: bis zum Stationsblock („Locator:", „DOK:", …).
+SENDER_TEXT_W = STATION_LABEL_X - TEXT_GAP - SENDER_X
+# Stationswerte: bis zur Kante der Empfängerspalte.
+STATION_VALUE_W = TO_LABEL_X - TEXT_GAP - STATION_VALUE_X
+# Bestätigungs-Markierung: eigenes Band, mittig um CONFIRM_MARK_X; rechts
+# begrenzt vom „To Amateur…"-Label, also symmetrisch das Doppelte des Abstands.
+CONFIRM_MARK_W = 2 * (TO_LABEL_X - TEXT_GAP - CONFIRM_MARK_X)
+# Eigenes Rufzeichen: bis zur Bestätigungs-Markierung, wenn eine gedruckt wird —
+# sonst steht der Platz bis zum „To Amateur…"-Label zur Verfügung.
+SENDER_CALLSIGN_W = (CONFIRM_MARK_X - CONFIRM_MARK_W / 2) - TEXT_GAP - SENDER_X
+SENDER_CALLSIGN_W_PLAIN = TO_LABEL_X - TEXT_GAP - SENDER_X
+
+# --------------------------------------------------------------------------- #
 # Funk-Block (Empfänger/Antenne/Leistung): dynamisch, nur wenn gefüllt. Wird als
 # **kleine beschriftete Tabelle** gezeichnet (3 Spalten mit Kopfzeile oben:
 # RIG / ANT / PWR, Werte in der Zeile darunter). Die Tabelle sitzt linksbündig

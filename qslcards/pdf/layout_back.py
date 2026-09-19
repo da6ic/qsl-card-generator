@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from reportlab.pdfbase.pdfmetrics import getAscent, getDescent
+from reportlab.pdfbase.pdfmetrics import getAscent, getDescent, stringWidth
 
 from . import geometry as g
 
@@ -37,10 +37,34 @@ _HEAD_FREQ = "FREQ MHZ"
 _HEAD_2WAY = "2-WAY QSO IN"
 _HEAD_RST = "SIGNAL REPORT"
 
+# Text der Bestätigungs-Markierung je Code (Inhalt, kein Layout). Ein Eintrag
+# fehlt für "none" — dann wird nichts gezeichnet und das eigene Rufzeichen darf
+# den Platz bis zum „To Amateur…"-Label nutzen (siehe `_draw_sender`).
+_CONFIRM_TEXTS = {"qso": "Confirming QSO", "swl": "Confirming SWL-Report"}
+
 
 # --------------------------------------------------------------------------- #
 # Öffentliche Helfer (CARD_LAYOUT.md §4)
 # --------------------------------------------------------------------------- #
+
+
+def fit_size(s: str, font: str, size: float, max_w: float | None) -> float:
+    """Schriftgröße, bei der `s` in `max_w` passt — **nur verkleinern, nie kürzen**.
+
+    Die Karte hat keinen Zeilenumbruch; ohne diese Bremse lief ein langer Name,
+    eine ausführliche Antennenbezeichnung oder ein Rufzeichen mit Präfix einfach
+    über den Nachbarblock. Statt abzuschneiden wird der Text proportional kleiner
+    gesetzt (vom Nutzer so entschieden: lieber klein als unvollständig).
+
+    Passt der Text ohnehin — der Normalfall —, bleibt `size` unverändert; die
+    Ausgabe ist dann Zeichen für Zeichen dieselbe wie zuvor. `max_w=None`
+    schaltet die Begrenzung ab (Texte ohne Nachbarn, z. B. „PSE QSL")."""
+    if not s or max_w is None or max_w <= 0:
+        return size
+    width = stringWidth(s, font, size)
+    if width <= max_w:
+        return size
+    return max(size * max_w / width, g.MIN_FONT_SIZE)
 
 
 def text(
@@ -52,11 +76,15 @@ def text(
     font: str,
     size: float,
     align: str = "left",
+    max_w: float | None = None,
 ) -> None:
     """Zeichnet Text, `yt` = Abstand der Glyphen-Oberkante von oben.
 
     Intern: baseline = page.page_h - yt - ascent, sodass die Textoberkante bei
-    `yt` liegt (leichter mit der Vorlage von oben abzugleichen)."""
+    `yt` liegt (leichter mit der Vorlage von oben abzugleichen). `max_w` begrenzt
+    die Breite (siehe `fit_size`); die Oberkante bleibt dabei bei `yt`, weil die
+    Grundlinie aus der **verkleinerten** Schriftgröße berechnet wird."""
+    size = fit_size(s, font, size, max_w)
     baseline = page.page_h - yt - getAscent(font, size)
     c.setFont(font, size)
     if align == "center":
@@ -82,8 +110,13 @@ def _text_in_band(
     font: str,
     size: float,
     align: str = "center",
+    max_w: float | None = None,
 ) -> None:
-    """Text vertikal mittig in einem Band [yt_top .. yt_top+band_h] (von oben)."""
+    """Text vertikal mittig in einem Band [yt_top .. yt_top+band_h] (von oben).
+
+    `max_w` begrenzt die Breite (siehe `fit_size`) — nötig überall dort, wo der
+    Text in einem Kasten oder einer Tabellenzelle steht."""
+    size = fit_size(s, font, size, max_w)
     ascent = getAscent(font, size)
     descent = getDescent(font, size)  # negativ
     center_y = page.page_h - (yt_top + band_h / 2)
@@ -147,7 +180,7 @@ def draw_back(c: Canvas, card: Card, config: AppConfig) -> None:
         qsl_yt = g.QSL_MARK_YT_RADIO if radio else g.QSL_MARK_YT
         table_top = g.TABLE_YT_TOP_RADIO if radio else g.TABLE_YT_TOP
 
-        _draw_sender(c, page, config)
+        _draw_sender(c, page, config, card.confirm_mark in _CONFIRM_TEXTS)
         _draw_recipient(c, page, card)
         _draw_station(c, page, config)
         _draw_radio(c, page, radio)
@@ -183,33 +216,64 @@ def _draw_radio(c: Canvas, page: PageLayout, entries: list[tuple[str, str]]) -> 
     _hline(c, page, x0, g.RADIO_TABLE_X1, head_bottom)
     _hline(c, page, x0, g.RADIO_TABLE_X1, bottom)
 
+    cell_w = col_w - 2 * g.BOX_TEXT_PAD  # Werte bleiben in ihrer Spalte
     for i, (label, value) in enumerate(entries):
         cx = x0 + (i + 0.5) * col_w
-        _text_in_band(c, page, cx, top, g.RADIO_HEAD_H, label, g.FONT_BOLD, g.SIZE_RADIO_HEAD)
-        _text_in_band(c, page, cx, head_bottom, value_h, value, g.FONT_REGULAR, g.SIZE_RADIO)
+        _text_in_band(
+            c, page, cx, top, g.RADIO_HEAD_H, label, g.FONT_BOLD, g.SIZE_RADIO_HEAD, max_w=cell_w
+        )
+        _text_in_band(
+            c,
+            page,
+            cx,
+            head_bottom,
+            value_h,
+            value,
+            g.FONT_REGULAR,
+            g.SIZE_RADIO,
+            max_w=cell_w,
+        )
 
 
-def _draw_sender(c: Canvas, page: PageLayout, config: AppConfig) -> None:
+def _draw_sender(c: Canvas, page: PageLayout, config: AppConfig, confirm: bool) -> None:
     s = config.sender
     # Das Rufzeichen steht so auf der Karte, wie es in der Config steht — mit
     # allem, was dazugehört: Landespräfix (`F/DL0MT`), Portabel-Kennung
     # (`/P`), `/QRP`, `/MM`. Nur großgeschrieben wird es, auch bei einer von
     # Hand geänderten Config.
-    text(
-        c, page, g.SENDER_X, g.CALLSIGN_YT, s.callsign.strip().upper(), g.FONT_BOLD, g.SIZE_CALLSIGN
-    )
-    text(c, page, g.SENDER_X, g.ADDR_Z1_YT, s.name, g.FONT_REGULAR, g.SIZE_ADDRESS)
-    text(c, page, g.SENDER_X, g.ADDR_Z2_YT, s.street, g.FONT_REGULAR, g.SIZE_ADDRESS)
+    #
+    # Wie viel Platz es hat, hängt am Nachbarn: steht rechts daneben eine
+    # Bestätigungs-Markierung, endet das Rufzeichen vor deren Band, sonst erst
+    # vor dem „To Amateur…"-Label. Lange Rufzeichen werden entsprechend kleiner
+    # gesetzt statt in den Nachbarn zu laufen (siehe `fit_size`).
+    callsign_w = g.SENDER_CALLSIGN_W if confirm else g.SENDER_CALLSIGN_W_PLAIN
     text(
         c,
         page,
         g.SENDER_X,
-        g.ADDR_Z3_YT,
-        f"{s.zip} {s.city}".strip(),
-        g.FONT_REGULAR,
-        g.SIZE_ADDRESS,
+        g.CALLSIGN_YT,
+        s.callsign.strip().upper(),
+        g.FONT_BOLD,
+        g.SIZE_CALLSIGN,
+        max_w=callsign_w,
     )
-    text(c, page, g.SENDER_X, g.ADDR_Z4_YT, s.country, g.FONT_REGULAR, g.SIZE_ADDRESS)
+    # Die Adresszeilen enden vor dem Stationsblock („Locator:", „DOK:", …).
+    for yt, value in (
+        (g.ADDR_Z1_YT, s.name),
+        (g.ADDR_Z2_YT, s.street),
+        (g.ADDR_Z3_YT, f"{s.zip} {s.city}".strip()),
+        (g.ADDR_Z4_YT, s.country),
+    ):
+        text(
+            c,
+            page,
+            g.SENDER_X,
+            yt,
+            value,
+            g.FONT_REGULAR,
+            g.SIZE_ADDRESS,
+            max_w=g.SENDER_TEXT_W,
+        )
 
 
 def _draw_recipient(c: Canvas, page: PageLayout, card: Card) -> None:
@@ -235,6 +299,7 @@ def _draw_recipient(c: Canvas, page: PageLayout, card: Card) -> None:
         g.FONT_BOLD,
         g.SIZE_CALL_BOX,
         align="center",
+        max_w=page.call_box_w - 2 * g.BOX_TEXT_PAD,
     )
     # Via
     text(c, page, g.VIA_LABEL_X, g.VIA_LABEL_YT, "Via:", g.FONT_REGULAR, g.SIZE_LABEL)
@@ -249,31 +314,25 @@ def _draw_recipient(c: Canvas, page: PageLayout, card: Card) -> None:
         g.FONT_REGULAR,
         g.SIZE_VIA,
         align="center",
+        max_w=page.via_box_w - 2 * g.BOX_TEXT_PAD,
     )
     # Confirm-Markierung (global aus der Config über card.confirm_mark): nur die
     # ausgewählte Option steht hier, kein Kästchen. Position ist fest (zentriert),
-    # unabhängig davon, ob/welche Portabel-Markierung gewählt ist.
-    if card.confirm_mark == "qso":
+    # unabhängig davon, ob/welche Portabel-Markierung gewählt ist. Das Band endet
+    # vor dem „To Amateur…"-Label — ohne die Begrenzung überlappte „Confirming
+    # SWL-Report" es schon bei Standardeinstellungen.
+    confirm_text = _CONFIRM_TEXTS.get(card.confirm_mark, "")
+    if confirm_text:
         text(
             c,
             page,
             g.CONFIRM_MARK_X,
             g.CONFIRM_MARK_YT,
-            "Confirming QSO",
+            confirm_text,
             g.FONT_BOLD,
             g.SIZE_MARK,
             align="center",
-        )
-    elif card.confirm_mark == "swl":
-        text(
-            c,
-            page,
-            g.CONFIRM_MARK_X,
-            g.CONFIRM_MARK_YT,
-            "Confirming SWL-Report",
-            g.FONT_BOLD,
-            g.SIZE_MARK,
-            align="center",
+            max_w=g.CONFIRM_MARK_W,
         )
 
 
@@ -291,7 +350,16 @@ def _draw_station(c: Canvas, page: PageLayout, config: AppConfig) -> None:
     )
     for label, value, yt in rows:
         text(c, page, g.STATION_LABEL_X, yt, label, g.FONT_REGULAR, g.SIZE_STATION)
-        text(c, page, g.STATION_VALUE_X, yt, value, g.FONT_REGULAR, g.SIZE_STATION)
+        text(
+            c,
+            page,
+            g.STATION_VALUE_X,
+            yt,
+            value,
+            g.FONT_REGULAR,
+            g.SIZE_STATION,
+            max_w=g.STATION_VALUE_W,
+        )
 
 
 def _draw_confirm(c: Canvas, page: PageLayout, card: Card, yt: float) -> None:
@@ -347,6 +415,14 @@ def _col_center(edges: list[float], idx: int) -> float:
     return (edges[idx] + edges[idx + 1]) / 2
 
 
+def _col_text_w(edges: list[float], idx: int) -> float:
+    """Nutzbare Textbreite einer Tabellenspalte (Spaltenbreite minus Innenabstand).
+
+    Nötig für lange Betriebsarten-Namen (z. B. „OLIVIA 8/250") — sie liefen sonst
+    über die Spaltenlinie in die Nachbarspalte."""
+    return (edges[idx + 1] - edges[idx]) - 2 * g.BOX_TEXT_PAD
+
+
 def _draw_table_header(c: Canvas, page: PageLayout, edges: list[float], top: float) -> None:
     # Einzeilige Kopfzeile: je Spalte ein Label, vertikal mittig in der Kopfhöhe.
     # DATE-Spalte trägt die Unterlabels D/M/Y (kein DATE-Titel mehr).
@@ -355,12 +431,23 @@ def _draw_table_header(c: Canvas, page: PageLayout, edges: list[float], top: flo
     size = g.SIZE_TABLE_HEAD
 
     date_left = edges[0]
+    sub_w = page.sub_date_w - g.BOX_TEXT_PAD
     for k, lbl in enumerate(_HEAD_DATE_SUB):
-        _text_in_band(c, page, date_left + page.sub_date_w * (k + 0.5), top, h, lbl, font, size)
-    _text_in_band(c, page, _col_center(edges, 1), top, h, _HEAD_UTC, font, size)
-    _text_in_band(c, page, _col_center(edges, 2), top, h, _HEAD_FREQ, font, size)
-    _text_in_band(c, page, _col_center(edges, 3), top, h, _HEAD_2WAY, font, size)
-    _text_in_band(c, page, _col_center(edges, 4), top, h, _HEAD_RST, font, size)
+        _text_in_band(
+            c, page, date_left + page.sub_date_w * (k + 0.5), top, h, lbl, font, size, max_w=sub_w
+        )
+    for idx, label in ((1, _HEAD_UTC), (2, _HEAD_FREQ), (3, _HEAD_2WAY), (4, _HEAD_RST)):
+        _text_in_band(
+            c,
+            page,
+            _col_center(edges, idx),
+            top,
+            h,
+            label,
+            font,
+            size,
+            max_w=_col_text_w(edges, idx),
+        )
 
 
 def _draw_table_row(
@@ -371,15 +458,38 @@ def _draw_table_row(
     h = g.ROW_H
 
     date_left = edges[0]
+    sub_w = page.sub_date_w - g.BOX_TEXT_PAD
     for k, val in enumerate((row.date_d, row.date_m, row.date_y)):
-        _text_in_band(c, page, date_left + page.sub_date_w * (k + 0.5), row_top, h, val, font, size)
-    _text_in_band(c, page, _col_center(edges, 1), row_top, h, row.utc, font, size)
-    _text_in_band(c, page, _col_center(edges, 2), row_top, h, row.freq_mhz, font, size)
-    _text_in_band(c, page, _col_center(edges, 3), row_top, h, row.mode, font, size)
+        _text_in_band(
+            c,
+            page,
+            date_left + page.sub_date_w * (k + 0.5),
+            row_top,
+            h,
+            val,
+            font,
+            size,
+            max_w=sub_w,
+        )
     # Report als ein Wert: RST wie im Log (Phone/CW) bzw. dB (Digimodes wie FT8).
-    _text_in_band(
-        c, page, _col_center(edges, 4), row_top, h, (row.rst_sent or "").strip(), font, size
+    values = (
+        (1, row.utc),
+        (2, row.freq_mhz),
+        (3, row.mode),
+        (4, (row.rst_sent or "").strip()),
     )
+    for idx, val in values:
+        _text_in_band(
+            c,
+            page,
+            _col_center(edges, idx),
+            row_top,
+            h,
+            val,
+            font,
+            size,
+            max_w=_col_text_w(edges, idx),
+        )
 
 
 def _draw_footer(c: Canvas, page: PageLayout, card: Card, config: AppConfig) -> None:
@@ -411,6 +521,7 @@ def _draw_footer(c: Canvas, page: PageLayout, card: Card, config: AppConfig) -> 
             g.FONT_REGULAR,
             g.SIZE_REMARKS,
             align="left",
+            max_w=page.remarks_box_w - 2 * g.REMARKS_TEXT_PAD,
         )
     text(
         c,
@@ -420,4 +531,5 @@ def _draw_footer(c: Canvas, page: PageLayout, card: Card, config: AppConfig) -> 
         config.generation.static_footer,
         g.FONT_BOLD,
         g.SIZE_FOOTER,
+        max_w=page.table_width,
     )
