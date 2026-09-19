@@ -271,8 +271,13 @@ class PreviewTable:
         if col == "remarks":
             return card.remarks.casefold()
         if col == "date":
+            # Als Strings vergleichen, nicht über `int()`: die Teile sind
+            # zweistellig und nullgefüllt, sortieren also ohnehin chronologisch —
+            # und ein QSO **ohne** Datum (im Log fehlt QSO_DATE, `_split_date`
+            # liefert dann leere Felder) ließe `int("")` sonst mit ValueError
+            # mitten im Tk-Callback platzen.
             r = card.rows[0] if card.rows else None
-            return (int(r.date_y), int(r.date_m), int(r.date_d)) if r else (0, 0, 0)
+            return (r.date_y, r.date_m, r.date_d) if r else ("", "", "")
         if col == "utc":
             return card.rows[0].utc if card.rows else ""
         return ""

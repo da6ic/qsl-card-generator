@@ -42,9 +42,9 @@ STATION_FIELDS: list[tuple[str, str]] = [
     ("itu", "ITU"),
 ]
 
-# Funk-Ausrüstung: erscheinen dynamisch auf der Karte (nur der Wert, ohne Label),
-# sobald gefüllt. In Abschnitt 3 durch eine Trennlinie von den Stationsdaten
-# abgesetzt.
+# Funk-Ausrüstung: erscheint dynamisch auf der Karte, sobald mindestens eins der
+# Felder gefüllt ist (kleine Tabelle RIG/ANT/PWR unter dem Stationsblock). In
+# Abschnitt 3 durch eine Trennlinie von den Stationsdaten abgesetzt.
 RADIO_FIELDS: list[tuple[str, str]] = [
     ("receiver", "Empfänger"),
     ("antenna", "Antenne"),
@@ -235,7 +235,7 @@ def show_about_dialog(
     ttk.Label(
         body,
         text=(
-            "Erzeugt aus einem ADIF-Logbuch QSL-Karten als PDF\n"
+            "Erzeugt aus einem Logbuch (ADIF/Cabrillo) QSL-Karten als PDF\n"
             "(A6, Bild-Vorderseite + Rückseite im DARC-Layout).\n\n"
             "Versandart je Station über QRZ/HamQTH.\n"
             "Absenderdaten aus config.yaml."
@@ -744,7 +744,8 @@ class PrintModeSection:
     drucken nicht bis zur Blattkante. Die vier Werte (in mm, je Kante) sagen
     „so viel Rand muss frei bleiben"; die Karte wird dann proportional
     verkleinert, sodass sie hineinpasst (siehe pdf/geometry.page_layout). Im
-    Bogenmodus gilt der Rand für den ganzen Bogen (pdf/geometry.sheet_layout).
+    Bogenmodus gilt er **je Karte**, also in jeder der vier Zellen — nur so hat
+    jede geschnittene Karte ihn ringsum (siehe pdf/geometry.print_margins).
     """
 
     # Randfelder in Anzeigereihenfolge: (Attributname, Beschriftung, Zeile, Spalte)
