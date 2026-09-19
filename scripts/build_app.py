@@ -32,6 +32,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import sysconfig
 import tarfile
 from pathlib import Path
 
@@ -49,6 +50,19 @@ DIST_DIR = ROOT / "dist"
 MIN_PYTHON = (3, 11)  # wie `requires-python` in pyproject.toml
 MIN_PYINSTALLER = (6, 21)
 MIN_TK = 9.0  # die eigentliche Bedingung — siehe Modul-Docstring
+
+# Ältestes macOS, das die Anleitung (`packaging/macos/README.md`) zusagt. Ob das
+# Bündel dort wirklich läuft, hängt aber nicht von dieser Zahl ab, sondern vom
+# **bauenden Interpreter** — siehe `macos_deployment_target`.
+MACOS_SUPPORTED_FLOOR = (11, 0)
+
+# Apple Silicon gibt es erst ab macOS 11 — ein arm64-Bündel kann gar nicht älter
+# sein, was auch immer das Deployment-Target behauptet. Der universal2-Installer
+# von python.org meldet `10.15` (das gilt für die x86_64-Hälfte), die arm64-Hälfte
+# trägt trotzdem `minos 11.0`. Ohne diese Untergrenze stünde in der Info.plist
+# wieder eine Zahl, die die mitgelieferten Bibliotheken nicht halten — derselbe
+# Fehler wie beim festen „11.0", nur eine Etage tiefer.
+MACOS_ARCH_FLOOR = {"arm64": (11, 0)}
 
 
 # --------------------------------------------------------------- Vorbedingungen
@@ -172,6 +186,83 @@ def check_prerequisites() -> list[str]:
     return problems
 
 
+# --------------------------------------------------------- macOS-Mindestversion
+def macos_deployment_target() -> tuple[int, int] | None:
+    """Ältestes macOS, gegen das der bauende Interpreter gelinkt ist.
+
+    PyInstaller bündelt die Bibliotheken **dieses** Interpreters — CPythons
+    Erweiterungsmodule, Tcl/Tk, OpenSSL, zlib. Sie tragen alle dessen
+    Deployment-Target, und `dyld` lehnt eine dylib ab, die für ein neueres
+    System gebaut wurde als das laufende. Das Bündel startet dort also nicht.
+
+    Entscheidend ist die Herkunft des Interpreters: **Homebrew baut immer gegen
+    das gerade laufende System** — auf einem Mac mit macOS 26 entsteht damit ein
+    Bündel, das auf macOS 15 nicht startet. Der Installer von python.org ist
+    dagegen gegen ein altes Ziel gebaut (10.13 bzw. 11.0).
+
+    Außerhalb von macOS `None` (dort gibt es keine `.app`).
+    """
+    if sys.platform != "darwin":
+        return None
+    raw = str(sysconfig.get_config_var("MACOSX_DEPLOYMENT_TARGET") or "").strip()
+    if not raw:
+        return None
+    try:
+        parts = [int(p) for p in raw.split(".")[:2]]
+    except ValueError:
+        return None
+    if not parts:
+        return None
+    major = parts[0]
+    minor = parts[1] if len(parts) > 1 else 0
+    return (major, minor)
+
+
+def macos_minimum_system_version() -> str:
+    """Der Wert für `LSMinimumSystemVersion` in der `Info.plist`.
+
+    Er wird **nicht** fest eingetragen, sondern hier abgeleitet: eine zu niedrige
+    Angabe ist die schlimmere Sorte Fehler. Launch Services lässt das Programm
+    dann starten, der Bootloader von PyInstaller (der bei 11.0 liegt) läuft
+    tatsächlich an — und erst beim Nachladen der Bibliotheken bricht alles mit
+    einer dyld-Meldung ab, die dem Anwender nichts sagt. Steht die Wahrheit
+    drin, meldet macOS sauber „erfordert macOS X oder neuer".
+
+    Zwei Werte gehen ein: das Deployment-Target des Interpreters **und** die
+    Untergrenze der Architektur (`MACOS_ARCH_FLOOR`). Der universal2-Installer
+    von python.org meldet `10.15`, seine arm64-Hälfte trägt aber `minos 11.0` —
+    die höhere der beiden Zahlen ist die wahre.
+    """
+    target = macos_deployment_target() or MACOS_SUPPORTED_FLOOR
+    floor = MACOS_ARCH_FLOOR.get(platform.machine().lower())
+    if floor is not None and floor > target:
+        target = floor
+    return f"{target[0]}.{target[1]}"
+
+
+def check_warnings() -> list[str]:
+    """Hinweise, die den Build nicht verhindern, aber die **Auslieferung**
+    einschränken — anders als `check_prerequisites` ist das keine Hürde, sondern
+    eine Information: für wen das Ergebnis taugt, entscheidet der Bauende."""
+    notes: list[str] = []
+    target = macos_deployment_target()
+    if target is not None and target > MACOS_SUPPORTED_FLOOR:
+        version = f"{target[0]}.{target[1]}"
+        notes.append(
+            f"Dieser Interpreter ist gegen macOS {version} gebaut "
+            f"(MACOSX_DEPLOYMENT_TARGET). Das Bündel läuft damit **nur auf macOS "
+            f"{version} und neuer** — auf älteren Systemen lehnt dyld die "
+            f"mitgelieferten Bibliotheken (CPython, Tcl/Tk, OpenSSL) ab und das "
+            f"Programm startet gar nicht.\n"
+            f"    Die Info.plist trägt {version} korrekt ein, macOS meldet also "
+            f"sauber \u201eerfordert macOS {version}\u201c statt abzustürzen.\n"
+            f"    Für ältere Systeme mit dem Installer von python.org bauen "
+            f"(3.14.7+, Ziel 10.13/11.0) statt mit Homebrew — Homebrew baut "
+            f"immer gegen das laufende System."
+        )
+    return notes
+
+
 # ------------------------------------------------------------------ Benennung
 def platform_tag() -> str:
     """Kurzname für den Dateinamen: `windows-x64`, `linux-x86_64`, `macos-arm64`."""
@@ -225,6 +316,30 @@ def write_version_resource() -> None:
 
 
 # ------------------------------------------------------------------ Verpacken
+# Platzhalter in `packaging/macos/LIESMICH.txt`, den das Verpacken füllt.
+MACOS_MINIMUM_PLACEHOLDER = "@MINIMUM@"
+
+
+def write_macos_guide(folder: Path) -> Path | None:
+    """Legt die Kurzanleitung in den Auslieferordner — mit der **echten**
+    Systemvoraussetzung statt eines Platzhalters.
+
+    Sie hängt am bauenden Interpreter (siehe `macos_deployment_target`) und kann
+    deshalb nicht im Quelltext der Anleitung stehen. Ohne diesen Schritt läse der
+    Empfänger eine Datei, die von „macOS 14 und älter" spricht, während das
+    Programm dort gar nicht startet.
+    """
+    guide = ROOT / "packaging" / "macos" / "LIESMICH.txt"
+    if not guide.is_file():
+        return None
+    text = guide.read_text(encoding="utf-8").replace(
+        MACOS_MINIMUM_PLACEHOLDER, macos_minimum_system_version()
+    )
+    target = folder / guide.name
+    target.write_text(text, encoding="utf-8")
+    return target
+
+
 def package_macos(folder: Path) -> Path:
     """Auslieferordner als ZIP — zwingend mit `ditto`.
 
@@ -237,9 +352,7 @@ def package_macos(folder: Path) -> Path:
     Prinzip wie bei Windows und Linux: was ausgeliefert wird, ist genau das, was
     in `dist/` ausprobiert wurde.
     """
-    guide = ROOT / "packaging" / "macos" / "LIESMICH.txt"
-    if guide.is_file():
-        shutil.copy2(guide, folder / guide.name)
+    write_macos_guide(folder)
 
     target = DIST_DIR / f"{archive_stem()}.zip"
     target.unlink(missing_ok=True)
@@ -376,7 +489,13 @@ def main() -> int:
         shutil.rmtree(DIST_DIR, ignore_errors=True)
 
     print(f"{APP_NAME} {__version__} für {platform_tag()}")
-    print(f"Python {platform.python_version()}, Tk {_tk_version()}\n")
+    print(f"Python {platform.python_version()}, Tk {_tk_version()}")
+    if sys.platform == "darwin":
+        print(f"Mindestens macOS {macos_minimum_system_version()}")
+    print()
+
+    for note in check_warnings():
+        print(f"Achtung: {note}\n", file=sys.stderr)
 
     result = build(args.clean)
     print(f"\nFertig: {result}  ({folder_size_mb(result):.0f} MB)")

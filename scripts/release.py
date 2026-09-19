@@ -128,7 +128,24 @@ def write_version(version: Version) -> str:
 
 # ----------------------------------------------------------------------- Git
 def git(*args: str) -> str:
-    result = subprocess.run(["git", *args], cwd=ROOT, check=True, capture_output=True, text=True)
+    """Ein git-Aufruf. Schlägt er fehl, endet der Lauf mit **Klartext**.
+
+    Ohne das käme an den drei Stellen, an denen git überhaupt vorkommt, ein
+    roher `CalledProcessError`-Traceback: außerhalb eines Repositories (Release
+    aus einem entpackten Archiv), ohne installiertes git, bei fehlendem
+    `user.email` oder wenn ein Pre-Commit-Hook bremst. Dasselbe Prinzip wie in
+    `build_app.check_prerequisites` — lieber eine Zeile, die sagt, was zu tun
+    ist, als ein Stapelauszug.
+    """
+    try:
+        result = subprocess.run(
+            ["git", *args], cwd=ROOT, check=True, capture_output=True, text=True
+        )
+    except FileNotFoundError:
+        raise SystemExit("git ist nicht installiert (oder nicht im PATH).") from None
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or "").strip() or f"Rückgabewert {exc.returncode}"
+        raise SystemExit(f"git {' '.join(args)} ist fehlgeschlagen:\n  {detail}") from None
     return result.stdout.strip()
 
 

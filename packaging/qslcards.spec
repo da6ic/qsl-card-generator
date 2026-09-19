@@ -27,10 +27,17 @@ PROJECT_ROOT = Path(SPECPATH).resolve().parent  # noqa: F821
 BUNDLE_ID = "de.qslcards.generator"
 
 sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 # Name **und** Version kommen aus dem Paket — dieselbe Quelle, aus der auch
 # `scripts/build_app.py` liest. Stand der Name hier doppelt, fände das
 # Bauskript hinterher das Ergebnis von PyInstaller nicht wieder.
 from qslcards import __app_name__ as APP_NAME, __version__  # noqa: E402
+
+# Die macOS-Mindestversion kommt aus demselben Skript, das auch davor warnt —
+# aus genau dem Grund, aus dem der Name dort steht: zwei Quellen liefen
+# auseinander, und ausgerechnet hier wäre das Auseinanderlaufen unsichtbar
+# (eine zu niedrige Angabe merkt man erst auf einem fremden Mac).
+from build_app import macos_minimum_system_version  # noqa: E402
 
 IS_WINDOWS = sys.platform.startswith("win")
 IS_MACOS = sys.platform == "darwin"
@@ -150,7 +157,13 @@ if IS_MACOS:
             # Pixelgröße hoch — die ganze Oberfläche wäre unscharf.
             "NSHighResolutionCapable": True,
             "LSApplicationCategoryType": "public.app-category.utilities",
-            "LSMinimumSystemVersion": "11.0",
+            # **Nicht** fest eintragen: PyInstaller bündelt die Bibliotheken des
+            # bauenden Interpreters, und die tragen dessen Deployment-Target.
+            # Ein zu niedriger Wert ist die schlimmere Sorte Fehler — Launch
+            # Services lässt das Programm dann starten und es stirbt erst beim
+            # Nachladen mit einer dyld-Meldung. Siehe
+            # `build_app.macos_minimum_system_version`.
+            "LSMinimumSystemVersion": macos_minimum_system_version(),
             "NSHumanReadableCopyright": "QSL-Karten-Generator",
         },
     )

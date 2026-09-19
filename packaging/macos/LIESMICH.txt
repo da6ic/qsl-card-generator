@@ -1,6 +1,8 @@
 QSL-Karten-Generator — Installation unter macOS
 ================================================
 
+Systemvoraussetzung: macOS @MINIMUM@ oder neuer.
+
 1. QSL-Karten-Generator.app aus diesem Ordner dorthin ziehen, wo du sie haben
    willst: in den Ordner „Programme", auf den Schreibtisch oder auf einen
    USB-Stick. Diese Datei brauchst du danach nicht mehr.

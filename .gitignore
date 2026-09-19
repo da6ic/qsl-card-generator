@@ -33,6 +33,10 @@ __pycache__/
 .venv/
 .venv-build/
 
-# IDE / OS
+# IDE / OS / Werkzeuge
 .idea/
 .DS_Store
+# Vom `/ide`-Befehl der Entwicklungswerkzeuge angelegt — lokale Verbindungsdaten,
+# nichts Projekthaftes. Bleibt draußen, sonst bricht `scripts/release.py` mit
+# „Arbeitskopie ist nicht sauber" ab.
+.mcp.json

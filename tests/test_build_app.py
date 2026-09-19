@@ -190,3 +190,129 @@ def test_macos_archive_keeps_symlinks_and_carries_the_guide(tmp_path, monkeypatc
 
         link = f"{folder.name}/{build_app.APP_NAME}.app/Contents/Frameworks/Tk.framework"
         assert stat.S_ISLNK(bundle.getinfo(link).external_attr >> 16)
+
+
+# --- macOS-Mindestversion -------------------------------------------------
+#
+# Der zweite Fall derselben Sorte wie oben: etwas, das beim Selbsttest **nie**
+# auffällt. PyInstaller bündelt die Bibliotheken des bauenden Interpreters, und
+# die tragen dessen Deployment-Target. Homebrew baut immer gegen das laufende
+# System — auf einem Mac mit macOS 26 entsteht damit ein Bündel, das auf
+# macOS 15 nicht startet (dyld lehnt die dylibs ab). Die `Info.plist` behauptete
+# vorher fest „11.0": Launch Services ließ das Programm also los, und es starb
+# erst beim Nachladen. Auf dem Baurechner selbst sieht man davon nichts.
+
+
+@pytest.fixture
+def on_macos(monkeypatch):
+    monkeypatch.setattr(build_app.sys, "platform", "darwin")
+
+
+def _target(monkeypatch, value):
+    monkeypatch.setattr(build_app.sysconfig, "get_config_var", lambda name: value)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("26", (26, 0)),  # so meldet es Homebrew auf macOS 26
+        ("11.0", (11, 0)),
+        ("10.13", (10, 13)),  # der Installer von python.org
+        ("", None),
+        (None, None),
+        ("Unsinn", None),
+    ],
+)
+def test_deployment_target_is_read_from_the_interpreter(on_macos, monkeypatch, value, expected):
+    _target(monkeypatch, value)
+    assert build_app.macos_deployment_target() == expected
+
+
+def test_no_deployment_target_outside_macos(monkeypatch):
+    monkeypatch.setattr(build_app.sys, "platform", "linux")
+    assert build_app.macos_deployment_target() is None
+
+
+def test_plist_minimum_follows_the_interpreter(on_macos, monkeypatch):
+    """Die `Info.plist` sagt die Wahrheit statt einer Wunschzahl."""
+    _target(monkeypatch, "26")
+    assert build_app.macos_minimum_system_version() == "26.0"
+
+
+def test_plist_minimum_falls_back_to_the_documented_floor(on_macos, monkeypatch):
+    """Lässt sich das Ziel nicht ermitteln, gilt, was die Anleitung zusagt."""
+    _target(monkeypatch, None)
+    floor = build_app.MACOS_SUPPORTED_FLOOR
+    assert build_app.macos_minimum_system_version() == f"{floor[0]}.{floor[1]}"
+
+
+def test_a_too_new_deployment_target_is_reported(on_macos, monkeypatch):
+    _target(monkeypatch, "26")
+    notes = build_app.check_warnings()
+    assert len(notes) == 1
+    assert "26.0" in notes[0]
+    # Die Meldung muss den Ausweg nennen, sonst hilft sie niemandem.
+    assert "python.org" in notes[0]
+
+
+def test_an_old_deployment_target_is_silent(on_macos, monkeypatch):
+    _target(monkeypatch, "11.0")
+    assert build_app.check_warnings() == []
+
+
+def test_the_warning_does_not_block_the_build(on_macos, sane, monkeypatch):
+    """Für wen das Ergebnis taugt, entscheidet der Bauende — nicht das Skript."""
+    _target(monkeypatch, "26")
+    assert build_app.check_prerequisites() == []
+
+
+def test_macos_guide_carries_the_real_system_requirement(tmp_path, monkeypatch, on_macos):
+    """Die Kurzanleitung im Archiv muss die **echte** Voraussetzung nennen.
+
+    Sie hängt am bauenden Interpreter und kann deshalb nicht im Quelltext der
+    Anleitung stehen. Ohne das Einsetzen läse der Empfänger eine Datei, die
+    Gatekeeper-Schritte für „macOS 14 und älter" beschreibt, während das
+    Programm dort gar nicht erst startet.
+    """
+    _target(monkeypatch, "26")
+    folder = tmp_path / "Auslieferung"
+    folder.mkdir()
+
+    written = build_app.write_macos_guide(folder)
+
+    assert written is not None
+    text = written.read_text(encoding="utf-8")
+    assert build_app.MACOS_MINIMUM_PLACEHOLDER not in text
+    assert "macOS 26.0 oder neuer" in text
+
+
+def test_the_guide_template_still_carries_the_placeholder():
+    """Sonst schreibt das Verpacken still nichts hinein."""
+    guide = build_app.ROOT / "packaging" / "macos" / "LIESMICH.txt"
+    assert build_app.MACOS_MINIMUM_PLACEHOLDER in guide.read_text(encoding="utf-8")
+
+
+def test_arm64_never_claims_a_macos_older_than_big_sur(on_macos, monkeypatch):
+    """Apple Silicon gibt es erst ab macOS 11 — ein arm64-Bündel auch.
+
+    Der universal2-Installer von python.org meldet `10.15` (das gilt für die
+    x86_64-Hälfte), die arm64-Hälfte trägt aber `minos 11.0`. Ohne die
+    Untergrenze stünde in der Info.plist wieder eine Zahl, welche die
+    mitgelieferten Bibliotheken nicht halten.
+    """
+    _target(monkeypatch, "10.15")
+    monkeypatch.setattr(build_app.platform, "machine", lambda: "arm64")
+    assert build_app.macos_minimum_system_version() == "11.0"
+
+
+def test_the_floor_never_lowers_a_higher_target(on_macos, monkeypatch):
+    _target(monkeypatch, "26")
+    monkeypatch.setattr(build_app.platform, "machine", lambda: "arm64")
+    assert build_app.macos_minimum_system_version() == "26.0"
+
+
+def test_intel_keeps_the_interpreters_target(on_macos, monkeypatch):
+    """Für x86_64 gibt es keine solche Untergrenze — dort gilt 10.15 wirklich."""
+    _target(monkeypatch, "10.15")
+    monkeypatch.setattr(build_app.platform, "machine", lambda: "x86_64")
+    assert build_app.macos_minimum_system_version() == "10.15"
