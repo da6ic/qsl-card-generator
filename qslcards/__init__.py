@@ -7,7 +7,7 @@ from __future__ import annotations
 # und `scripts/build_app.py` benennt die Bündel danach. Angehoben wird sie nicht
 # von Hand, sondern mit `scripts/release.py patch|minor|major` (das schreibt
 # genau diese Zeile, baut und setzt Commit und Tag).
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 # Der Name, unter dem das Programm ausgeliefert wird: Programmdatei, `.app`,
 # Archivname und die Windows-Dateieigenschaften. `scripts/build_app.py` und
