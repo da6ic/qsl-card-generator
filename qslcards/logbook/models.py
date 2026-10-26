@@ -24,4 +24,7 @@ class QSO:
     # HamQTH-Lookup. Absenderdaten kommen dagegen immer aus der Config (§5.3).
     qth: str | None = None  # Ort der Gegenstation
     country: str | None = None  # Land der Gegenstation
+    # ADIF-DXCC-Nummer der Gegenstation (Feld `DXCC`), falls der Logger sie
+    # schreibt. Roh als String; gewinnt vor dem Lookup (Most-Wanted-Filter).
+    dxcc: str | None = None
     raw: dict[str, str] = field(default_factory=dict)  # alle Felder roh, kleingeschrieben

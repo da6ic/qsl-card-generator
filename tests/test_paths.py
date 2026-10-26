@@ -39,6 +39,8 @@ def test_source_mode_keeps_everything_in_the_project_folder():
     assert paths.program_dir() == PROJECT_ROOT
     assert paths.config_path() == PROJECT_ROOT / "config.yaml"
     assert paths.cache_path() == PROJECT_ROOT / "lookup_cache.json"
+    assert paths.mostwanted_path() == PROJECT_ROOT / "mostwanted.json"
+    assert paths.cty_path() == PROJECT_ROOT / "cty.dat"
     assert paths.resource_dir() == PROJECT_ROOT
 
 
@@ -55,6 +57,8 @@ def test_source_mode_ignores_the_working_directory(monkeypatch, tmp_path):
 def test_shipped_resources_exist_where_the_code_looks_for_them():
     assert paths.resource_path("qslcards", "assets", "fonts", "DejaVuSans.ttf").is_file()
     assert paths.resource_path("qslcards", "assets", "icons", "app_icon.ico").is_file()
+    assert paths.bundled_cty_path().is_file()
+    assert paths.dxcc_numbers_path().is_file()
     assert paths.resource_path("handbuch.md").is_file()
     assert paths.example_config_path().is_file()
 
@@ -89,8 +93,10 @@ def test_frozen_with_local_config_switches_to_portable(frozen):
 def test_config_and_cache_never_drift_apart(frozen):
     """Ein Cache neben einer fremden Config gehörte zu einem anderen Konto."""
     assert paths.cache_path().parent == paths.config_path().parent
+    assert paths.mostwanted_path().parent == paths.config_path().parent
     (frozen / "config.yaml").write_text("sender: {}\n", encoding="utf-8")
     assert paths.cache_path().parent == paths.config_path().parent
+    assert paths.mostwanted_path().parent == paths.config_path().parent
 
 
 def test_macos_app_bundle_looks_next_to_the_app(monkeypatch, tmp_path):

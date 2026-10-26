@@ -56,6 +56,23 @@ def test_load_example_all_fields():
     assert c.generation.qsl_mark == "none"
     assert c.generation.confirm_mark == "none"
 
+    # Most-Wanted-Filter: aus, Top 100, Rangliste nach dem Mode des QSOs.
+    assert c.mostwanted.enabled is False
+    assert c.mostwanted.top == 100
+    assert c.mostwanted.category == "auto"
+
+
+def test_mostwanted_roundtrip_and_old_config_without_it(tmp_path: Path):
+    path = tmp_path / "c.yaml"
+    # Eine config.yaml von vor dem Filter: gilt weiter, mit den Defaults.
+    path.write_text("sender:\n  callsign: DL0MT\n", encoding="utf-8")
+    assert cfg.load(path).mostwanted == cfg.MostWantedConfig()
+
+    config = cfg.AppConfig()
+    config.mostwanted = cfg.MostWantedConfig(enabled=True, top=25, category="cw")
+    cfg.save(config, path)
+    assert cfg.load(path).mostwanted == cfg.MostWantedConfig(enabled=True, top=25, category="cw")
+
 
 def test_save_load_roundtrip(tmp_path: Path):
     original = cfg.load(EXAMPLE)

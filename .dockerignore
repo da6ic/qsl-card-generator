@@ -24,4 +24,6 @@ dist/
 *.adi
 *.adif
 lookup_cache.json
+mostwanted.json
+/cty.dat
 config.yaml

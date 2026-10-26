@@ -41,6 +41,8 @@ APP_DIR_NAME_XDG = "qsl-karten-generator"
 CONFIG_NAME = "config.yaml"
 EXAMPLE_CONFIG_NAME = "config.example.yaml"
 CACHE_NAME = "lookup_cache.json"
+MOSTWANTED_NAME = "mostwanted.json"
+CTY_NAME = "cty.dat"
 HANDBOOK_NAME = "handbuch.md"
 LOG_NAME = "qslcards.log"
 
@@ -135,6 +137,28 @@ def config_path() -> Path:
 
 def cache_path() -> Path:
     return data_dir() / CACHE_NAME
+
+
+def mostwanted_path() -> Path:
+    """Gespeicherte GDXF-Rangliste (Most-Wanted-Filter) — neben dem Lookup-Cache."""
+    return data_dir() / MOSTWANTED_NAME
+
+
+def cty_path() -> Path:
+    """Zuletzt geladene `cty.dat` (Rufzeichen -> DXCC) — neben dem Lookup-Cache.
+
+    Fehlt sie, gilt die mitgelieferte Kopie (`bundled_cty_path`)."""
+    return data_dir() / CTY_NAME
+
+
+def bundled_cty_path() -> Path:
+    """Die mit dem Programm ausgelieferte `cty.dat` (nur lesbar)."""
+    return resource_path("qslcards", "assets", "dxcc", CTY_NAME)
+
+
+def dxcc_numbers_path() -> Path:
+    """Hauptpräfix der `cty.dat` -> ADIF-DXCC-Nummer (mitgeliefert, nur lesbar)."""
+    return resource_path("qslcards", "assets", "dxcc", "dxcc-numbers.csv")
 
 
 def log_path() -> Path:

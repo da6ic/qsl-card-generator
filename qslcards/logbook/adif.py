@@ -137,5 +137,6 @@ def _record_to_qso(record: dict[str, str]) -> QSO | None:
         gridsquare=record.get("gridsquare"),
         qth=record.get("qth"),
         country=record.get("country"),
+        dxcc=(record.get("dxcc") or "").strip() or None,
         raw=dict(record),
     )

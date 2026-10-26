@@ -21,6 +21,7 @@ from qslcards.lookup import (
     extract_manager_callsign,
     has_lookup_credentials,
     lookup_calls,
+    normalize_dxcc,
     normalize_via_priority,
     resolve_route,
 )
@@ -87,6 +88,10 @@ def hamqth_search_xml(call: str = "DL1ABC") -> str:
         "<adr_zip>12345</adr_zip>"
         "<adr_country>Germany</adr_country>"
         "<grid>JO31AB</grid>"
+        # DXCC des Rufzeichens (230 = DL) und — absichtlich anders — das der
+        # Postanschrift (291 = K): nur `adif` zählt für den Most-Wanted-Filter.
+        "<adif>230</adif>"
+        "<adr_adif>291</adr_adif>"
         "<qsl_via>OH2BH</qsl_via>"
         "<qsl>Y</qsl>"
         "<qsldirect>N</qsldirect>"
@@ -124,6 +129,9 @@ def qrz_callsign_xml(call: str = "AA7BQ") -> str:
         "<country>United States</country>"
         "<grid>DM43</grid>"
         "<qslmgr>W3HNK</qslmgr>"
+        # `dxcc` = Gebiet des Rufzeichens; `ccode` = das der Postanschrift.
+        "<dxcc>291</dxcc>"
+        "<ccode>271</ccode>"
         "</Callsign></QRZDatabase>"
     )
 
@@ -152,6 +160,7 @@ def test_hamqth_login_and_lookup():
     assert result.accepts_direct == "N"
     assert result.lotw == "Y"
     assert result.eqsl == "?"
+    assert result.dxcc == "230"  # `adif`, nicht `adr_adif`
     # 1. Call = Session, 2. Call = Lookup (mit prg-Parameter)
     assert http.calls[0][1] == {"u": "user", "p": "pass"}
     assert http.calls[1][1] == {"id": "SESSION123", "callsign": "DL1ABC", "prg": "qslcards"}
@@ -267,6 +276,7 @@ def test_qrz_login_and_lookup():
     assert result.country == "United States"
     assert result.grid == "DM43"
     assert result.manager == "W3HNK"
+    assert result.dxcc == "291"  # `dxcc`, nicht `ccode`
     # QRZ liefert keine Büro/Direkt/LoTW/eQSL-Flags
     assert result.accepts_bureau is None
     assert result.accepts_direct is None
@@ -471,6 +481,7 @@ def test_chain_skips_second_provider_when_nothing_is_missing():
         accepts_direct="Y",
         lotw="Y",
         eqsl="Y",
+        dxcc="230",
         source="qrz",
     )
     a = StubProvider({"DL1ABC": complete})
@@ -842,3 +853,57 @@ def test_has_lookup_credentials():
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+# -- DXCC (Most-Wanted-Filter) ----------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("230", "230"),
+        (" 291 ", "291"),
+        ("0230", "230"),
+        ("0", None),  # HamQTH: kein Gebiet
+        ("", None),
+        (None, None),
+        ("DL", None),
+        ("-1", None),
+    ],
+)
+def test_normalize_dxcc(value, expected):
+    assert normalize_dxcc(value) == expected
+
+
+def test_hamqth_dxcc_zero_counts_as_unknown():
+    xml = hamqth_search_xml().replace("<adif>230</adif>", "<adif>0</adif>")
+    http = FakeSession([FakeResponse(hamqth_session_xml()), FakeResponse(xml)])
+    result = HamQTHClient("user", "pass", http=http).lookup("DL1ABC")
+    assert result is not None and result.dxcc is None
+
+
+def test_chain_fills_dxcc_from_hamqth_when_qrz_has_none():
+    """QRZ ohne Abo liefert evtl. kein `dxcc` — dann füllt HamQTH die Lücke."""
+    qrz = StubProvider({"DL1ABC": LookupResult(call="DL1ABC", name="Hans", source="qrz")})
+    hamqth = StubProvider({"DL1ABC": LookupResult(call="DL1ABC", dxcc="230", source="hamqth")})
+    result = ChainedLookup([qrz, hamqth]).lookup("DL1ABC")
+    assert result is not None and result.dxcc == "230"
+
+
+def test_result_with_only_dxcc_is_not_empty():
+    """Sonst ginge das Gebiet beim Zusammenführen und Cachen verloren."""
+    assert not LookupResult(call="DL1ABC", dxcc="230").is_empty()
+
+
+def test_cache_keeps_dxcc_and_old_entries_load_without_it(tmp_path: Path):
+    path = tmp_path / "cache.json"
+    LookupCache(path).set("DL1ABC", LookupResult(call="DL1ABC", name="Hans", dxcc="230"))
+    assert LookupCache(path).get("DL1ABC").dxcc == "230"
+
+    # Ein Eintrag aus der Zeit vor dem Feld: lädt, nur eben ohne Gebiet (keine
+    # Migration — so mit dem Nutzer entschieden).
+    data = json.loads(path.read_text(encoding="utf-8"))
+    del data["DL1ABC"]["result"]["dxcc"]
+    path.write_text(json.dumps(data), encoding="utf-8")
+    old = LookupCache(path).get("DL1ABC")
+    assert old is not None and old.name == "Hans" and old.dxcc is None

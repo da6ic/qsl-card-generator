@@ -65,13 +65,13 @@ class GenerationConfig:
     #                 ohne beidseitigen Druck: erst Vorderseiten drucken, Papier
     #                 umgedreht neu einlegen, dann Rückseiten drucken.
     print_mode: str = "duplex"  # "duplex" | "separate"
-    # Bogendruck (quer zum Druckmodus, GUI-Abschnitt 9):
+    # Bogendruck (quer zum Druckmodus, GUI-Abschnitt 10):
     #   "single" -> eine Karte je PDF-Seite (A6 quer), wie bisher.
     #   "a4_4up" -> vier Karten je PDF-Seite (A4 quer, 2×2) mit gestrichelten
     #               Schnitt-Hilfslinien zwischen den Karten (nur auf den
     #               Rückseiten). Der Druckrand gilt weiterhin **je Karte**.
     sheet_mode: str = "single"  # "single" | "a4_4up"
-    # Druckrand („Erweiterte Einstellungen" in GUI-Abschnitt 9): viele Drucker
+    # Druckrand („Erweiterte Einstellungen" in GUI-Abschnitt 10): viele Drucker
     # drucken nicht bis zur Blattkante und beschneiden sonst den Inhalt. Ist
     # print_margin_enabled aktiv, wird die Karte proportional so verkleinert,
     # dass diese Ränder (in **mm**, je Kante) frei bleiben; der dabei auf einer
@@ -92,6 +92,23 @@ class GenerationConfig:
     # weniger, und Gastrufzeichen, `/QRP`, `/MM` oder `/4` brauchen keine
     # Sonderbehandlung mehr.
     confirm_mark: str = "none"  # "qso" | "swl" | "none" (global)
+
+
+@dataclass
+class MostWantedConfig:
+    """Most-Wanted-Filter (GUI-Abschnitt 7): nur Karten an gesuchte DXCC-Gebiete.
+
+    Die Rangliste ist die der GDXF (https://gdxf.de/mostwanted/, aus Sicht
+    Mitteleuropas). Ist der Filter an, wird eine Karte nur gedruckt, wenn ihr
+    DXCC-Gebiet unter den ersten `top` Rängen liegt — zusätzlich zur
+    Trennlinie der Zustellwege. Ein unbekanntes Gebiet wird dann nicht gedruckt.
+    """
+
+    enabled: bool = False
+    top: int = 100  # 1..340 (Zahl der aktuellen DXCC-Gebiete)
+    # "auto" = Rangliste nach dem Mode des QSOs (CW/Phone/Digital);
+    # sonst fest "mixed" | "cw" | "phone" | "digital".
+    category: str = "auto"
 
 
 @dataclass
@@ -122,6 +139,7 @@ class AppConfig:
     sender: SenderConfig = field(default_factory=SenderConfig)
     lookup: LookupConfig = field(default_factory=LookupConfig)
     generation: GenerationConfig = field(default_factory=GenerationConfig)
+    mostwanted: MostWantedConfig = field(default_factory=MostWantedConfig)
     appearance: AppearanceConfig = field(default_factory=AppearanceConfig)
     recent: RecentConfig = field(default_factory=RecentConfig)
 
@@ -194,6 +212,7 @@ def load(path: str | Path) -> AppConfig:
         sender=_from_dict(SenderConfig, data.get("sender")),
         lookup=_from_dict(LookupConfig, data.get("lookup")),
         generation=_from_dict(GenerationConfig, data.get("generation")),
+        mostwanted=_from_dict(MostWantedConfig, data.get("mostwanted")),
         appearance=_from_dict(AppearanceConfig, data.get("appearance")),
         recent=_recent_from_dict(data.get("recent")),
     )

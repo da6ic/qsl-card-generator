@@ -436,6 +436,8 @@ def _to_qso(
         gridsquare=gridsquare,
         qth=None,
         country=None,
+        # Cabrillo kennt kein DXCC-Feld: es kommt allein aus dem Lookup.
+        dxcc=None,
         raw=raw,
     )
 

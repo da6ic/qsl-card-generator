@@ -4,19 +4,26 @@
 Zustellwege, der QSL-Manager und die Adresse kommen aus dem Lookup (Map
 `CALL -> LookupResult`, optional); ohne Treffer gilt `default_via`. Welcher Weg
 tatsächlich gedruckt wird — und ob überhaupt — entscheidet die Prioritätsliste
-der GUI (`effective_via`), nicht dieses Modul.
+der GUI (`effective_via`) zusammen mit dem Most-Wanted-Filter (`is_printable`),
+nicht der Aufbau der Karten.
 """
 
 from __future__ import annotations
 
 from collections import OrderedDict
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from qslcards.config import AppConfig
 from qslcards.logbook import QSO
-from qslcards.lookup import accepted_routes, extract_manager_callsign, resolve_route
+from qslcards.lookup import (
+    accepted_routes,
+    extract_manager_callsign,
+    normalize_dxcc,
+    resolve_route,
+)
+from qslcards.mostwanted import MostWantedFilter
 from qslcards.pdf.geometry import MAX_ROWS_PLAIN, MAX_ROWS_WITH_REMARKS
 
 from .models import Card, CardRow
@@ -26,6 +33,8 @@ if TYPE_CHECKING:
 
 # Map CALL (Großbuchstaben) -> Lookup-Ergebnis; None-Werte sind erlaubt.
 Lookups = dict[str, "LookupResult | None"]
+# Rufzeichen -> ADIF-DXCC-Nummer ohne Netz (die cty.dat, `dxcc.CtyDatabase.dxcc`).
+DxccResolver = Callable[[str], "int | None"]
 
 # Optionale Tabelle Band -> repräsentative Frequenz (MHz), falls FREQ im Log fehlt.
 # Untere Bandkante als Näherung; nur zur Anzeige auf der Karte.
@@ -126,11 +135,66 @@ def effective_via(card: Card, active_priority: Sequence[str]) -> str | None:
     return via if via in active_priority else None
 
 
-def build_cards(qsos: list[QSO], config: AppConfig, lookups: Lookups | None = None) -> list[Card]:
+def mostwanted_rank(card: Card, mostwanted: MostWantedFilter) -> int | None:
+    """Most-Wanted-Rang der Karte (bester über ihre QSOs); None = keiner."""
+    return mostwanted.rank(card.dxcc, (row.mode for row in card.rows))
+
+
+def is_printable(
+    card: Card,
+    active_priority: Sequence[str],
+    mostwanted: MostWantedFilter | None = None,
+) -> bool:
+    """Wird die Karte gedruckt? Die Voreinstellung der Spalte „Drucken".
+
+    Beide Bedingungen müssen gelten: ein aktiver Zustellweg über der
+    Trennlinie (`effective_via`) **und** — wenn der Most-Wanted-Filter an ist
+    (`mostwanted` nicht None) — ein DXCC-Gebiet unter den ersten N. Ein
+    unbekanntes Gebiet besteht den Filter nicht. Einzige Quelle der Wahrheit
+    für die Vorschau; der Export druckt genau, was dort „Ja" ist.
+    """
+    if effective_via(card, active_priority) is None:
+        return False
+    if mostwanted is None:
+        return True
+    return mostwanted.accepts(card.dxcc, (row.mode for row in card.rows))
+
+
+def _card_dxcc(
+    qso: QSO, result: LookupResult | None, resolve_dxcc: DxccResolver | None
+) -> int | None:
+    """DXCC-Gebiet eines QSOs, in dieser Reihenfolge:
+
+    1. das Feld `DXCC` im Log — der Logger kannte das Gebiet zur QSO-Zeit und
+       kennt Sonderrufzeichen am besten;
+    2. die `cty.dat` (`resolve_dxcc`) — ohne Netz, auch für Cabrillo, mit
+       gepflegten Ausnahmen für DXpeditionen;
+    3. der Lookup (QRZ/HamQTH) — nur noch für Rufzeichen, die die cty.dat
+       nicht kennt.
+    """
+    value = normalize_dxcc(qso.dxcc)
+    if value:
+        return int(value)
+    if resolve_dxcc is not None:
+        number = resolve_dxcc(qso.call)
+        if number:
+            return number
+    value = normalize_dxcc(result.dxcc if result else None)
+    return int(value) if value else None
+
+
+def build_cards(
+    qsos: list[QSO],
+    config: AppConfig,
+    lookups: Lookups | None = None,
+    *,
+    resolve_dxcc: DxccResolver | None = None,
+) -> list[Card]:
     """Wandelt **alle** QSOs in Karten um (Umformung, Gruppierung, Sortierung).
 
     `lookups` liefert je Rufzeichen Via/Manager/Adresse; ohne Eintrag gilt
     `default_via` und ein leeres „Via:"-Feld. Es wird **nicht** nach Via gefiltert.
+    `resolve_dxcc` ordnet Rufzeichen ohne `DXCC`-Feld ihr Gebiet zu (cty.dat).
     """
     gen = config.generation
 
@@ -142,9 +206,9 @@ def build_cards(qsos: list[QSO], config: AppConfig, lookups: Lookups | None = No
     max_rows = MAX_ROWS_WITH_REMARKS if remarks else MAX_ROWS_PLAIN
 
     if gen.card_mode == "per_station":
-        cards = _group_per_station(qsos, lookups, gen.default_via, max_rows)
+        cards = _group_per_station(qsos, lookups, gen.default_via, max_rows, resolve_dxcc)
     else:  # "per_qso" (Default)
-        cards = _group_per_qso(qsos, lookups, gen.default_via)
+        cards = _group_per_qso(qsos, lookups, gen.default_via, resolve_dxcc)
 
     # Globale, manuelle Markierungen aus der Config je Karte übernehmen.
     for card in cards:
@@ -218,7 +282,12 @@ def normalize_station_cards(cards: list[Card]) -> list[Card]:
     return result
 
 
-def _group_per_qso(qsos: list[QSO], lookups: Lookups | None, default_via: str) -> list[Card]:
+def _group_per_qso(
+    qsos: list[QSO],
+    lookups: Lookups | None,
+    default_via: str,
+    resolve_dxcc: DxccResolver | None,
+) -> list[Card]:
     cards: list[Card] = []
     for qso in qsos:
         via_routes, via_text, recipient = _resolve_via(qso.call, lookups, default_via)
@@ -229,13 +298,18 @@ def _group_per_qso(qsos: list[QSO], lookups: Lookups | None, default_via: str) -
                 via_routes=via_routes,
                 rows=[_make_row(qso)],
                 recipient=recipient,
+                dxcc=_card_dxcc(qso, recipient, resolve_dxcc),
             )
         )
     return cards
 
 
 def _group_per_station(
-    qsos: list[QSO], lookups: Lookups | None, default_via: str, max_rows: int
+    qsos: list[QSO],
+    lookups: Lookups | None,
+    default_via: str,
+    max_rows: int,
+    resolve_dxcc: DxccResolver | None,
 ) -> list[Card]:
     # Gruppieren nach Rufzeichen (die akzeptierten Wege sind je Call konstant, da
     # sie aus dem Lookup kommen). OrderedDict wahrt die Ersteinfüge-Reihenfolge.
@@ -244,9 +318,18 @@ def _group_per_station(
         via_routes, via_text, recipient = _resolve_via(qso.call, lookups, default_via)
         entry = groups.setdefault(
             qso.call,
-            {"qsos": [], "via_routes": via_routes, "via_text": via_text, "recipient": recipient},
+            {
+                "qsos": [],
+                "via_routes": via_routes,
+                "via_text": via_text,
+                "recipient": recipient,
+                "dxcc": None,
+            },
         )
         entry["qsos"].append(qso)
+        # Erstes bekanntes Gebiet der Station gilt (das Rufzeichen ist dasselbe).
+        if entry["dxcc"] is None:
+            entry["dxcc"] = _card_dxcc(qso, recipient, resolve_dxcc)
 
     cards: list[Card] = []
     for call, entry in groups.items():
@@ -265,6 +348,7 @@ def _group_per_station(
                     via_routes=entry["via_routes"],
                     rows=rows[start : start + max_rows],
                     recipient=entry["recipient"],
+                    dxcc=entry["dxcc"],
                 )
             )
     return cards

@@ -10,6 +10,8 @@ from __future__ import annotations
 from qslcards.cards.builder import (
     build_cards,
     effective_via,
+    is_printable,
+    mostwanted_rank,
     normalize_station_cards,
     regroup_card_by_remarks,
 )
@@ -17,6 +19,7 @@ from qslcards.cards.models import Card, CardRow
 from qslcards.config import AppConfig, GenerationConfig
 from qslcards.logbook import QSO
 from qslcards.lookup.base import LookupResult
+from qslcards.mostwanted import MostWantedFilter, MostWantedList, RankedEntity
 from qslcards.pdf.geometry import MAX_ROWS, MAX_ROWS_PLAIN, MAX_ROWS_WITH_REMARKS
 
 
@@ -341,3 +344,98 @@ def test_cards_sorted_by_call_then_date():
     cards = build_cards(qsos, config(card_mode="per_qso"))
     keys = [(c.recipient_call, c.rows[0].date_d) for c in cards]
     assert keys == [("DL1AA", "19"), ("DL1AA", "20"), ("DL2BB", "19")]
+
+
+# --- DXCC + Most-Wanted-Filter -------------------------------------------
+
+# Kleine Rangliste: P5 (344) überall vorn, JA (339) in CW weit hinten,
+# DL (230) ganz am Ende.
+RANKING = MostWantedList(
+    year=2025,
+    rankings={
+        category: {
+            dxcc: RankedEntity(dxcc=dxcc, rank=rank, prefix="", name="")
+            for dxcc, rank in ranks.items()
+        }
+        for category, ranks in {
+            "mixed": {344: 1, 339: 60, 230: 340},
+            "cw": {344: 1, 339: 300, 230: 339},
+            "phone": {344: 1, 339: 20, 230: 339},
+            "digital": {344: 9, 339: 150, 230: 339},
+        }.items()
+    },
+)
+
+
+def test_dxcc_from_log_wins_over_lookup():
+    qsos = [make_qso("JA1AA", dxcc="339")]
+    lookups = {"JA1AA": res("JA1AA", dxcc="291")}
+    assert build_cards(qsos, config(), lookups)[0].dxcc == 339
+
+
+def test_dxcc_from_lookup_when_log_has_none():
+    qsos = [make_qso("JA1AA")]
+    assert build_cards(qsos, config(), {"JA1AA": res("JA1AA", dxcc="339")})[0].dxcc == 339
+    # weder Log noch Lookup -> unbekannt
+    assert build_cards(qsos, config())[0].dxcc is None
+
+
+def test_dxcc_order_is_log_then_cty_then_lookup():
+    """Log-Feld vor cty.dat vor Lookup — die cty.dat macht den Filter
+    unabhängig von Zugangsdaten und funktioniert auch für Cabrillo."""
+    cty = {"JA1AA": 339, "VK9DX": 189}.get
+    lookups = {"JA1AA": res("JA1AA", dxcc="291"), "ZZ9ZZ": res("ZZ9ZZ", dxcc="1")}
+    qsos = [make_qso("JA1AA"), make_qso("VK9DX", dxcc="150"), make_qso("ZZ9ZZ")]
+    cards = {c.recipient_call: c for c in build_cards(qsos, config(), lookups, resolve_dxcc=cty)}
+    assert cards["JA1AA"].dxcc == 339  # cty.dat schlägt den Lookup
+    assert cards["VK9DX"].dxcc == 150  # das Log schlägt die cty.dat
+    assert cards["ZZ9ZZ"].dxcc == 1  # cty.dat kennt es nicht -> Lookup
+
+
+def test_dxcc_per_station_takes_first_known():
+    qsos = [make_qso("JA1AA", time="1000"), make_qso("JA1AA", time="1100", dxcc="339")]
+    card = build_cards(qsos, config(card_mode="per_station"))[0]
+    assert card.dxcc == 339
+
+
+def test_auto_category_measures_each_mode_and_takes_the_best():
+    """„pro Station" mit CW (Rang 300) und SSB (Rang 20): die Karte zählt mit 20."""
+    qsos = [
+        make_qso("JA1AA", time="1000", mode="CW", dxcc="339"),
+        make_qso("JA1AA", time="1100", mode="SSB", dxcc="339"),
+    ]
+    card = build_cards(qsos, config(card_mode="per_station"))[0]
+    assert mostwanted_rank(card, MostWantedFilter(RANKING, top=50)) == 20
+    assert mostwanted_rank(card, MostWantedFilter(RANKING, category="cw")) == 300
+
+
+def test_fixed_category_counts_only_qsos_in_that_mode():
+    """Wie im DXCC-Filter des Kollegen: an der CW-Liste zählen nur CW-QSOs.
+    Mixed nimmt alle; „Automatisch" misst jedes QSO an seiner eigenen Liste."""
+    ssb = build_cards([make_qso("JA1AA", mode="SSB", dxcc="339")], config())[0]
+    assert mostwanted_rank(ssb, MostWantedFilter(RANKING, category="cw")) is None
+    assert mostwanted_rank(ssb, MostWantedFilter(RANKING, category="phone")) == 20
+    assert mostwanted_rank(ssb, MostWantedFilter(RANKING, category="mixed")) == 60
+
+
+def test_is_printable_needs_route_and_mostwanted():
+    rare = build_cards([make_qso("P5AA", mode="FT8", dxcc="344")], config())[0]
+    common = build_cards([make_qso("DL1AA", mode="FT8", dxcc="230")], config())[0]
+    active = ["B", "D"]
+    top50 = MostWantedFilter(RANKING, top=50)
+
+    # Filter aus -> nur die Zustellwege zählen.
+    assert is_printable(rare, active) and is_printable(common, active)
+    # Filter an -> nur die Top 50 (P5 ist Digital-Rang 9, DL Rang 339).
+    assert is_printable(rare, active, top50)
+    assert not is_printable(common, active, top50)
+    # Kein aktiver Weg schlägt jeden Rang.
+    assert not is_printable(rare, ["L"], top50)
+
+
+def test_unknown_dxcc_or_missing_list_is_not_printed():
+    """So mit dem Nutzer entschieden: ohne Gebiet bzw. ohne Liste kein Druck."""
+    unknown = build_cards([make_qso("XX1AA")], config())[0]
+    rare = build_cards([make_qso("P5AA", dxcc="344")], config())[0]
+    assert not is_printable(unknown, ["B"], MostWantedFilter(RANKING))
+    assert not is_printable(rare, ["B"], MostWantedFilter(None))

@@ -13,7 +13,7 @@ import tkinter as tk
 from collections.abc import Callable, Iterable
 from tkinter import ttk
 
-from qslcards import paths
+from qslcards import mostwanted, paths
 from qslcards.lookup import (
     PROVIDER_HAMQTH,
     PROVIDER_QRZ,
@@ -90,6 +90,12 @@ PROVIDER_FIELDS: dict[str, tuple[str, ...]] = {
 # wie ein Fehler. Bewusste Ausnahme von „keine Erklärtexte in den Abschnitten".
 LOOKUP_SESSION_HINT = "Gilt nur für diese Sitzung — wird nicht gespeichert."
 
+# Kategorien des Most-Wanted-Filters (Abschnitt 7): Anzeigename -> Config-Code,
+# in der Reihenfolge der Auswahlliste („Automatisch" zuerst).
+MOSTWANTED_LABEL_TO_CODE: dict[str, str] = {
+    mostwanted.CATEGORY_LABELS[code]: code for code in mostwanted.CATEGORY_CHOICES
+}
+
 QSL_MARK_CHOICES = ["Leer lassen", "PSE QSL", "TNX QSL"]
 CONFIRM_MARK_CHOICES = ["Leer lassen", "Confirming QSO", "Confirming SWL-Report"]
 
@@ -143,6 +149,18 @@ def _valid_mm(proposed: str, max_value: float) -> bool:
 def limit_entry_number(entry: ttk.Entry | ttk.Spinbox, max_value: float) -> None:
     """Lässt in einem Feld nur mm-Zahlen bis `max_value` zu (siehe _valid_mm)."""
     vcmd = (entry.register(lambda proposed: _valid_mm(proposed, max_value)), "%P")
+    entry.config(validate="key", validatecommand=vcmd)
+
+
+def limit_entry_integer(entry: ttk.Entry | ttk.Spinbox, max_value: int) -> None:
+    """Lässt in einem Feld nur Ganzzahlen bis `max_value` zu (leer ist erlaubt,
+    sonst ließe sich der Wert nicht überschreiben)."""
+    vcmd = (
+        entry.register(
+            lambda proposed: not proposed or (proposed.isdigit() and int(proposed) <= max_value)
+        ),
+        "%P",
+    )
     entry.config(validate="key", validatecommand=vcmd)
 
 
@@ -681,16 +699,100 @@ class LookupSection:
             entry.configure(style="TEntry")
 
 
-class RemarksSection:
-    """7. Bemerkungen (Remarks). Globaler Text für ALLE Karten.
+class MostWantedSection:
+    """7. Most Wanted: nur Karten an gesuchte DXCC-Gebiete drucken.
 
-    Erscheint dynamisch auf der Rückseite: nur wenn Text gesetzt ist, wird der
-    Remarks-Kasten gezeichnet (und die Karte bekommt dann weniger QSO-Zeilen).
-    In der Vorschau (Abschnitt 8) lässt sich der Text je Karte überschreiben.
+    Rangliste der GDXF (aus Sicht Mitteleuropas). Ist die Checkbox an, setzt
+    der Filter die Spalte „Drucken" zusätzlich zur Trennlinie der Zustellwege:
+    gedruckt wird nur, was unter den ersten N Rängen liegt. „Automatisch" misst
+    jedes QSO an der Liste seines Modes (CW/Phone/Digital).
+
+    Die Statusanzeige rechts ist **kein** Erklärtext, sondern zeigt den Stand
+    der Liste (Jahrgang, Abrufdatum, Fehler) — ohne sie wäre nicht zu sehen,
+    warum bei einem Netzfehler keine Karte mehr auf „Ja" steht.
     """
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="7. Bemerkungen")
+        self.frame = ttk.LabelFrame(parent, text="7. Most Wanted")
+        self.enabled = tk.BooleanVar(value=False)
+        self.top = tk.StringVar(value=str(mostwanted.DEFAULT_TOP))
+        self.category = tk.StringVar(value=mostwanted.CATEGORY_LABELS[mostwanted.DEFAULT_CATEGORY])
+        self.status_var = tk.StringVar(value="")
+
+        # Eine Zeile über die volle Fensterbreite (wie Abschnitt 8): Schalter,
+        # Top, Kategorie — die Statuszeile rechtsbündig am Ende, wie der Zähler
+        # der Bemerkungen.
+        group_gap = (PAD_INNER * 3, 0)
+        self.enabled_check = ttk.Checkbutton(
+            self.frame, text="Nur Most Wanted drucken", variable=self.enabled
+        )
+        self.enabled_check.grid(row=0, column=0, pady=GAP_ROW, sticky="w")
+
+        ttk.Label(self.frame, text="Top").grid(
+            row=0, column=1, padx=group_gap, pady=GAP_ROW, sticky="w"
+        )
+        self.top_spin = ttk.Spinbox(
+            self.frame,
+            textvariable=self.top,
+            from_=mostwanted.TOP_MIN,
+            to=mostwanted.TOP_MAX,
+            increment=1,
+            width=6,
+        )
+        self.top_spin.grid(row=0, column=2, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="w")
+        limit_entry_integer(self.top_spin, mostwanted.TOP_MAX)
+
+        ttk.Label(self.frame, text="Kategorie").grid(
+            row=0, column=3, padx=group_gap, pady=GAP_ROW, sticky="w"
+        )
+        self.category_combo = ttk.Combobox(
+            self.frame,
+            textvariable=self.category,
+            values=list(MOSTWANTED_LABEL_TO_CODE),
+            state="readonly",
+            width=22,
+        )
+        self.category_combo.grid(row=0, column=4, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="w")
+
+        self.status_label = ttk.Label(
+            self.frame, textvariable=self.status_var, style="Muted.TLabel"
+        )
+        self.status_label.grid(row=0, column=5, padx=group_gap, pady=GAP_ROW, sticky="e")
+        self.frame.columnconfigure(5, weight=1)
+
+    # -- Zustand (für app.py: gather/apply) -------------------------------
+    def category_code(self) -> str:
+        """Gewählte Kategorie als Config-Code (`auto`/`mixed`/`cw`/…)."""
+        return MOSTWANTED_LABEL_TO_CODE.get(self.category.get(), mostwanted.DEFAULT_CATEGORY)
+
+    def set_category(self, code: str) -> None:
+        self.category.set(mostwanted.CATEGORY_LABELS[mostwanted.normalize_category(code)])
+
+    def top_value(self) -> int:
+        """Top N als Zahl (1..340); ein leeres Feld beim Tippen zählt als Default."""
+        return mostwanted.clamp_top(self.top.get())
+
+    def normalize_top(self) -> None:
+        """Feld beim Verlassen auf den gültigen Wert setzen (leer -> Default)."""
+        value = str(self.top_value())
+        if self.top.get() != value:
+            self.top.set(value)
+
+    def set_status(self, text: str, *, error: bool = False) -> None:
+        self.status_var.set(text)
+        self.status_label.configure(style="Danger.TLabel" if error else "Muted.TLabel")
+
+
+class RemarksSection:
+    """8. Bemerkungen (Remarks). Globaler Text für ALLE Karten.
+
+    Erscheint dynamisch auf der Rückseite: nur wenn Text gesetzt ist, wird der
+    Remarks-Kasten gezeichnet (und die Karte bekommt dann weniger QSO-Zeilen).
+    In der Vorschau (Abschnitt 9) lässt sich der Text je Karte überschreiben.
+    """
+
+    def __init__(self, parent: tk.Misc) -> None:
+        self.frame = ttk.LabelFrame(parent, text="8. Bemerkungen")
         self.remarks = tk.StringVar()
 
         ttk.Label(self.frame, text="Text für alle Karten").grid(row=0, column=0, sticky="w")
@@ -729,7 +831,7 @@ class RemarksSection:
 
 
 class PrintModeSection:
-    """9. Druckmodus.
+    """10. Druckmodus.
 
     Wählt, wie die PDF(s) erzeugt werden: „duplex" (eine PDF, Vorder-/Rückseite
     abwechselnd, für Duplexdrucker) oder „separate" (zwei PDFs – erst alle
@@ -757,7 +859,7 @@ class PrintModeSection:
     )
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="9. Druckmodus")
+        self.frame = ttk.LabelFrame(parent, text="10. Druckmodus")
         self.print_mode = tk.StringVar(value="duplex")
 
         # Zwei nebeneinanderliegende Container: links die Druckmodi, rechts der
@@ -871,7 +973,7 @@ DEFAULT_OUTPUT_NAME = "qsl_karten.pdf"
 
 
 class OutputSection:
-    """10. Ausgabe. Der Status steht in der Fußzeile (`StatusBar`).
+    """11. Ausgabe. Der Status steht in der Fußzeile (`StatusBar`).
 
     Der **Adress-/Label-Export** steht hier (über der Zielwahl) und nicht mehr
     bei den Lookups: die CSV entsteht erst beim Erzeugen und landet neben der
@@ -881,7 +983,7 @@ class OutputSection:
     """
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="10. Ausgabe")
+        self.frame = ttk.LabelFrame(parent, text="11. Ausgabe")
         # Absoluter Pfad, kein bloßer Dateiname: ein relativer landete beim
         # gebündelten Programm im Arbeitsverzeichnis des Systems.
         self.output_var = tk.StringVar(value=str(paths.default_output_dir() / DEFAULT_OUTPUT_NAME))
@@ -910,7 +1012,7 @@ class OutputSection:
 class StatusBar:
     """Fußzeile des Fensters: Statuspunkt + Meldung links, Kurzinfo rechts.
 
-    Ersetzt die frühere Statuszeile in Abschnitt 10 — der Status ist damit immer
+    Ersetzt die frühere Statuszeile in Abschnitt 11 — der Status ist damit immer
     sichtbar, auch wenn die Seite gescrollt ist.
     """
 

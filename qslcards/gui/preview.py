@@ -1,9 +1,11 @@
-"""7. Vorschau-Tabelle aller Karten/QSOs (docs/SPECIFICATION.md §2, §7).
+"""9. Vorschau-Tabelle aller Karten/QSOs (docs/SPECIFICATION.md §2, §7).
 
 Zeigt **alle** QSOs (nicht nur die gefilterten). Die Spalte „Via" zeigt die per
-Lookup bestimmte Versandart; während der Lookup läuft, steht dort „…". Über die
-Spalte „Drucken" werden einzelne Karten ab-/angewählt. Oben rechts ein Button
-„Neu abrufen" plus eine Lookup-Statuszeile.
+Lookup bestimmte Versandart; während der Lookup läuft, steht dort „…". Die
+Spalte „MW" zeigt den Most-Wanted-Rang des DXCC-Gebiets (Abschnitt 7). Über die
+Spalte „Drucken" werden einzelne Karten ab-/angewählt; ihre Voreinstellung
+kommt als Regel von `app.py` (`cards.builder.is_printable`). Oben rechts ein
+Button „Neu abrufen" plus eine Lookup-Statuszeile.
 """
 
 from __future__ import annotations
@@ -16,11 +18,7 @@ from tkinter import ttk
 from typing import TYPE_CHECKING
 
 from qslcards import paths
-from qslcards.cards.builder import (
-    effective_via,
-    max_rows_for_remarks,
-    normalize_station_cards,
-)
+from qslcards.cards.builder import max_rows_for_remarks, normalize_station_cards
 from qslcards.lookup import VIA_CODES, VIA_LABELS, resolve_route
 
 from .scrolling import bind_wheel, wheel_step
@@ -30,10 +28,11 @@ from .theme import GAP_COL, Palette, palette_for
 if TYPE_CHECKING:
     from qslcards.cards.models import Card
 
-_COLUMNS = ("print", "call", "qsos", "via", "route", "remarks", "date", "utc")
+_COLUMNS = ("print", "call", "mw", "qsos", "via", "route", "remarks", "date", "utc")
 _HEADINGS = {
     "print": "Drucken",
     "call": "Call",
+    "mw": "MW",
     "qsos": "#QSOs",
     "via": "Via",
     "route": "Route/Manager",
@@ -42,6 +41,10 @@ _HEADINGS = {
     "utc": "UTC",
 }
 _PENDING = "…"  # Platzhalter, solange der Lookup für die Zeile noch läuft
+# Spalte „MW": DXCC-Gebiet unbekannt (kein Log-Feld, kein Lookup-Treffer) bzw.
+# Gebiet bekannt, aber ohne Rang (z. B. gelöscht oder nicht in der Liste).
+_MW_UNKNOWN = "?"
+_MW_UNRANKED = "–"
 _EDITABLE = ("via", "route", "remarks")  # per Doppelklick editierbare Spalten
 # Spalten mit Editier-Hinweis im Kopf (Stift): die editierbaren + „Drucken"
 # (Drucken ist per Klick umschaltbar, gilt also auch als bearbeitbar).
@@ -94,7 +97,7 @@ class PreviewTable:
     """Treeview der Karten; Zeilen per Klick auf die Spalte 'Drucken' abwählbar."""
 
     def __init__(self, parent: tk.Misc, palette: Palette | None = None) -> None:
-        self.frame = ttk.LabelFrame(parent, text="8. Vorschau")
+        self.frame = ttk.LabelFrame(parent, text="9. Vorschau")
         # Farben für Zeilen-Tags und Icons (ohne Angabe: aktuelles Systemthema).
         self._palette = palette or palette_for("system")
 
@@ -118,6 +121,7 @@ class PreviewTable:
         for col in _COLUMNS:
             self.tree.column(col, width=70, anchor="center")
         self.tree.column("call", width=90)
+        self.tree.column("mw", width=50)
         self.tree.column("route", width=110)
         self.tree.column("remarks", width=140, anchor="w")
         self.tree.column("date", width=90)
@@ -160,8 +164,11 @@ class PreviewTable:
         self._rows: dict[str, tuple[Card, bool]] = {}
         # Aktive Wege (über der Trennlinie) in Prioritätsreihenfolge; bestimmt den
         # angezeigten „Via"-Weg und die Drucken-Markierung. Von set_cards/
-        # apply_via_filter gesetzt (aus der Prioritätsliste in Abschnitt 4).
+        # apply_print_filter gesetzt (aus der Prioritätsliste in Abschnitt 4).
         self._active_priority: list[str] = []
+        # Most-Wanted-Rang je Karte (für die Spalte „MW"); None = keine Liste
+        # geladen -> die Spalte bleibt leer. Von set_cards/apply_print_filter.
+        self._rank: Callable[[Card], int | None] | None = None
         self._pending = False  # während des Lookups keine Bearbeitung
         # Ob Karten derselben Station zusammengehören (Modus „pro Station"): dann
         # führt eine Remarks-Änderung die Station neu zusammen/teilt sie neu auf.
@@ -262,6 +269,10 @@ class PreviewTable:
             return inc
         if col == "call":
             return card.recipient_call.casefold()
+        if col == "mw":
+            # Gerankte Karten zuerst (Rang aufsteigend), Unbekanntes ans Ende.
+            rank = self._rank(card) if self._rank is not None else None
+            return (rank is None, rank or 0)
         if col == "qsos":
             return len(card.rows)
         if col == "via":
@@ -382,17 +393,20 @@ class PreviewTable:
         pending: bool = False,
         groupable: bool = False,
         active_priority: list[str] | None = None,
+        rank: Callable[[Card], int | None] | None = None,
     ) -> None:
         """Füllt die Tabelle neu.
 
         `included(card)` bestimmt die Drucken-Voreinstellung je Karte (None → alle
-        drucken). `pending=True` zeigt „…" für Via/Route (Lookup läuft noch).
+        drucken). `pending=True` zeigt „…" für Via/Route/MW (Lookup läuft noch).
         `groupable=True` (Modus „pro Station") lässt eine Remarks-Änderung die
         ganze Station neu gruppieren (zusammenführen bzw. aufteilen).
-        `active_priority` sind die aktiven Wege (für die „Via"-Anzeige).
+        `active_priority` sind die aktiven Wege (für die „Via"-Anzeige),
+        `rank(card)` der Most-Wanted-Rang (für „MW"; None = keine Liste).
         """
         self._pending = pending
         self._groupable = groupable
+        self._rank = rank
         if active_priority is not None:
             self._active_priority = active_priority
         self.tree.delete(*self.tree.get_children())
@@ -420,6 +434,7 @@ class PreviewTable:
         return (
             "Ja" if inc else "Nein",
             card.recipient_call,
+            _PENDING if self._pending else self._mw_display(card),
             len(card.rows),
             via,
             route,
@@ -449,17 +464,41 @@ class PreviewTable:
             return ""
         return VIA_LABELS.get(code, code)
 
-    def apply_via_filter(self, active_priority: list[str]) -> None:
-        """Setzt Anzeige + Drucken-Markierung je Zeile neu anhand der aktiven
-        Prioritätsliste (Weg über der Trennlinie)."""
+    def _mw_display(self, card: Card) -> str:
+        """Anzeigetext der Spalte „MW": Rang, „?" (Gebiet unbekannt), „–"
+        (Gebiet ohne Rang) — oder leer, solange keine Liste geladen ist."""
+        if self._rank is None:
+            return ""
+        if card.dxcc is None:
+            return _MW_UNKNOWN
+        rank = self._rank(card)
+        return _MW_UNRANKED if rank is None else str(rank)
+
+    def apply_print_filter(
+        self,
+        active_priority: list[str],
+        included: Callable[[Card], bool],
+        rank: Callable[[Card], int | None] | None = None,
+    ) -> None:
+        """Setzt Anzeige + Drucken-Markierung je Zeile neu (ohne Rebuild).
+
+        Ausgelöst von einer geänderten Prioritätsliste (Abschnitt 4) oder einer
+        Einstellung des Most-Wanted-Filters (Abschnitt 7). `included(card)` ist
+        die Druckregel, `rank(card)` der Rang für die Spalte „MW". Manuelle
+        Umschaltungen in „Drucken" gehen dabei verloren — wie bisher bei der
+        Trennlinie."""
         self._active_priority = active_priority
+        self._rank = rank
         for iid, (card, _inc) in self._rows.items():
-            inc = effective_via(card, active_priority) is not None
+            inc = bool(included(card))
             self._rows[iid] = (card, inc)
             values = list(self.tree.item(iid, "values"))
             values[0] = "Ja" if inc else "Nein"
-            values[_COLUMNS.index("via")] = self._via_display(card)
+            if not self._pending:
+                values[_COLUMNS.index("via")] = self._via_display(card)
+                values[_COLUMNS.index("mw")] = self._mw_display(card)
             self.tree.item(iid, values=values)
+        self._reapply_sort()
         self._restripe()
 
     def set_row_included(self, iid: str, included: bool) -> None:

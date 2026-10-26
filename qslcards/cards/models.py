@@ -41,3 +41,6 @@ class Card:
     via_override: str | None = None
     # Empfängeradresse nur bei Bedarf gefüllt (Export), NICHT auf der Karte:
     recipient: LookupResult | None = None
+    # ADIF-DXCC-Nummer der Gegenstation (Log vor Lookup) für den Most-Wanted-
+    # Filter; None = unbekannt. Steht NICHT auf der Karte.
+    dxcc: int | None = None

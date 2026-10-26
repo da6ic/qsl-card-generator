@@ -9,6 +9,7 @@
     nach und liefert eine Map `CALL -> LookupResult | None`.
   - `accepted_routes(result, default_via)` — Menge der Zustellwege einer Station.
   - `resolve_route(accepted, active_priority)` — höchstpriorisierter aktiver Weg.
+  - `normalize_dxcc(value)` — DXCC-Nummer säubern (`None` für leer/0/unlesbar).
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from qslcards.lookup.base import (
     LookupCredentials,
     LookupProvider,
     LookupResult,
+    normalize_dxcc,
 )
 from qslcards.lookup.cache import LookupCache
 from qslcards.lookup.hamqth import HamQTHClient
@@ -45,6 +47,7 @@ __all__ = [
     "accepted_routes",
     "resolve_route",
     "extract_manager_callsign",
+    "normalize_dxcc",
     "normalize_via_priority",
     "active_via_priority",
     "VIA_CODES",

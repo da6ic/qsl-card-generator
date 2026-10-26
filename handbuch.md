@@ -25,7 +25,7 @@ noch fehlt, und markiert die betroffenen Felder rot.
 
 ## Der Weg zur fertigen PDF {#ueberblick}
 
-Die Oberfläche ist von oben nach unten in zehn Abschnitte geteilt — in dieser
+Die Oberfläche ist von oben nach unten in elf Abschnitte geteilt — in dieser
 Reihenfolge arbeitest du sie ab:
 
 1. [Logbuch laden](#abschnitt-1) — ADIF- oder Cabrillo-Datei wählen und einlesen.
@@ -34,12 +34,14 @@ Reihenfolge arbeitest du sie ab:
 4. [Zustellwege ordnen](#abschnitt-4) — welche QSLs überhaupt gedruckt werden.
 5. [Kartenmodus wählen](#abschnitt-5) — eine Karte pro QSO oder pro Station.
 6. [Lookups einrichten](#abschnitt-6) — Zugangsdaten für QRZ/HamQTH (optional).
-7. [Bemerkung eintragen](#abschnitt-7) — ein kurzer Text auf der Karte
+7. [Most Wanted wählen](#abschnitt-7) — nur Karten an gesuchte DXCC-Gebiete
    (optional).
-8. [Vorschau prüfen](#abschnitt-8) — Liste aller Karten, hier korrigierst du
+8. [Bemerkung eintragen](#abschnitt-8) — ein kurzer Text auf der Karte
+   (optional).
+9. [Vorschau prüfen](#abschnitt-9) — Liste aller Karten, hier korrigierst du
    Einzelfälle.
-9. [Druckmodus einstellen](#abschnitt-9) — Duplex, Bogen, Seitenrand.
-10. [PDF erzeugen](#abschnitt-10) — Ziel wählen und drucken lassen.
+10. [Druckmodus einstellen](#abschnitt-10) — Duplex, Bogen, Seitenrand.
+11. [PDF erzeugen](#abschnitt-11) — Ziel wählen und drucken lassen.
 
 Die unterstrichenen Verweise kannst du anklicken — auch überall sonst im
 Handbuch, wo auf ein anderes Kapitel hingewiesen wird. Über die Kapitelliste am
@@ -98,7 +100,7 @@ braucht. Daran ändert sich für dich Folgendes:
 - **Gestrichene QSOs kommen mit.** Der Contest wertet sie nicht,
   aber die Verbindung hat ja stattgefunden — die Gegenstation bekommt ihre
   Karte. Willst du das nicht, setze die Zeile in der Vorschau
-  ([Kapitel 8](#abschnitt-8)) auf **Drucken: Nein**.
+  ([Kapitel 9](#abschnitt-9)) auf **Drucken: Nein**.
 - **Oberhalb von 902 MHz steht im Contest-Log nur das Band**, keine genaue
   Frequenz. Auf der Karte steht dann die Bandmitte, zum Beispiel `1240` für das
   23-cm-Band.
@@ -107,7 +109,7 @@ braucht. Daran ändert sich für dich Folgendes:
   pro Station" ([Kapitel 5](#abschnitt-5)) ist hier meist die bessere Wahl.
 
 Ein erneutes **Log laden** baut die Kartenliste komplett neu auf. Deine
-Korrekturen in der Vorschau ([Kapitel 8](#abschnitt-8)) gehen dabei verloren,
+Korrekturen in der Vorschau ([Kapitel 9](#abschnitt-9)) gehen dabei verloren,
 und die Stationsabfrage startet von vorn.
 
 ## 2. Frontbild {#abschnitt-2}
@@ -127,7 +129,7 @@ Wichtig für ein gutes Ergebnis:
 - Die Karte ist **quer** (148 × 105 mm). Ein Querformat-Bild passt am besten.
 - Für sauberen Druck mit 300 dpi sollte das Bild etwa **1750 × 1240 Pixel** oder
   größer sein.
-- Ist in [Abschnitt 9](#abschnitt-9) ein Seitenrand eingestellt, rückt auch das
+- Ist in [Abschnitt 10](#abschnitt-10) ein Seitenrand eingestellt, rückt auch das
   Frontbild um denselben Rand ein, damit Vorder- und Rückseite deckungsgleich
   sitzen.
 
@@ -214,7 +216,7 @@ auf Büro. Dann werden schlicht alle Karten gedruckt.
   mehrfach gearbeitet hast.
 
 Auf eine Karte passen **6 QSO-Zeilen**. Steht auf der Karte eine Bemerkung
-([Kapitel 7](#abschnitt-7)), braucht deren Kasten Platz und es passen nur noch
+([Kapitel 8](#abschnitt-8)), braucht deren Kasten Platz und es passen nur noch
 **3 Zeilen**. Hat eine Station mehr QSOs, entstehen automatisch Folgekarten.
 
 ## 6. Lookups {#abschnitt-6}
@@ -264,7 +266,7 @@ nichts. **Neu abrufen** (oder der Cache-Griff darüber) fragt frisch nach und
 holt die Wege dann nach.
 
 Die gefundenen Anschriften kannst du dir als Datei ausgeben lassen — die Checkbox
-dafür steht bei der Ausgabe ([Kapitel 10](#abschnitt-10)), weil die Datei dort
+dafür steht bei der Ausgabe ([Kapitel 11](#abschnitt-11)), weil die Datei dort
 entsteht. Auf der Karte selbst steht die Anschrift des Empfängers grundsätzlich
 nicht, dort erscheint nur sein Rufzeichen.
 
@@ -275,7 +277,65 @@ Felder deshalb wieder leer und du trägst sie erneut ein. Das ist Absicht: ein
 Passwort im Klartext auf der Platte wäre für jeden lesbar, der an deinen Rechner
 kommt. Alle übrigen Einstellungen bleiben natürlich erhalten.
 
-## 7. Bemerkungen {#abschnitt-7}
+## 7. Most Wanted {#abschnitt-7}
+
+Hier kannst du die Karten auf die **gesuchtesten DXCC-Gebiete** beschränken —
+etwa um nach einer DXpedition-Saison zuerst die seltenen Bestätigungen auf den
+Weg zu bringen.
+
+Die Rangliste stammt von der German DX Foundation
+([gdxf.de/mostwanted](https://gdxf.de/mostwanted/)). Sie zeigt, welche Gebiete
+aus Sicht Mitteleuropas am meisten gesucht sind — Platz 1 ist das seltenste,
+ganz hinten steht Deutschland selbst. Die GDXF stellt sie einmal im Jahr neu
+auf, getrennt nach Mixed, CW, Phone und Digital.
+
+- **Nur Most Wanted drucken** — schaltet den Filter ein. Aus: Es zählen nur die
+  Zustellwege ([Kapitel 4](#abschnitt-4)), wie gewohnt.
+- **Top** — wie viele Plätze der Rangliste zählen, von 1 bis 340. Mit „50" wird
+  nur gedruckt, was unter den 50 gesuchtesten Gebieten ist.
+- **Kategorie** — an welcher Rangliste gemessen wird. **Automatisch (nach
+  Mode)** nimmt für jedes QSO die passende: CW für CW, Phone für SSB, AM und FM,
+  Digital für FT8, RTTY und alles andere. Ein Gebiet kann in CW gesucht sein und
+  in FT8 nicht. Stehen auf einer Karte ([Kapitel 5](#abschnitt-5)) QSOs in
+  verschiedenen Modes, zählt der beste Platz. **Mixed** misst alle QSOs an der
+  Mixed-Liste. **CW**, **Phone** oder **Digital** zählen dagegen **nur** QSOs in
+  dieser Betriebsart — ein SSB-QSO bestätigt kein gesuchtes CW-Gebiet.
+
+Ist der Filter an, muss eine Karte **beides** erfüllen: einen aktiven Zustellweg
+haben und unter den ersten Plätzen liegen. Alles andere steht in der Vorschau auf
+„Drucken: Nein" ([Kapitel 9](#abschnitt-9)), wo du einzelne Karten trotzdem von
+Hand einschalten kannst.
+
+**Woher kennt das Programm das DXCC-Gebiet?** In dieser Reihenfolge:
+
+1. Schreibt dein Log-Programm das ADIF-Feld `DXCC`, gilt das.
+2. Sonst leitet das Programm das Gebiet aus dem Rufzeichen ab — über die
+   `cty.dat` von AD1C ([country-files.com](https://www.country-files.com/)),
+   die auch Contest-Logger wie QARTest oder N1MM benutzen. Sie kennt neben den
+   Präfixen auch die Sonderrufzeichen von DXpeditionen. Das klappt **ohne
+   Internet und ohne Zugangsdaten** und auch für ein Cabrillo-Log, das kein
+   DXCC-Feld hat.
+3. Kennt auch die `cty.dat` das Rufzeichen nicht, hilft der Lookup ([Kapitel
+   6](#abschnitt-6)), falls du Zugangsdaten eingetragen hast.
+
+**Eine Karte ohne bekanntes Gebiet wird bei eingeschaltetem Filter nicht
+gedruckt**; in der Vorschau steht dann `?` in der Spalte „MW". `/MM` (auf See)
+und `/AM` (in der Luft) zählen für kein Gebiet.
+
+Die Liste holt das Programm **selbst**, sobald du den Filter einschaltest, und
+merkt sie sich in der Datei `mostwanted.json`. Nach 30 Tagen fragt es beim
+nächsten Einschalten bzw. Programmstart neu bei der GDXF nach. Die `cty.dat`
+bringt das Programm mit; eine neuere holt es nach 14 Tagen auf dieselbe Weise.
+Solange geladen wird, kannst du noch keine Karten erzeugen. Rechts in der Zeile
+steht, welcher Jahrgang der GDXF-Liste gilt und wann er abgerufen wurde.
+
+Ist die GDXF-Seite nicht erreichbar, gilt die zuletzt gespeicherte Liste weiter
+(rechts steht dann „Abruf fehlgeschlagen").
+Gibt es noch gar keine, steht dort „GDXF-Liste nicht abrufbar" und **keine**
+Karte ist zum Drucken markiert — schalte den Filter dann aus oder versuche es
+später noch einmal (Filter aus- und wieder einschalten).
+
+## 8. Bemerkungen {#abschnitt-8}
 
 Der Text unter **Text für alle Karten** erscheint auf jeder Karte im
 REMARKS-Kasten, zum Beispiel „Vielen Dank für das nette QSO im 40-m-Band".
@@ -289,7 +349,7 @@ REMARKS-Kasten, zum Beispiel „Vielen Dank für das nette QSO im 40-m-Band".
   danach den globalen Text, fragt das Programm nach, ob es die von Hand
   gesetzten Bemerkungen überschreiben soll.
 
-## 8. Vorschau {#abschnitt-8}
+## 9. Vorschau {#abschnitt-9}
 
 Die Tabelle zeigt jede Karte, die erzeugt werden würde. Hier korrigierst du
 Einzelfälle, bevor gedruckt wird.
@@ -299,6 +359,10 @@ Die Spalten:
 - **Drucken** — `Ja` oder `Nein`. Zeilen auf „Nein" sind ausgegraut und landen
   nicht in der PDF.
 - **Call** — das Rufzeichen der Gegenstation.
+- **MW** — der Platz des DXCC-Gebiets in der Most-Wanted-Liste
+  ([Kapitel 7](#abschnitt-7)), in der dort gewählten Kategorie. `?` heißt: das
+  Gebiet ist unbekannt, `–`: es hat keinen Platz in der Liste. Leer, solange
+  noch keine Liste geladen ist.
 - **#QSOs** — wie viele QSO-Zeilen auf dieser Karte stehen.
 - **Via** — der Zustellweg, über den diese Karte ginge.
 - **Route/Manager** — das Manager-Rufzeichen für das Feld „Via:" auf der Karte.
@@ -317,7 +381,8 @@ Bedienen:
   Reihenfolge, die du hier siehst.
 
 Stellst du bei einer Karte den Via-Weg von Hand ein, wird sie automatisch auf
-„Drucken: Ja" gesetzt.
+„Drucken: Ja" gesetzt — außer der Most-Wanted-Filter ([Kapitel 7](#abschnitt-7))
+schließt sie aus.
 
 Steht in Via und Route noch `…`, läuft der Lookup — dann ist nichts änderbar,
 warte kurz.
@@ -325,7 +390,7 @@ warte kurz.
 Alle Korrekturen hier gelten **nur für diese Sitzung**. „Log laden" oder „Neu
 abrufen" bauen die Liste neu auf und verwerfen sie.
 
-## 9. Druckmodus {#abschnitt-9}
+## 10. Druckmodus {#abschnitt-10}
 
 **Duplexdruck (Vorder-/Rückseite abwechselnd)** erzeugt eine einzige PDF, in der
 sich Bild- und Textseite abwechseln. Das ist die richtige Wahl für Drucker, die
@@ -361,7 +426,7 @@ Wichtig beim Drucken: Stelle im Druckdialog die Skalierung auf **100 % bzw.
 „keine Anpassung"**. Wählt der Druckertreiber „An Seite anpassen", schrumpft er
 die Karte ein zweites Mal und die eingestellten Ränder stimmen nicht mehr.
 
-## 10. Ausgabe {#abschnitt-10}
+## 11. Ausgabe {#abschnitt-11}
 
 Mit **Ziel…** wählst du, wohin die PDF geschrieben wird; voreingestellt ist
 `qsl_karten.pdf` in deinem Dokumentenordner. Dann **PDF erzeugen** — der Balken
@@ -467,7 +532,7 @@ dich direkt hin ([Menü](#menue)).
   (der Finder versteckt `Library`; nimm den Menüeintrag)
 - **Linux** — `~/.config/qsl-karten-generator/`
 
-Darin liegen drei Dateien:
+Darin liegen bis zu fünf Dateien:
 
 - `config.yaml` — alle deine Einstellungen. Das Programm schreibt sie bei jeder
   Änderung selbst; bearbeite sie nicht von Hand, sonst überschreibt der nächste
@@ -477,9 +542,15 @@ Darin liegen drei Dateien:
   Rechner einmal neu ein.
 - `lookup_cache.json` — die gemerkten Antworten der Lookups
   ([Kapitel 6](#abschnitt-6)).
+- `mostwanted.json` — die zuletzt abgerufene Most-Wanted-Liste der GDXF
+  ([Kapitel 7](#abschnitt-7)). Sie entsteht erst, wenn du den Filter einmal
+  einschaltest.
+- `cty.dat` — die zuletzt abgerufene Präfixliste von AD1C, mit der das Programm
+  Rufzeichen ihrem DXCC-Gebiet zuordnet ([Kapitel 7](#abschnitt-7)). Fehlt sie,
+  gilt die mitgelieferte.
 - `qslcards.log` — das Protokoll. Klemmt etwas, steht hier der Grund.
 
-Die fertigen PDFs landen dort, wo du sie in [Abschnitt 10](#abschnitt-10)
+Die fertigen PDFs landen dort, wo du sie in [Abschnitt 11](#abschnitt-11)
 hinlegst; vorgeschlagen wird dein Dokumentenordner.
 
 ### Das Programm mitnehmen
@@ -507,13 +578,15 @@ beginnt mit `START-OF-LOG:` ([Kapitel 1](#abschnitt-1)).
 **Die Spalte SIGNAL REPORT bleibt leer** — bei einem Contest-Log ist das normal:
 viele Contests tauschen gar keinen Rapport aus ([Kapitel 1](#abschnitt-1)).
 
-**„PDF erzeugen" reagiert nicht** — läuft noch der Lookup? Solange Stationen
-abgefragt werden, ist der Knopf gesperrt. Der Status unten im Fenster sagt, wie
-weit es ist.
+**„PDF erzeugen" reagiert nicht** — läuft noch der Lookup oder lädt die
+Most-Wanted-Liste? Solange ist der Knopf gesperrt. Der Status unten im Fenster
+bzw. in Abschnitt 7 sagt, wie weit es ist.
 
 **Eine Station fehlt in der Kartenliste** — sie nimmt keinen der aktiven
 Zustellwege an ([Kapitel 4](#abschnitt-4)). Zieh die Trennlinie tiefer oder
-setze die Karte in der Vorschau von Hand auf „Drucken: Ja".
+setze die Karte in der Vorschau von Hand auf „Drucken: Ja". Ist der
+Most-Wanted-Filter an ([Kapitel 7](#abschnitt-7)), liegt ihr Gebiet vielleicht
+nicht unter den ersten Plätzen — oder es ist unbekannt (`?` in der Spalte „MW").
 
 **Alle Karten stehen auf Büro** — dann gibt es keine Lookup-Zugangsdaten oder
 die Abfrage ist fehlgeschlagen. Prüfe [Abschnitt 6](#abschnitt-6). Nach jedem
@@ -524,7 +597,7 @@ das Feld „Route/Manager" in der Vorschau, oder leere den Cache und frage neu a
 
 **Die Ränder im Ausdruck stimmen nicht** — fast immer die Skalierung im
 Druckdialog; sie muss auf 100 % / „keine Anpassung" stehen ([Kapitel
-9](#abschnitt-9)).
+10](#abschnitt-10)).
 
 **Etwas anderes klemmt** — dann schau ins Protokoll: **Hilfe ▸ Protokoll
 anzeigen** ([Wo liegen meine Dateien?](#dateien)). Dort notiert das Programm,

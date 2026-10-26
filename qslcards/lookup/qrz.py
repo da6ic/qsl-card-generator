@@ -26,7 +26,7 @@ from xml.etree import ElementTree as ET
 
 import requests
 
-from qslcards.lookup.base import LookupResult
+from qslcards.lookup.base import LookupResult, normalize_dxcc
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +163,9 @@ def _parse_callsign(call: str, node: ET.Element) -> LookupResult:
         country=field("country"),
         grid=field("grid"),
         manager=field("qslmgr"),
+        # `dxcc` ist das Gebiet des Rufzeichens; `ccode`/`country` beziehen sich
+        # auf die Postanschrift. Ohne Abo fehlt es evtl. — dann füllt HamQTH.
+        dxcc=normalize_dxcc(field("dxcc")),
         # QRZ liefert keine zuverlässigen Büro/Direkt/LoTW/eQSL-Flags → None.
         source="qrz",
     )

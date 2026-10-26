@@ -24,7 +24,7 @@ from xml.etree import ElementTree as ET
 
 import requests
 
-from qslcards.lookup.base import LookupResult
+from qslcards.lookup.base import LookupResult, normalize_dxcc
 
 logger = logging.getLogger(__name__)
 
@@ -165,5 +165,8 @@ def _parse_search(call: str, search: ET.Element) -> LookupResult:
         accepts_direct=flag("qsldirect"),
         lotw=flag("lotw"),
         eqsl=flag("eqsl"),
+        # `adif` ist das DXCC-Gebiet des Rufzeichens; `adr_adif` wäre das der
+        # Postanschrift und taugt für den Most-Wanted-Filter nicht.
+        dxcc=normalize_dxcc(field("adif")),
         source="hamqth",
     )

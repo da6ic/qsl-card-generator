@@ -34,6 +34,7 @@ def test_minimal_log():
     assert q.mode == "CW"
     assert q.rst_sent == "599"
     assert q.rst_rcvd == "599"
+    assert q.dxcc is None  # Cabrillo kennt kein DXCC-Feld -> nur aus dem Lookup
 
 
 def test_sender_data_from_header_never_lands_in_qso():

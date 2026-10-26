@@ -84,10 +84,11 @@ SECTIONS: list[tuple[int, str]] = [
     (4, "Zustellwege"),
     (5, "Kartenmodus"),
     (6, "Lookups"),
-    (7, "Bemerkungen"),
-    (8, "Vorschau"),
-    (9, "Druckmodus"),
-    (10, "Ausgabe"),
+    (7, "Most Wanted"),
+    (8, "Bemerkungen"),
+    (9, "Vorschau"),
+    (10, "Druckmodus"),
+    (11, "Ausgabe"),
 ]
 
 # Kürzel des Handbuchs: auf macOS ⌘? (dort das übliche Hilfe-Kürzel), sonst F1.
@@ -288,7 +289,7 @@ class MenuBar:
             menu.add_command(label="Liste leeren", command=lambda: self.actions.clear_recent())
 
     def set_generate_enabled(self, enabled: bool) -> None:
-        """Sperrt/entsperrt „Datei > PDF erzeugen" synchron zum Button (Abschnitt 10)."""
+        """Sperrt/entsperrt „Datei > PDF erzeugen" synchron zum Button (Abschnitt 11)."""
         if self._generate_entry is None:
             return
         self._generate_entry.menu.entryconfig(

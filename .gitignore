@@ -1,6 +1,10 @@
 # Konfiguration & lokale Daten (nicht einchecken)
 config.yaml
 lookup_cache.json
+# GDXF-Most-Wanted-Rangliste, vom Programm abgerufen (fremde Daten, nicht einchecken)
+mostwanted.json
+# Zuletzt geladene cty.dat im Projektordner (die mitgelieferte liegt in qslcards/assets/dxcc/)
+/cty.dat
 *.png
 
 # Ausnahme: das Programm-Icon gehört zum Code (aus app_icon.svg gerendert,

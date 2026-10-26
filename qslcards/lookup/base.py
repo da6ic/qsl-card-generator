@@ -34,7 +34,21 @@ DATA_FIELDS = (
     "accepts_direct",
     "lotw",
     "eqsl",
+    "dxcc",
 )
+
+
+def normalize_dxcc(value: str | None) -> str | None:
+    """ADIF-DXCC-Nummer säubern: nur eine positive Ganzzahl zählt.
+
+    Leer, `0` (HamQTH: „kein Gebiet") oder Unlesbares -> `None`, damit es beim
+    Zusammenführen als Lücke gilt und der nächste Anbieter sie füllen kann.
+    Führende Nullen fallen weg (`"0230"` -> `"230"`).
+    """
+    text = (value or "").strip()
+    if not text.isdigit() or int(text) <= 0:
+        return None
+    return str(int(text))
 
 
 @dataclass
@@ -52,6 +66,9 @@ class LookupResult:
     accepts_direct: str | None = None  # HamQTH qsldirect  ("Y"/"N"/"?")
     lotw: str | None = None  # HamQTH lotw               ("Y"/"N"/"?")
     eqsl: str | None = None  # HamQTH eqsl               ("Y"/"N"/"?")
+    # ADIF-DXCC-Nummer des Rufzeichens (HamQTH `adif`, QRZ `dxcc`) — für den
+    # Most-Wanted-Filter. Nicht verwechseln mit dem Land der Postanschrift.
+    dxcc: str | None = None
     source: str = "none"  # "hamqth" | "qrz" | "cache" | "none"
 
     def is_empty(self) -> bool:
@@ -61,12 +78,13 @@ class LookupResult:
         damit dieselbe Abfrage nicht erneut ins Netz geht. Wichtig: ein Treffer
         mit **nur** Manager oder **nur** einem „Y"-Flag (z. B. `lotw=Y`) ist
         **nicht** leer — sonst ginge die Versandart-Info beim Cachen verloren.
+        Dasselbe gilt für einen Treffer mit nur dem DXCC-Gebiet.
         """
         has_address = any((self.name, self.street, self.zip, self.city, self.country, self.grid))
         has_routing = bool(self.manager) or any(
             flag == "Y" for flag in (self.accepts_bureau, self.accepts_direct, self.lotw, self.eqsl)
         )
-        return not (has_address or has_routing)
+        return not (has_address or has_routing or self.dxcc)
 
     def missing_fields(self) -> tuple[str, ...]:
         """Datenfelder, die dieser Treffer nicht füllt (leer oder `None`).

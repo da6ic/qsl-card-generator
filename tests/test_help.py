@@ -114,7 +114,7 @@ def test_chapters_are_the_h2_headings():
 def test_shipped_handbook_is_readable_and_has_chapters():
     blocks = helpmod.parse(helpmod.load_handbook())
     assert helpmod.handbook_path().is_file()
-    assert len(helpmod.chapters(blocks)) >= 10
+    assert len(helpmod.chapters(blocks)) >= 11
 
 
 def test_handbook_has_an_anchor_for_every_section():

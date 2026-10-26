@@ -8,6 +8,7 @@ im Test durchläuft. Braucht ein funktionierendes Tk — sonst wird übersprunge
 from __future__ import annotations
 
 import tkinter as tk
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tkinter import ttk
 from unittest import mock
@@ -15,6 +16,7 @@ from unittest import mock
 import pytest
 
 from qslcards import config as cfg
+from qslcards import mostwanted
 from qslcards.gui import app as appmod
 from qslcards.gui import sections
 from qslcards.lookup.base import LookupResult
@@ -55,10 +57,26 @@ def app(tmp_path, monkeypatch):
     # Echte config.yaml nicht anfassen.
     monkeypatch.setattr(appmod, "CONFIG_PATH", str(tmp_path / "config.yaml"))
     monkeypatch.setattr(appmod, "EXAMPLE_CONFIG_PATH", str(tmp_path / "missing.yaml"))
+    # Ebenso die gespeicherte Most-Wanted-Liste: ein Test sieht nur seine eigene.
+    monkeypatch.setattr(appmod, "MOSTWANTED_PATH", str(tmp_path / "mostwanted.json"))
+    # Die zuletzt abgerufene cty.dat ebenso; es gilt die mitgelieferte Kopie.
+    monkeypatch.setattr(appmod, "CTY_PATH", str(tmp_path / "cty.dat"))
+    # Und nie ins Netz: der cty.dat-Abruf liefert im Test nur die lokale Kopie.
+    monkeypatch.setattr(
+        appmod.dxcc,
+        "refresh",
+        lambda stored, bundled, numbers, **_kw: appmod.dxcc.CtyRefreshResult(
+            appmod.dxcc.load(stored, bundled, numbers)
+        ),
+    )
     try:
         application = appmod.App()
     except tk.TclError as exc:  # kein Display -> Test überspringen
         pytest.skip(f"kein Tk-Display: {exc}")
+    # Fenster einmal abbilden lassen: an ein noch nicht gemapptes Widget
+    # verschickt `event_generate` nichts. Unter Homebrew-Tk war es schon
+    # gemappt, unter python.org-Tk (9.0.4) gingen <FocusOut>/<Button-1> verloren.
+    application.update()
     yield application
     application.destroy()
 
@@ -76,12 +94,19 @@ def _load(app, tmp_path, log=ADIF, name="log.adi"):
         app.update()  # after()-Callbacks (Lookup fertig) abarbeiten
 
 
+def _row_values(app, iid) -> dict:
+    """Zeilenwerte als {Spaltenname: Wert} — über die Namen, nicht die
+    Position: eine neue Spalte (wie „MW") verschöbe sonst still jeden Index."""
+    columns = app.preview.tree.cget("columns")
+    return dict(zip(columns, app.preview.tree.item(iid, "values"), strict=True))
+
+
 def _row_map(app):
-    """recipient_call -> Zeilenwerte (Drucken, Call, #QSOs, Via, Route, …)."""
+    """recipient_call -> {Spaltenname: Wert} (siehe `_row_values`)."""
     out = {}
     for iid in app.preview.tree.get_children():
-        vals = app.preview.tree.item(iid, "values")
-        out[vals[1]] = vals
+        vals = _row_values(app, iid)
+        out[vals["call"]] = vals
     return out
 
 
@@ -146,12 +171,12 @@ def test_auto_lookup_fills_via_and_manager(app, tmp_path):
     rows = _row_map(app)
     # Standard-Priorität aktiv: Büro, Direkt. Manager zählt als Büro-Weg und
     # setzt den Manager-Call ins Via-Feld (Route-Spalte). Via wird ausgeschrieben.
-    assert rows["DL1AA"][3] == "Büro" and rows["DL1AA"][4] == "DK0XYZ"
-    assert rows["DL2BB"][3] == "Büro"
+    assert rows["DL1AA"]["via"] == "Büro" and rows["DL1AA"]["route"] == "DK0XYZ"
+    assert rows["DL2BB"]["via"] == "Büro"
     # Reine LoTW-Station: kein aktiver Weg -> nicht gedruckt, aber die Via-Spalte
     # zeigt trotzdem den natürlichen Weg (LOTW), nicht „—".
-    assert rows["DL3CC"][3] == "LOTW"
-    assert rows["DL3CC"][0] == "Nein"
+    assert rows["DL3CC"]["via"] == "LOTW"
+    assert rows["DL3CC"]["print"] == "Nein"
     assert {c.recipient_call for c in app.preview.included_cards()} == {"DL1AA", "DL2BB"}
     # „PDF erzeugen" nach dem Lookup wieder aktiv.
     assert str(app.output_section.generate_btn["state"]) == "normal"
@@ -278,7 +303,7 @@ def test_without_credentials_all_default_via(app, tmp_path):
     # Keine Zugangsdaten -> kein Netzcall, alle Via = default_via ("B" -> „Büro").
     _load(app, tmp_path)
     rows = _row_map(app)
-    assert all(rows[c][3] == "Büro" for c in ("DL1AA", "DL2BB", "DL3CC"))
+    assert all(rows[c]["via"] == "Büro" for c in ("DL1AA", "DL2BB", "DL3CC"))
     assert str(app.output_section.generate_btn["state"]) == "normal"
 
 
@@ -293,8 +318,8 @@ def test_priority_change_toggles_print_without_removing_rows(app, tmp_path):
     app._apply_filter()
     rows = _row_map(app)
     assert set(rows) == {"DL1AA", "DL2BB", "DL3CC"}  # alle Zeilen noch da
-    assert rows["DL3CC"][0] == "Ja"
-    assert rows["DL2BB"][0] == "Nein"
+    assert rows["DL3CC"]["print"] == "Ja"
+    assert rows["DL2BB"]["print"] == "Nein"
     included = {c.recipient_call for c in app.preview.included_cards()}
     assert included == {"DL3CC"}
 
@@ -312,9 +337,9 @@ def test_edit_via_updates_card_and_print_flag(app, tmp_path):
 
     card = next(c for c, _ in app.preview._rows.values() if c.recipient_call == "DL3CC")
     assert card.via_override == "B"
-    row = app.preview.tree.item(iid, "values")
-    assert row[3] == "Büro"  # Via-Spalte (ausgeschrieben)
-    assert row[0] == "Ja"  # Drucken nachgezogen
+    row = _row_values(app, iid)
+    assert row["via"] == "Büro"  # ausgeschrieben
+    assert row["print"] == "Ja"  # Drucken nachgezogen
     assert "DL3CC" in {c.recipient_call for c in app.preview.included_cards()}
 
 
@@ -330,9 +355,9 @@ def test_edit_route_changes_manager_text_only(app, tmp_path):
 
     card = next(c for c, _ in app.preview._rows.values() if c.recipient_call == "DL1AA")
     assert card.via_text == "via bureau"
-    row = app.preview.tree.item(iid, "values")
-    assert row[4] == "via bureau"  # Route-Spalte
-    assert row[3] == "Büro"  # Via unverändert (Manager zählt als Büro)
+    row = _row_values(app, iid)
+    assert row["route"] == "via bureau"
+    assert row["via"] == "Büro"  # unverändert (Manager zählt als Büro)
 
 
 def test_edit_via_rejects_invalid_code(app, tmp_path):
@@ -489,7 +514,7 @@ def test_theme_applied_on_start(app):
 
 
 def test_remarks_counter_follows_input(app):
-    """Abschnitt 7 zeigt „geschrieben/erlaubt" und läuft beim Tippen mit."""
+    """Abschnitt 8 zeigt „geschrieben/erlaubt" und läuft beim Tippen mit."""
     from qslcards.gui.sections import REMARKS_MAX_LEN
 
     section = app.remarks_section
@@ -656,7 +681,7 @@ def test_autosave_keeps_appearance_and_recent(app, tmp_path):
 
 
 def test_print_margin_block_follows_the_toggle(app):
-    """Abschnitt 9: die Randfelder erscheinen erst über „Erweiterte
+    """Abschnitt 10: die Randfelder erscheinen erst über „Erweiterte
     Einstellungen" und verschwinden wieder."""
     section = app.printmode_section
     app.update_idletasks()
@@ -703,7 +728,7 @@ def test_print_margin_toggle_does_not_move_the_radios(app):
 
 
 def test_print_margin_toggle_keeps_the_section_height(app):
-    """Der Platz des Randblocks ist immer reserviert: Abschnitt 9 behält seine
+    """Der Platz des Randblocks ist immer reserviert: Abschnitt 10 behält seine
     Höhe und schiebt die Ausgabe darunter beim Auf-/Zuklappen nicht weg."""
     section = app.printmode_section
 
@@ -740,7 +765,7 @@ def test_print_margins_parsed_and_clamped(app):
 
 
 def test_sheet_checkbox_maps_to_the_config_value(app):
-    """Abschnitt 9: die Checkbox trägt den Config-Wert direkt (on/off-value),
+    """Abschnitt 10: die Checkbox trägt den Config-Wert direkt (on/off-value),
     damit app.py nichts umrechnen muss."""
     section = app.printmode_section
     assert section.sheet_mode.get() == "single"
@@ -927,11 +952,11 @@ def _help_marks(app) -> dict[int, tk.Misc]:
 
 def test_every_section_has_a_help_mark(app):
     marks = _help_marks(app)
-    assert sorted(marks) == list(range(1, 11))
+    assert sorted(marks) == list(range(1, 12))
     assert {mark.cget("text") for mark in marks.values()} == {"?"}
     # Der Titel selbst bleibt sichtbar (der Text ist ins Label gewandert).
     title = app.output_section.frame.nametowidget(str(app.output_section.frame.cget("labelwidget")))
-    assert title.winfo_children()[0].cget("text") == "10. Ausgabe"
+    assert title.winfo_children()[0].cget("text") == "11. Ausgabe"
 
 
 def test_help_mark_opens_its_chapter(app):
@@ -1132,6 +1157,179 @@ def test_about_dialog_has_no_close_button(app):
         assert [w for w in widgets if isinstance(w, ttk.Button)] == []
     finally:
         dialog.destroy()
+
+
+# -- Abschnitt 7: Most Wanted ---------------------------------------------
+
+# DXCC aus dem Log (ADIF-Feld `DXCC`), damit kein Lookup nötig ist: P5 und JA
+# sind gesucht, DL nicht; XX1AA hat kein bekanntes Gebiet.
+MW_ADIF = (
+    "<call:4>P5AA<qso_date:8>20240102<time_on:4>1200<mode:2>CW<dxcc:3>344<eor>\n"
+    "<call:5>JA1AA<qso_date:8>20240102<time_on:4>1300<mode:3>FT8<dxcc:3>339<eor>\n"
+    "<call:5>DL1AA<qso_date:8>20240102<time_on:4>1400<mode:3>SSB<dxcc:3>230<eor>\n"
+    "<call:5>XX1AA<qso_date:8>20240102<time_on:4>1500<mode:3>SSB<eor>\n"
+)
+
+
+def _mw_ranking(fetched_at=None):
+    ranks = {"mixed": {344: 1, 339: 40, 230: 340}, "cw": {344: 1}, "digital": {339: 60}}
+    return mostwanted.MostWantedList(
+        year=2025,
+        rankings={
+            category: {
+                dxcc: mostwanted.RankedEntity(dxcc=dxcc, rank=rank, prefix="", name="")
+                for dxcc, rank in entries.items()
+            }
+            for category, entries in ranks.items()
+        },
+        fetched_at=(fetched_at or datetime.now(UTC)).isoformat(),
+    )
+
+
+def _enable_mostwanted(app, result):
+    """Filter einschalten; der Abruf läuft synchron und liefert `result`."""
+    with (
+        mock.patch.object(appmod.threading, "Thread", _SyncThread),
+        mock.patch.object(appmod.mostwanted, "refresh", return_value=result) as refresh,
+    ):
+        app.mostwanted_section.enabled.set(True)
+        app.update()
+    return refresh
+
+
+def test_mostwanted_spans_the_full_width_like_the_remarks(app):
+    """Abschnitt 7 liegt über die ganze Breite zwischen Lookups und Bemerkungen
+    (vom Nutzer so gewünscht, „lang gezogen wie Abschnitt 8")."""
+    app.update_idletasks()
+    most_wanted, remarks = app.mostwanted_section.frame, app.remarks_section.frame
+    lookups = app.lookup_section.frame
+    assert most_wanted.winfo_rootx() == remarks.winfo_rootx()
+    assert most_wanted.winfo_width() == remarks.winfo_width()
+    assert lookups.winfo_rooty() + lookups.winfo_height() <= most_wanted.winfo_rooty()
+    assert most_wanted.winfo_rooty() + most_wanted.winfo_height() <= remarks.winfo_rooty()
+    assert app._sections[7] is most_wanted
+
+
+def test_mostwanted_filter_marks_only_the_top_n(app, tmp_path):
+    _load(app, tmp_path, log=MW_ADIF)
+    assert {r["print"] for r in _row_map(app).values()} == {"Ja"}  # Filter aus
+
+    refresh = _enable_mostwanted(app, mostwanted.RefreshResult(_mw_ranking(), fetched=True))
+    refresh.assert_called_once()
+    rows = _row_map(app)
+    # Automatisch: P5 in CW Rang 1, JA in Digital Rang 60 (> Top 50 nicht, < 100 ja)
+    assert rows["P5AA"]["mw"] == "1" and rows["JA1AA"]["mw"] == "60"
+    assert rows["DL1AA"]["mw"] == "–"  # DL ist in Phone nicht gelistet
+    assert rows["XX1AA"]["mw"] == "?"  # Gebiet unbekannt
+    assert {c for c, r in rows.items() if r["print"] == "Ja"} == {"JA1AA", "P5AA"}
+
+    # Top 50: JA fällt heraus — ohne Rebuild, nur die Markierung.
+    app.mostwanted_section.top.set("50")
+    rows = _row_map(app)
+    assert {c for c, r in rows.items() if r["print"] == "Ja"} == {"P5AA"}
+
+    # Feste Kategorie Mixed: DL Rang 340 liegt weiter außerhalb, JA (40) wieder drin.
+    app.mostwanted_section.set_category("mixed")
+    rows = _row_map(app)
+    assert {c for c, r in rows.items() if r["print"] == "Ja"} == {"P5AA", "JA1AA"}
+    assert rows["DL1AA"]["mw"] == "340"
+
+
+def test_mostwanted_works_for_cabrillo_without_lookup(app, tmp_path):
+    """Cabrillo kennt kein DXCC-Feld und ohne Zugangsdaten gibt es keinen
+    Lookup — das Gebiet kommt dann aus der mitgelieferten cty.dat."""
+    cabrillo = (
+        "START-OF-LOG: 3.0\nCALLSIGN: DL0MT\n"
+        "QSO: 14020 CW 2026-10-24 0624 DL0MT 599 14 P5AA 599 25\n"
+        "QSO: 14170 PH 2026-10-24 0625 DL0MT 59 14 DL1AA 59 14\n"
+        "END-OF-LOG:\n"
+    )
+    _load(app, tmp_path, log=cabrillo, name="contest.log")
+    _enable_mostwanted(app, mostwanted.RefreshResult(_mw_ranking(), fetched=True))
+    rows = _row_map(app)
+    assert {c for c, r in rows.items() if r["print"] == "Ja"} == {"P5AA"}
+    assert rows["P5AA"]["mw"] == "1"  # CW-Liste
+    assert rows["DL1AA"]["mw"] == "–"  # Gebiet bekannt (DL), aber in Phone ohne Rang
+
+
+def test_mostwanted_fresh_data_is_not_fetched_again(app, tmp_path):
+    """Wer frische Daten hat (GDXF-Liste und cty.dat), löst beim Einschalten
+    keinen Netzzugriff aus."""
+    app.mostwanted_list = _mw_ranking()
+    with mock.patch.object(appmod.dxcc, "is_stale", return_value=False):
+        refresh = _enable_mostwanted(app, mostwanted.RefreshResult(None, error="darf nicht"))
+    refresh.assert_not_called()
+
+
+def test_mostwanted_without_list_prints_nothing_and_says_why(app, tmp_path):
+    _load(app, tmp_path, log=MW_ADIF)
+    _enable_mostwanted(app, mostwanted.RefreshResult(None, error="offline"))
+
+    assert {r["print"] for r in _row_map(app).values()} == {"Nein"}
+    section = app.mostwanted_section
+    assert section.status_var.get() == "GDXF-Liste nicht abrufbar"
+    assert section.status_label.cget("style") == "Danger.TLabel"
+
+
+def test_mostwanted_failed_refresh_keeps_the_old_list(app, tmp_path):
+    _load(app, tmp_path, log=MW_ADIF)
+    old = _mw_ranking(datetime.now(UTC) - timedelta(days=90))
+    _enable_mostwanted(app, mostwanted.RefreshResult(old, error="offline"))
+
+    assert {c for c, r in _row_map(app).items() if r["print"] == "Ja"} == {"P5AA", "JA1AA"}
+    assert "Abruf fehlgeschlagen" in app.mostwanted_section.status_var.get()
+    assert "GDXF 2025" in app.mostwanted_section.status_var.get()
+
+
+def test_mostwanted_settings_do_not_refetch_after_a_failure(app, tmp_path):
+    """Nach einem gescheiterten Abruf bleibt die Liste „veraltet". Dann darf
+    nicht jeder Tastendruck im Top-Feld erneut ins Netz gehen — nur das
+    erneute Einschalten versucht es noch einmal."""
+    failed = mostwanted.RefreshResult(None, error="offline")
+    refresh = _enable_mostwanted(app, failed)
+    with (
+        mock.patch.object(appmod.threading, "Thread", _SyncThread),
+        mock.patch.object(appmod.mostwanted, "refresh", return_value=failed) as again,
+    ):
+        app.mostwanted_section.top.set("5")
+        app.mostwanted_section.top.set("50")
+        app.mostwanted_section.set_category("cw")
+        again.assert_not_called()
+        app.mostwanted_section.enabled.set(False)
+        app.mostwanted_section.enabled.set(True)
+        again.assert_called_once()
+    refresh.assert_called_once()
+
+
+def test_generate_waits_for_the_mostwanted_list(app, tmp_path):
+    _load(app, tmp_path, log=MW_ADIF)
+    app._mostwanted_running = True
+    app._update_generate_state()
+    assert str(app.output_section.generate_btn.cget("state")) == "disabled"
+    with (
+        mock.patch.object(appmod, "messagebox") as box,
+        mock.patch.object(appmod, "generate") as gen,
+    ):
+        app._on_generate()
+    box.showinfo.assert_called_once()
+    gen.assert_not_called()
+
+
+def test_mostwanted_settings_are_saved(app):
+    section = app.mostwanted_section
+    with (
+        mock.patch.object(appmod.mostwanted, "refresh"),
+        mock.patch.object(appmod.threading, "Thread", _SyncThread),
+    ):
+        section.enabled.set(True)
+    section.top.set("25")
+    section.set_category("cw")
+    saved = app._gather_config().mostwanted
+    assert (saved.enabled, saved.top, saved.category) == (True, 25, "cw")
+
+    # Unsinn im Feld landet nie in der Config.
+    section.top.set("")
+    assert app._gather_config().mostwanted.top == mostwanted.DEFAULT_TOP
 
 
 if __name__ == "__main__":  # pragma: no cover

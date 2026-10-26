@@ -150,6 +150,15 @@ def test_recipient_fields_mapped():
     assert q.gridsquare == "JO60hs"
 
 
+def test_dxcc_field_mapped():
+    """`DXCC` (ADIF-Gebietsnummer) wird übernommen — er gewinnt im
+    Most-Wanted-Filter vor dem Lookup. Fehlt er, bleibt das Feld leer."""
+    with_dxcc = parse_text("<CALL:5>JA1AA<QSO_DATE:8>20260719<TIME_ON:4>1508<DXCC:3>339<EOR>")
+    without = parse_text("<CALL:5>JA1AA<QSO_DATE:8>20260719<TIME_ON:4>1508<EOR>")
+    assert with_dxcc[0].dxcc == "339"
+    assert without[0].dxcc is None
+
+
 def test_own_station_fields_not_promoted():
     # Eigene Stationsfelder bleiben roh, werden NICHT zu QSO-Attributen.
     text = (

@@ -100,7 +100,7 @@ def test_actions_and_view_menu_entries(bar):
     view = _submenu(bar.menubar, "Ansicht")
     assert _labels(view) == ["Farbthema", "Gehe zu Abschnitt"]
     assert _labels(_submenu(view, "Farbthema")) == ["System", "Hell", "Dunkel"]
-    assert len(_labels(_submenu(view, "Gehe zu Abschnitt"))) == 10
+    assert len(_labels(_submenu(view, "Gehe zu Abschnitt"))) == 11
 
 
 def test_help_menu_entries(bar):
@@ -142,8 +142,8 @@ def test_theme_entries_pass_the_mode(bar, calls):
 
 def test_goto_section_passes_number(bar, calls):
     view = _submenu(bar.menubar, "Ansicht")
-    _invoke(_submenu(view, "Gehe zu Abschnitt"), "8. Vorschau")
-    assert calls == [("goto_section", 8)]
+    _invoke(_submenu(view, "Gehe zu Abschnitt"), "9. Vorschau")
+    assert calls == [("goto_section", 9)]
 
 
 def test_recent_menus_start_empty_and_fill(bar, calls):

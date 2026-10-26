@@ -12,19 +12,21 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
+from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from PIL import Image, ImageTk
 
-from qslcards import __version__, paths
+from qslcards import __version__, dxcc, mostwanted, paths
 from qslcards import config as cfg
-from qslcards.cards.builder import build_cards, effective_via
+from qslcards.cards.builder import build_cards, is_printable, mostwanted_rank
 from qslcards.config import (
     AppConfig,
     AppearanceConfig,
     GenerationConfig,
     LookupConfig,
+    MostWantedConfig,
     RecentConfig,
     SenderConfig,
     push_recent,
@@ -53,6 +55,7 @@ from .sections import (
     ImageSection,
     LookupSection,
     ModeSection,
+    MostWantedSection,
     OutputSection,
     PrintModeSection,
     RemarksSection,
@@ -71,6 +74,12 @@ from .textedit import install_entry_shortcuts
 # (siehe `paths.data_dir`). Bleiben bewusst Modulattribute: die Tests setzen sie um.
 CONFIG_PATH = str(paths.config_path())
 EXAMPLE_CONFIG_PATH = str(paths.example_config_path())
+MOSTWANTED_PATH = str(paths.mostwanted_path())
+# cty.dat (Rufzeichen -> DXCC): zuletzt abgerufene Kopie, mitgelieferte Kopie,
+# Nummerntabelle. Ebenfalls Modulattribute, damit die Tests sie umsetzen können.
+CTY_PATH = str(paths.cty_path())
+BUNDLED_CTY_PATH = str(paths.bundled_cty_path())
+DXCC_NUMBERS_PATH = str(paths.dxcc_numbers_path())
 
 # Fenster-/Programm-Icon: die von `scripts/make_icon.py` gerenderten PNGs.
 ICON_DIR = paths.resource_path("qslcards", "assets", "icons")
@@ -174,6 +183,14 @@ def load_app_icons(widget: tk.Misc) -> list[tk.PhotoImage]:
     return [icon for icon in icons if icon is not None]
 
 
+def _format_date(iso: str | None) -> str:
+    """ISO-Zeitstempel (UTC) -> „26.10.2026" in lokaler Zeit; unlesbar -> „?"."""
+    try:
+        return datetime.fromisoformat(iso or "").astimezone().strftime("%d.%m.%Y")
+    except ValueError:
+        return "?"
+
+
 class _ScrollableFrame:
     """Vertikal scrollbarer Container (Canvas + inneres Frame + Scrollbar).
 
@@ -240,6 +257,15 @@ class App(tk.Tk):
         self._lookup_running = False
         self._generating = False
 
+        # Most-Wanted-Rangliste (Abschnitt 7): die gespeicherte bzw. zuletzt
+        # abgerufene Liste, ob gerade abgerufen wird und der letzte Fehler.
+        self.mostwanted_list: mostwanted.MostWantedList | None = None
+        self._mostwanted_running = False
+        self._mostwanted_error: str | None = None
+        # cty.dat: ordnet Rufzeichen ohne DXCC-Feld ihr Gebiet zu — ohne Netz,
+        # auch für Cabrillo und ohne Lookup-Zugangsdaten.
+        self.cty: dxcc.CtyDatabase | None = None
+
         # Zuletzt für den Karten-Neuaufbau verwendeter globaler Remarks-Text.
         # Verhindert überflüssige Rebuilds bei jedem FocusOut ohne Textänderung.
         self._last_remarks_built = ""
@@ -263,6 +289,7 @@ class App(tk.Tk):
         self._apply_config_to_widgets(self.base_config)
         self._last_mtime = self._config_mtime()
         self._wire_autosave()
+        self._init_mostwanted()
         self.after(POLL_MS, self._poll_config)
 
     # ---------------------------------------------------------------- UI
@@ -302,6 +329,7 @@ class App(tk.Tk):
 
         self.sender_section = SenderSection(root)
         self.lookup_section = LookupSection(root)
+        self.mostwanted_section = MostWantedSection(root)
         self.remarks_section = RemarksSection(root)
         self.preview = PreviewTable(root, palette=self.palette)
         self.printmode_section = PrintModeSection(root)
@@ -316,13 +344,14 @@ class App(tk.Tk):
         self.lookup_section.frame.grid(
             row=1, column=1, padx=(pad // 2, pad), pady=(pad, 0), sticky="nsew"
         )
-        # Abschnitt 7 (Remarks) über volle Breite, dann Vorschau (8), Druckmodus (9)
-        # und Ausgabe (10).
+        # Ab Abschnitt 7 über volle Breite: Most Wanted (7), Remarks (8), Vorschau
+        # (9), Druckmodus (10) und Ausgabe (11).
         for section, row, fill in (
-            (self.remarks_section.frame, 2, "we"),
-            (self.preview.frame, 3, "nsew"),
-            (self.printmode_section.frame, 4, "we"),
-            (self.output_section.frame, 5, "we"),
+            (self.mostwanted_section.frame, 2, "we"),
+            (self.remarks_section.frame, 3, "we"),
+            (self.preview.frame, 4, "nsew"),
+            (self.printmode_section.frame, 5, "we"),
+            (self.output_section.frame, 6, "we"),
         ):
             section.grid(row=row, column=0, columnspan=2, padx=pad, pady=(pad, 0), sticky=fill)
         self.output_section.frame.grid_configure(pady=(pad, pad))
@@ -338,10 +367,11 @@ class App(tk.Tk):
             4: self.filter_section.frame,
             5: self.mode_section.frame,
             6: self.lookup_section.frame,
-            7: self.remarks_section.frame,
-            8: self.preview.frame,
-            9: self.printmode_section.frame,
-            10: self.output_section.frame,
+            7: self.mostwanted_section.frame,
+            8: self.remarks_section.frame,
+            9: self.preview.frame,
+            10: self.printmode_section.frame,
+            11: self.output_section.frame,
         }
 
         # Kontexthilfe: jeder Abschnittstitel bekommt ein „?", das das Handbuch
@@ -436,6 +466,16 @@ class App(tk.Tk):
         # Nach einer Via-Bearbeitung die Drucken-Markierung der Zeile nachziehen.
         self.preview.on_cell_edited = self._on_cell_edited
 
+        # Most Wanted: jede Einstellung setzt nur die Drucken-Markierung neu
+        # (kein Rebuild). Nur das Einschalten holt bei Bedarf die Liste — Top
+        # und Kategorie nicht, sonst ginge nach einem gescheiterten Abruf jeder
+        # Tastendruck im Top-Feld erneut ins Netz.
+        section = self.mostwanted_section
+        section.enabled.trace_add("write", self._on_mostwanted_toggle)
+        for var in (section.top, section.category):
+            var.trace_add("write", self._on_mostwanted_change)
+        section.top_spin.bind("<FocusOut>", lambda _e: section.normalize_top())
+
     # ----------------------------------------------------------- Config
     def _read_config(self) -> AppConfig:
         """Liest `config.yaml` (ersatzweise die Beispieldatei); Defaults sonst.
@@ -488,6 +528,10 @@ class App(tk.Tk):
             self.remarks_section.remarks.set(config.generation.remarks)
             self._last_remarks_built = config.generation.remarks
 
+            self.mostwanted_section.enabled.set(config.mostwanted.enabled)
+            self.mostwanted_section.top.set(str(mostwanted.clamp_top(config.mostwanted.top)))
+            self.mostwanted_section.set_category(config.mostwanted.category)
+
             # Menü-Zustand (Farbthema-Markierung, „Zuletzt verwendet") nachziehen.
             self.menubar.set_theme_mode(config.appearance.theme)
             self.menubar.set_recent(config.recent.logs, config.recent.images)
@@ -521,12 +565,18 @@ class App(tk.Tk):
             qsl_mark=QSL_MARK_TO_CODE.get(self.sender_section.qsl_mark.get(), "none"),
             confirm_mark=CONFIRM_MARK_TO_CODE.get(self.sender_section.confirm_mark.get(), "none"),
         )
+        most_wanted = MostWantedConfig(
+            enabled=self.mostwanted_section.enabled.get(),
+            top=self.mostwanted_section.top_value(),
+            category=self.mostwanted_section.category_code(),
+        )
         # Aussehen und „Zuletzt verwendet" haben keine Eingabefelder: sie werden
         # aus der Basis-Config übernommen, damit der Auto-Save sie nicht verliert.
         return AppConfig(
             sender=sender,
             lookup=lookup,
             generation=generation,
+            mostwanted=most_wanted,
             appearance=AppearanceConfig(theme=self.base_config.appearance.theme),
             recent=RecentConfig(
                 logs=list(self.base_config.recent.logs),
@@ -578,6 +628,9 @@ class App(tk.Tk):
             self.printmode_section.sheet_mode,
             self.printmode_section.advanced,
             *self.printmode_section.margin_vars.values(),
+            self.mostwanted_section.enabled,
+            self.mostwanted_section.top,
+            self.mostwanted_section.category,
         ]
         for var in watched:
             var.trace_add("write", self._on_var_change)
@@ -628,6 +681,7 @@ class App(tk.Tk):
         if config.appearance.theme != previous_theme:
             self._apply_theme(config.appearance.theme)
         self._last_mtime = self._config_mtime()
+        self._ensure_mostwanted()  # Filter evtl. in der Datei eingeschaltet
         self._rebuild_cards()
         self.status.set("Config neu geladen (Datei geändert)", "ok")
 
@@ -724,26 +778,53 @@ class App(tk.Tk):
         priority, cut = self.filter_section.get_priority()
         return active_via_priority(priority, cut)
 
+    def _mostwanted_filter(self) -> mostwanted.MostWantedFilter:
+        """Die aktuelle Most-Wanted-Regel aus Abschnitt 7 (auch wenn sie aus ist)."""
+        return mostwanted.MostWantedFilter(
+            self.mostwanted_list,
+            top=self.mostwanted_section.top_value(),
+            category=self.mostwanted_section.category_code(),
+        )
+
     def _included_default(self, card) -> bool:
-        """Drucken-Voreinstellung: Karte druckbar, wenn ein aktiver Weg passt."""
-        return effective_via(card, self._active_via_priority()) is not None
+        """Drucken-Voreinstellung: ein aktiver Weg passt **und**, falls der
+        Most-Wanted-Filter an ist, das Gebiet liegt unter den ersten N."""
+        rule = self._mostwanted_filter() if self.mostwanted_section.enabled.get() else None
+        return is_printable(card, self._active_via_priority(), rule)
+
+    def _mostwanted_rank(self):
+        """Rang je Karte für die Spalte „MW" — oder None, solange es keine Liste
+        gibt (dann bleibt die Spalte leer statt überall „–" zu zeigen)."""
+        if self.mostwanted_list is None:
+            return None
+        rule = self._mostwanted_filter()
+        return lambda card: mostwanted_rank(card, rule)
 
     def _rebuild_cards(self) -> None:
         if not self.qsos:
             self.preview.set_cards([])
             return
-        cards = build_cards(self.qsos, self._gather_config(), self.lookups)
+        cards = build_cards(
+            self.qsos,
+            self._gather_config(),
+            self.lookups,
+            resolve_dxcc=self.cty.dxcc if self.cty is not None else None,
+        )
         self.preview.set_cards(
             cards,
             included=self._included_default,
             pending=self._lookup_running,
             groupable=self.mode_section.card_mode.get() == "per_station",
             active_priority=self._active_via_priority(),
+            rank=self._mostwanted_rank(),
         )
 
     def _apply_filter(self) -> None:
-        """Priorität geändert: nur die Drucken-Markierung neu setzen (kein Rebuild)."""
-        self.preview.apply_via_filter(self._active_via_priority())
+        """Priorität oder Most-Wanted-Filter geändert: nur die Drucken-Markierung
+        und die Anzeige neu setzen (kein Rebuild)."""
+        self.preview.apply_print_filter(
+            self._active_via_priority(), self._included_default, self._mostwanted_rank()
+        )
 
     def _on_priority_move(self, direction: str) -> None:
         """▲/▼ in der Prioritätsliste: verschieben, dann Auto-Save + Filter neu.
@@ -791,11 +872,99 @@ class App(tk.Tk):
 
     def _on_cell_edited(self, iid: str, card, column: str) -> None:
         """Nach einer Via-Bearbeitung die Drucken-Markierung der Zeile nachziehen
-        (manuell erzwungener Weg -> drucken). Route-Edits ändern nur den
+        (manuell erzwungener Weg -> drucken, sofern der Most-Wanted-Filter die
+        Karte nicht ausschließt). Route-Edits ändern nur den
         Kartentext und lassen die Markierung unberührt."""
         if column == "via":
-            included = effective_via(card, self._active_via_priority()) is not None
-            self.preview.set_row_included(iid, included)
+            self.preview.set_row_included(iid, self._included_default(card))
+
+    # ------------------------------------------------- Most Wanted (async)
+    def _init_mostwanted(self) -> None:
+        """Beim Start: gespeicherte Liste und cty.dat lesen (lokal, ohne Netz)
+        und — wenn der Filter an ist und etwas fehlt oder veraltet ist — neu
+        abrufen. Die cty.dat gibt es immer: notfalls die mitgelieferte."""
+        self.mostwanted_list = mostwanted.load(MOSTWANTED_PATH)
+        self.cty = dxcc.load(CTY_PATH, BUNDLED_CTY_PATH, DXCC_NUMBERS_PATH)
+        self._show_mostwanted_status()
+        self._ensure_mostwanted()
+
+    def _on_mostwanted_toggle(self, *_args) -> None:
+        """Filter ein-/ausgeschaltet: beim Einschalten die Liste bei Bedarf holen
+        (auch der Weg, einen gescheiterten Abruf zu wiederholen)."""
+        if self._suppress_save:
+            return
+        self._ensure_mostwanted()
+        self._on_mostwanted_change()
+
+    def _on_mostwanted_change(self, *_args) -> None:
+        """Top/Kategorie geändert: Statuszeile und Drucken-Markierung neu.
+
+        Beim programmatischen Setzen (Config laden) passiert hier nichts — der
+        Aufrufer zieht danach selbst nach (`_init_mostwanted`/`_reload_from_file`).
+        """
+        if self._suppress_save:
+            return
+        self._show_mostwanted_status()
+        self._apply_filter()
+
+    def _ensure_mostwanted(self) -> None:
+        """Ruft GDXF-Liste und cty.dat im Hintergrund ab — nur bei
+        eingeschaltetem Filter und nur, was fehlt oder veraltet ist (GDXF nach
+        30, cty.dat nach 14 Tagen). Wer den Filter nicht nutzt, löst keinen
+        Netzzugriff aus. Während des Abrufs ist „PDF erzeugen" gesperrt."""
+        if self._mostwanted_running or not self.mostwanted_section.enabled.get():
+            return
+        if not mostwanted.is_stale(self.mostwanted_list) and not dxcc.is_stale(CTY_PATH):
+            return
+        self._mostwanted_running = True
+        self._show_mostwanted_status()
+        self._update_generate_state()
+        threading.Thread(target=self._mostwanted_worker, daemon=True).start()
+
+    def _mostwanted_worker(self) -> None:
+        # Beide `refresh` fangen Netz-, HTTP- und Formatfehler selbst ab (nie
+        # fatal) und rufen nur ab, was veraltet ist.
+        ranking = mostwanted.refresh(MOSTWANTED_PATH)
+        cty = dxcc.refresh(CTY_PATH, BUNDLED_CTY_PATH, DXCC_NUMBERS_PATH)
+        self.after(0, self._mostwanted_done, ranking, cty)
+
+    def _mostwanted_done(
+        self, result: mostwanted.RefreshResult, cty: dxcc.CtyRefreshResult | None = None
+    ) -> None:
+        self._mostwanted_running = False
+        self.mostwanted_list = result.ranking
+        self._mostwanted_error = result.error
+        self._update_generate_state()
+        self._show_mostwanted_status()
+        if cty is not None and cty.fetched and cty.database is not None:
+            # Neue cty.dat: Gebiete können sich geändert haben (neue
+            # DXpeditions-Rufzeichen) -> Karten neu aufbauen. Kommt höchstens
+            # alle 14 Tage beim Einschalten vor.
+            self.cty = cty.database
+            self._rebuild_cards()
+        else:
+            self._apply_filter()
+
+    def _show_mostwanted_status(self) -> None:
+        """Statuszeile von Abschnitt 7: Jahrgang + Abrufdatum, oder was fehlt."""
+        section = self.mostwanted_section
+        ranking = self.mostwanted_list
+        if self._mostwanted_running:
+            section.set_status("Lade GDXF-Liste…")
+        elif ranking is None and self._mostwanted_error:
+            section.set_status("GDXF-Liste nicht abrufbar", error=True)
+        elif ranking is None:
+            section.set_status("Noch keine GDXF-Liste geladen")
+        elif self._mostwanted_error:
+            # Kurz gehalten: die Zeile steht rechts in einer einzigen Zeile über
+            # die Fensterbreite, die längere Fassung lief dort über den Rand.
+            date = _format_date(ranking.fetched_at)
+            section.set_status(
+                f"GDXF {ranking.year or '?'} · {date} · Abruf fehlgeschlagen", error=True
+            )
+        else:
+            date = _format_date(ranking.fetched_at)
+            section.set_status(f"GDXF {ranking.year or '?'} · abgerufen {date}")
 
     # ------------------------------------------------------- Lookup (async)
     def _lookup_credentials(self) -> LookupCredentials:
@@ -911,7 +1080,7 @@ class App(tk.Tk):
         )
 
     def _update_generate_state(self) -> None:
-        busy = self._lookup_running or self._generating
+        busy = self._lookup_running or self._mostwanted_running or self._generating
         self.output_section.generate_btn.config(state="disabled" if busy else "normal")
         self.menubar.set_generate_enabled(not busy)
 
@@ -1067,6 +1236,11 @@ class App(tk.Tk):
         if self._lookup_running:
             messagebox.showinfo(
                 "Lookup läuft", "Bitte warten, bis die Stationen nachgeschlagen sind."
+            )
+            return
+        if self._mostwanted_running:
+            messagebox.showinfo(
+                "Most-Wanted-Liste lädt", "Bitte warten, bis die GDXF-Liste abgerufen ist."
             )
             return
         missing, first_section = self._check_required()
