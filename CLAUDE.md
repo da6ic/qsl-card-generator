@@ -967,6 +967,13 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
     ohne Lizenzvermerk); `mostwanted.json` ist gitignored.
 
 **Realität der Testdaten (`Log.adi`, `beispiel-logs/`)**
+- **Keine der Dateien liegt im Repository** (`*.adi` und `beispiel-logs/` sind
+  gitignored, persönliche Daten). Tests, die sie lesen, tragen ein `skipif` und
+  überspringen sich in einer frischen Kopie; alles Fachliche daran prüfen
+  Inline-Fälle mit. Gefunden am 2026-10-26 beim Probe-Klon für die Übergabe an
+  einen Kollegen: vorher waren dort **drei Tests rot**, weil sie `Log.adi`
+  stillschweigend voraussetzten. Vor einer Weitergabe deshalb einmal frisch
+  klonen, venv anlegen, `pytest` — erst dann ist „bei mir grün" etwas wert.
 - Enthält **kein** `QSL_SENT_VIA` (und keine Via-Info) — das ist der **Normalfall**:
   die Via kommt aus dem Lookup, nicht aus dem Log. Ohne Lookup-Credentials fallen
   alle Karten auf `default_via` (Default `B`); mit Credentials liefert der Lookup
@@ -1238,3 +1245,6 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   `feat/fix/docs/chore`, GUI-Zwischenstände als **WIP** markieren.
 - IDE-Dateien (`.idea/`, `.DS_Store`) nie mitcommitten.
 - Doku-Änderungen erst nach Abnahme des Codes.
+- **Weitergeben nur über Git** (Klon oder `git bundle create … --all`), nie den
+  Arbeitsordner: darin liegen `config.yaml`, `lookup_cache.json` (Anschriften
+  fremder Stationen), die Logs, PDFs und ein venv mit fremden Pfaden.

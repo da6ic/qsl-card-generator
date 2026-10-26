@@ -44,15 +44,31 @@ Rückseite im DARC-QSL-Layout.
   umschaltbar über „Ansicht → Farbthema".
 
 ## Voraussetzungen
-- Python 3.11+ (zum **Bündeln** siehe unten: dort zählt Tk 9)
-- `pip install -r requirements.txt`
+- Python **3.11+** mit **Tkinter** und am besten **Tk 9** — mit Tk 8.6 läuft das
+  Programm auch, nur die Stift-/Schaltersymbole der Vorschautabelle fehlen dann
+  (ohne Fehlermeldung). Tkinter ist je nach System ein eigenes Paket:
+
+  | System | Python mit Tk 9 |
+  |---|---|
+  | macOS | Installer von [python.org](https://www.python.org/downloads/macos/) ab **3.14.7** (Tk 9 ist dabei) — oder Homebrew: `brew install python@3.14 python-tk@3.14` |
+  | Windows | Installer von python.org ab **3.14.7**, x64 (Tk 9 ist dabei) |
+  | Fedora 42+ | `sudo dnf install python3.14 python3.14-tkinter` (das Standard-`python3` bringt nur Tk 8.6) |
+
+  Prüfen: `python -c "import tkinter; print(tkinter.TkVersion)"` muss `9.0` ausgeben.
 - Ein Frontbild.
 
 ## Schnellstart
+
+Im Projektordner (wichtig: `requirements.txt` installiert das Projekt selbst
+editierbar mit `-e .[dev]`):
+
 ```bash
-pip install -r requirements.txt
-python -m qslcards               # startet die GUI
+python3.14 -m venv .venv                     # bzw. python3.15, python -m venv … unter Windows
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m qslcards                 # startet die GUI
 ```
+
+Unter Windows heißt der Interpreter im venv `.venv\Scripts\python.exe`.
 
 Absenderdaten, Zugangsdaten und alles Weitere trägt man **im Programmfenster**
 ein; die `config.yaml` entsteht dabei von selbst und wird bei jeder Änderung
@@ -84,11 +100,38 @@ verwendet"-Listen).
 
 > Der Bereich unten rechts auf der Rückseite (in der Vorlage das Logo) bleibt frei.
 
+## Entwickeln
+
+```bash
+.venv/bin/python -m pytest tests/ -q                         # alle Tests
+.venv/bin/python -m black qslcards/ tests/ scripts/          # formatieren
+.venv/bin/python -m ruff check qslcards/ tests/ scripts/     # Lint
+.venv/bin/python scripts/preview_card.py                     # Musterkarten -> card_preview.pdf
+```
+
+Vor jedem Commit müssen alle drei grün sein. Die GUI-Tests bauen das Fenster
+ohne Bedienung auf (unter Linux ohne Bildschirm überspringen sie sich), und
+**kein Test geht ins Netz** — Lookups, GDXF-Liste und `cty.dat` sind gemockt.
+
+**Was bewusst nicht im Repository liegt** (gitignored, persönliche oder fremde
+Daten): die eigene `config.yaml` und der `lookup_cache.json` (Anschriften fremder
+Stationen), Logbücher (`*.adi`), die abgerufene `mostwanted.json`/`cty.dat` und
+erzeugte PDFs. Einige Tests vergleichen zusätzlich mit echten Logs (`Log.adi`,
+`beispiel-logs/cqww26.adi`); fehlen die Dateien, **überspringen** sie sich —
+alles andere läuft ohne sie. Wer das Projekt weitergibt, nimmt deshalb das
+Git-Repository (Klon oder `git bundle create qsl.bundle --all`), nicht eine
+Kopie des Arbeitsordners: darin lägen genau diese Dateien. `scripts/release.py`
+braucht außerdem Historie und Tags.
+
+Wie das Programm gebaut ist und warum, steht in `docs/SPECIFICATION.md`; die
+Arbeitsanleitung für Claude Code mit allen getroffenen Entscheidungen in
+`CLAUDE.md`.
+
 ## Bauen (auslieferbare Anwendung)
 
 ```bash
-pip install -e ".[build]"
-python scripts/build_app.py --clean
+.venv/bin/python -m pip install -e ".[build]"
+.venv/bin/python scripts/build_app.py --clean
 ```
 
 Ergebnis in `dist/`: ein Programmordner plus ein Archiv, benannt nach Version und

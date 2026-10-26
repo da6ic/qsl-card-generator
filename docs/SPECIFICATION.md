@@ -1224,8 +1224,12 @@ in `geometry.py` referenzieren.
 - `test_adif_parser.py`: alle Fälle aus §4.4.
 - `test_cabrillo_parser.py`: alle Fälle aus §4.5.4.
 - `test_logbook.py`: Formaterkennung und Fehlerverhalten des Dispatchers (§4.6),
-  inkl. „`parse_file` auf `Log.adi` liefert dasselbe wie der ADIF-Parser" als
-  Regressionsschutz und „fehlende Datei → `OSError`, nicht `LogFormatError`".
+  inkl. „`parse_file` liefert dasselbe wie der ADIF-Parser" als
+  Regressionsschutz (an einem Mini-Log im HAMRS-Stil, zusätzlich an `Log.adi`,
+  wenn es lokal liegt) und „fehlende Datei → `OSError`, nicht `LogFormatError`".
+- **Kein Test setzt eine ungetrackte Datei voraus.** `Log.adi` und
+  `beispiel-logs/` sind gitignored (persönliche Daten); Tests daran tragen ein
+  `skipif`. In einer frischen Kopie läuft die Suite damit grün.
 - `test_card_builder.py`: alle QSOs (kein Via-Filter mehr), `via_routes` aus
   Lookup-Map + `default_via`-Fallback, `effective_via` (Priorität + Trennlinie +
   `via_override`), Datum-Split, Gruppierung per_qso/per_station, Zeilen-Überlauf

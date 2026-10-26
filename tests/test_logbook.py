@@ -20,6 +20,15 @@ CABRILLO = (
     "END-OF-LOG:\n"
 )
 CABRILLO_BARE = "QSO: 14000 CW 2001-11-24 2209 DL0MT 599 14 XT2DX 599 35\n"
+# Aufbau wie ein HAMRS-Export (vgl. Log.adi): Kopf mit <EOH>, ein QSO ohne
+# Rapport (<RST_SENT:0>) und ein Rapport mit Zeilenumbruch in der Länge.
+HAMRS_LIKE = (
+    "HAMRS export\n<ADIF_VER:5>3.1.4<PROGRAMID:5>HAMRS<EOH>\n"
+    "<CALL:6>DL2SCT<QSO_DATE:8>20260719<TIME_ON:4>1508<BAND:3>20m<MODE:3>SSB"
+    "<RST_SENT:2>59<EOR>\n"
+    "<CALL:5>PA3BR<QSO_DATE:8>20260719<TIME_ON:4>1512<BAND:3>20m<MODE:3>FT8"
+    "<RST_SENT:3>+9\n<RST_RCVD:0><EOR>\n"
+)
 
 
 # ------------------------------------------------------- detect_format
@@ -76,10 +85,23 @@ def test_adif_without_records_raises():
 # ----------------------------------------------------------- parse_file
 
 
-def test_parse_file_matches_the_adif_parser():
-    """Regressionsschutz für den Umbau: der Dispatcher ändert nichts am Ergebnis."""
-    expected = adif_parser.parse_file(SAMPLE_LOG)
-    assert parse_file(SAMPLE_LOG) == expected
+def test_parse_file_matches_the_adif_parser(tmp_path):
+    """Regressionsschutz für den Umbau: der Dispatcher ändert nichts am Ergebnis.
+
+    Mit einem Mini-Log in der Art von HAMRS (Kopf, leerer Rapport, ein Wert mit
+    Zeilenumbruch in der deklarierten Länge) — läuft auch ohne `Log.adi`.
+    """
+    path = tmp_path / "hamrs.adi"
+    path.write_text(HAMRS_LIKE, encoding="utf-8")
+    expected = adif_parser.parse_file(path)
+    assert len(expected) == 2
+    assert parse_file(path) == expected
+
+
+@pytest.mark.skipif(not SAMPLE_LOG.exists(), reason="Log.adi liegt nicht im Repository")
+def test_parse_file_matches_the_adif_parser_on_the_real_log():
+    """Dasselbe am echten Logbuch — nur lokal, die Datei ist gitignored."""
+    assert parse_file(SAMPLE_LOG) == adif_parser.parse_file(SAMPLE_LOG)
 
 
 def test_missing_file_raises_oserror_not_logformaterror(tmp_path):

@@ -4,9 +4,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from qslcards.logbook.adif import parse_file, parse_text
 
+# Das echte Logbuch (HAMRS) liegt nur lokal: `*.adi` ist gitignored, es sind
+# persönliche Daten. Tests daran überspringen sich in einer frischen Kopie — die
+# Eigenheiten, um die es geht, prüfen die Fälle oben auch ohne die Datei.
 SAMPLE_LOG = Path(__file__).resolve().parent.parent / "Log.adi"
+requires_sample_log = pytest.mark.skipif(
+    not SAMPLE_LOG.exists(), reason="Log.adi liegt nicht im Repository (persönliche Daten)"
+)
 
 
 def test_with_header():
@@ -199,6 +207,7 @@ def test_overlong_length_that_counts_the_newline():
     assert q.rst_rcvd == "-1"
 
 
+@requires_sample_log
 def test_no_value_keeps_trailing_whitespace():
     """Sammelnetz am echten Logbuch: kein einziger Rohwert trägt Leerraum am Ende."""
     for qso in parse_file(SAMPLE_LOG):
@@ -212,6 +221,7 @@ def test_leading_whitespace_is_part_of_the_value():
     assert parse_text(text)[0].raw["comment"] == "  Hallo"
 
 
+@requires_sample_log
 def test_parse_real_sample_log():
     qsos = parse_file(SAMPLE_LOG)
     assert len(qsos) > 0
