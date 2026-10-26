@@ -44,3 +44,16 @@ __pycache__/
 # nichts Projekthaftes. Bleibt draußen, sonst bricht `scripts/release.py` mit
 # „Arbeitskopie ist nicht sauber" ab.
 .mcp.json
+
+# Lokale Einstellungen von Claude Code (Berechtigungen dieses Rechners).
+.claude/settings.local.json
+
+# Beispiel-Logs: echte Contest-Logs mit Name, Anschrift und E-Mail im Kopf —
+# persönliche Daten, gehören nicht ins Repository. Der Abgleich in
+# tests/test_dxcc.py läuft nur, wenn sie lokal da sind.
+/beispiel-logs/
+
+# „DXCC-Filter" eines Vereinskollegen: eigenes Programm, eigenes Repository.
+# Liegt hier nur zum Nachschlagen; übernommen sind Regeln und Nummerntabelle
+# (siehe qslcards/dxcc/).
+/dxcc-filter/
