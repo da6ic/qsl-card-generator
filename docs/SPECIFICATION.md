@@ -19,7 +19,7 @@ Kartenmodus und Druckmodus.
 ## 2. GUI (Tkinter)
 
 Ein Hauptfenster mit **Menüleiste** (§2.1), einem scrollbaren Bereich mit den
-Abschnitten 1–10 und einer **Statusleiste** am Fuß (§2.3). Farben und Abstände
+Abschnitten 1–11 und einer **Statusleiste** am Fuß (§2.3). Farben und Abstände
 kommen ausschließlich aus `gui/theme.py` (§2.2) — kein Widget setzt selbst eine
 Farbe, so wie kein Zeichencode eine Layoutzahl setzt (`pdf/geometry.py`).
 
@@ -78,7 +78,7 @@ Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
    „Adressen nachschlagen" mehr — der Lookup läuft **automatisch beim Log-Laden**
    (§6), sofern Zugangsdaten eingetragen sind. Die Checkbox
    „Adress-/Label-Export erzeugen" stand hier einmal und steht jetzt in
-   Abschnitt 10 (die CSV entsteht beim Erzeugen und landet neben der PDF); der
+   Abschnitt 11 (die CSV entsteht beim Erzeugen und landet neben der PDF); der
    Config-Schlüssel bleibt `lookup.address_export`, weil die Anschriften aus dem
    Lookup kommen.
    Die vier Zugangsdaten-Felder werden **nicht persistiert** (§3,
@@ -87,13 +87,37 @@ Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
    Hinweiszeile ist die bewusste Ausnahme von „keine Erklärtexte in den
    Abschnitten" — ohne sie wirkten die leeren Felder beim zweiten Start wie ein
    Fehler.
-7. **Bemerkungen**: ein Textfeld „Text für alle Karten" (global, `generation.
+7. **Most Wanted** (optional, §6a): **eine Zeile über die volle Breite** (wie
+   Abschnitt 8, vom Nutzer so gewünscht): Checkbox `Nur Most Wanted drucken`
+   (`mostwanted.enabled`), `Top` als `ttk.Spinbox` 1–340 (`mostwanted.top`,
+   Default 100; Tastatur-Validierung nur Ganzzahlen, beim Verlassen auf den
+   gültigen Wert gesetzt), `Kategorie` als schreibgeschützte Combobox
+   (`Automatisch (nach Mode)`, `Mixed`, `CW`, `Phone`, `Digital` →
+   `mostwanted.category` `auto|mixed|cw|phone|digital`) und **rechtsbündig** am
+   Zeilenende eine Statusanzeige (`Muted.TLabel`, bei Fehlern `Danger.TLabel`):
+   „GDXF 2025 · abgerufen 26.10.2026", „Lade GDXF-Liste…", „Noch keine
+   GDXF-Liste geladen", „GDXF-Liste nicht abrufbar" bzw. „GDXF 2025 ·
+   26.10.2026 · Abruf fehlgeschlagen". Die Texte sind **kurz gehalten**: die
+   Zeile ist im Standardfenster 969 px breit, die längere Fassung („…
+   Aktualisierung fehlgeschlagen", 1031 px) lief über den Rand. Die Statusanzeige
+   ist kein Erklärtext, sondern zeigt, warum bei einem Netzfehler keine Karte auf
+   „Ja" steht. Jede Änderung setzt nur die Drucken-Markierung neu (kein Rebuild).
+   **Nur das Einschalten** (und der Programmstart) löst einen Abruf aus — Top und
+   Kategorie nicht, sonst ginge nach einem gescheiterten Abruf jeder Tastendruck
+   im Top-Feld erneut ins Netz. *Verworfen:* der Abschnitt rechts unter
+   „6. Lookups" (erst so gebaut, ließ links unter „5. Kartenmodus" 114 px Lücke).
+8. **Bemerkungen**: ein Textfeld „Text für alle Karten" (global, `generation.
    remarks`). Steht Text drin, erscheint auf der Rückseite der REMARKS-Kasten
    (dynamisch, §7); leer → kein Kasten. Max. **80 Zeichen**. Je Karte in der
-   Vorschau (Abschnitt 8) überschreibbar.
-8. **Vorschau**: Tabelle (`ttk.Treeview`) **aller** Karten/QSOs (nicht nur der
-   gefilterten): Spalten `Drucken`, `Call`, `#QSOs`, `Via`, `Route/Manager`,
-   `Remarks`, `Datum`, `UTC`. Die `Via`-Spalte zeigt den Zustellweg
+   Vorschau (Abschnitt 9) überschreibbar.
+9. **Vorschau**: Tabelle (`ttk.Treeview`) **aller** Karten/QSOs (nicht nur der
+   gefilterten): Spalten `Drucken`, `Call`, `MW`, `#QSOs`, `Via`, `Route/Manager`,
+   `Remarks`, `Datum`, `UTC`. `MW` zeigt den Most-Wanted-Rang des DXCC-Gebiets in
+   der Kategorie aus Abschnitt 7 (bester Rang über die QSOs der Karte), `?` wenn
+   das Gebiet unbekannt ist, `–` wenn es keinen Rang hat, und bleibt leer, solange
+   keine Liste geladen ist; sortiert wird gerankt zuerst, aufsteigend. Die
+   Drucken-Voreinstellung kommt als Regel von `app.py`
+   (`builder.is_printable`, `PreviewTable.apply_print_filter`). Die `Via`-Spalte zeigt den Zustellweg
    **ausgeschrieben** (`Büro`/`Direkt`/`eQSL`/`LOTW`); solange der Lookup läuft,
    steht dort „…". Auch bei **nicht** gedruckten Karten wird der (natürliche) Weg
    angezeigt, nie ein „—" — ob gedruckt wird, steht in der Spalte „Drucken".
@@ -131,7 +155,7 @@ Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
    **Oben rechts** ein Button „Neu abrufen" (holt fehlende/abgebrochene Stationen
    nach) sowie eine Lookup-Statuszeile. Die gesamte Oberfläche ist scrollbar; die
    Tabelle zeigt mindestens ~5 Einträge.
-9. **Druckmodus**: Zweispaltig. **Links** die Radiobuttons `Duplexdruck
+10. **Druckmodus**: Zweispaltig. **Links** die Radiobuttons `Duplexdruck
    (Vorder-/Rückseite abwechselnd)` / `Vorder-/Rückseite getrennt (2 PDFs)` →
    `generation.print_mode` (`duplex` | `separate`, siehe §7), darunter — durch
    einen `ttk.Separator` abgesetzt, damit sie nicht wie eine dritte Modus-Option
@@ -155,14 +179,15 @@ Die Abschnitte (top → bottom) liegen in `gui/sections.py`:
    Ein-/Ausblenden schiebt die Abschnitte darunter nicht weg.
    Erklärtexte unter Checkbox und Randblock gab es zwischenzeitlich; sie wurden
    vom Nutzer wieder entfernt.
-10. **Ausgabe**: **über** der Zielwahl die Checkbox „Adress-/Label-Export
+11. **Ausgabe**: **über** der Zielwahl die Checkbox „Adress-/Label-Export
    erzeugen" (`lookup.address_export`, §7) — sie steht hier, weil die CSV beim
    Erzeugen entsteht und neben der gewählten PDF landet; darunter Zielpfad,
    Button `PDF erzeugen` (Primärbutton,
    `Accent.TButton`) und Fortschrittsbalken (`ttk.Progressbar`). Die Statuszeile
    steht **nicht** mehr hier, sondern in der Fußleiste (§2.3). `PDF erzeugen` ist
-   **deaktiviert**, solange der Lookup nach dem Log-Laden noch läuft, und wird erst
-   danach wieder aktiv (synchron dazu der Menüeintrag). Fehlende Pflichtangaben
+   **deaktiviert**, solange der Lookup nach dem Log-Laden oder der Abruf der
+   Most-Wanted-Daten (Abschnitt 7) noch läuft, und wird erst danach wieder aktiv
+   (synchron dazu der Menüeintrag). Fehlende Pflichtangaben
    sperren den Button **nicht**, sondern werden beim Klick gemeldet (§2.4). Nach Erfolg werden die
    erzeugten PDF(s) direkt in der Standardanwendung geöffnet.
 
@@ -306,7 +331,7 @@ einen Hinweis mit dem erwarteten Pfad statt einer Ausnahme.
   kommen aus der `Palette` (`apply_palette`, deshalb folgt ein offenes Fenster
   dem Themenwechsel ohne Neuaufbau).
 - **Anker sind der Vertrag zur Oberfläche**: das „?" im Titel von Abschnitt N
-  springt zu `abschnitt-N`. Ein Test prüft, dass es diesen Anker für alle zehn
+  springt zu `abschnitt-N`. Ein Test prüft, dass es diesen Anker für alle elf
   Abschnitte gibt, und dass jeder interne Verweis ein existierendes Ziel hat.
 - **Verweise**: `#anker` springt im Handbuch, alles andere geht an
   `webbrowser.open`.
@@ -317,7 +342,7 @@ einen Hinweis mit dem erwarteten Pfad statt einer Ausnahme.
 - **Kontexthilfe**: `sections.add_section_help(frame, command)` hängt das „?" an
   den Abschnittstitel; es funktioniert für beide Bauweisen (LabelFrame mit `text`
   bekommt dafür ein `labelwidget`, `required_section` hat schon eins). `app.py`
-  hängt es zentral über `self._sections` an alle zehn Rahmen — kein
+  hängt es zentral über `self._sections` an alle elf Rahmen — kein
   Abschnitts-Konstruktor weiß davon.
 - Das Fenster ist **nicht modal** (man soll beim Ausfüllen nachlesen können), es
   gibt immer nur eines, es lädt bei `<FocusIn>` nach einer Änderung der Datei neu
@@ -354,7 +379,7 @@ class SenderConfig:
 class LookupConfig:
     program_id: str = "qslcards"   # HamQTH verlangt prg-Kennung
     address_export: bool = False   # Adress-/Label-Export der gedruckten Karten;
-                                   # Widget in GUI-Abschnitt 10 (§2.2), Daten aus dem Lookup
+                                   # Widget in GUI-Abschnitt 11 (§2.2), Daten aus dem Lookup
     # Hinweis: KEIN `lookup_addresses` mehr — der Lookup läuft automatisch beim
     # Log-Laden, sobald Zugangsdaten eingetragen sind (siehe §6).
     # Die Zugangsdaten selbst stehen bewusst NICHT hier, sondern in
@@ -380,7 +405,7 @@ class GenerationConfig:
     sheet_mode: str = "single"
     # Druckrand (§7): Ränder in mm je Kante, nur wirksam wenn eingeschaltet.
     #   Gilt IMMER je Karte — im Bogen also je Zelle des 2×2-Rasters.
-    print_margin_enabled: bool = False # „Erweiterte Einstellungen" in Abschnitt 9
+    print_margin_enabled: bool = False # „Erweiterte Einstellungen" in Abschnitt 10
     print_margin_top: float = 0.0      # 0 .. PRINT_MARGIN_MAX (15 mm)
     print_margin_bottom: float = 0.0
     print_margin_left: float = 0.0
@@ -394,6 +419,13 @@ class GenerationConfig:
     # Rufzeichen des Absenders (`F/DL0MT/P`), siehe §2.1 Abschnitt 3.
     # Hinweis: KEIN `via_filter`/`include_missing_via` mehr — die Via steht nie im
     # Log, sie wird immer per Lookup bestimmt (§6).
+
+@dataclass
+class MostWantedConfig:              # GUI-Abschnitt 7, siehe §6a
+    enabled: bool = False            # Filter an: nur Gebiete unter den ersten `top`
+    top: int = 100                   # 1..340 (mostwanted.clamp_top)
+    category: str = "auto"           # "auto" | "mixed" | "cw" | "phone" | "digital"
+                                     #   (mostwanted.normalize_category)
 
 @dataclass
 class AppearanceConfig:
@@ -410,9 +442,14 @@ class AppConfig:
     sender: SenderConfig
     lookup: LookupConfig
     generation: GenerationConfig
+    mostwanted: MostWantedConfig
     appearance: AppearanceConfig
     recent: RecentConfig
 ```
+
+Eine `config.yaml` von vor dem Filter lädt ohne `mostwanted:` und bekommt die
+Defaults; der Config-Wert bleibt bewusst dumm (wie `sheet_mode`), geprüft wird
+beim Lesen in `mostwanted.clamp_top`/`normalize_category`.
 
 `load(path) -> AppConfig` / `save(config, path)`. Fehlende Felder → Defaults.
 `recent` wird **defensiv** geladen (nur nicht-leere Strings, auf `MAX_RECENT`
@@ -516,6 +553,7 @@ logbook/
 | `gridsquare`     | `gridsquare`     |                                            |
 | `qth`            | `qth`            | Ort der Gegenstation (falls vorhanden)     |
 | `country`        | `country`        | Land der Gegenstation (falls vorhanden)    |
+| `dxcc`           | `dxcc`           | ADIF-DXCC-Nummer (roh, getrimmt); gewinnt im Most-Wanted-Filter (§6a) |
 | (alle)           | `raw`            | vollständiger Roh-Record                   |
 
 Die Felder `qsl_sent_via`/`qsl_via` werden weiterhin geparst (Rohdaten), steuern
@@ -619,6 +657,7 @@ wie `FN12FR` das Rufzeichen-Muster erfüllt (Präfix `FN1`, Ziffer `2`, Suffix `
 | `felder[1]` je Seite | `rst_sent`/`rst_rcvd` | nur bei gültigem Rapportmuster |
 | Empfangs-Austausch | `gridsquare` | nur wenn er **genau einen** Locator enthält |
 | — | `qsl_sent_via`, `qsl_via`, `name`, `qth`, `country` | immer leer: Cabrillo kennt keine Versandart (§6) |
+| — | `dxcc` | immer leer: Cabrillo kennt kein DXCC-Feld — das Gebiet kommt aus der `cty.dat` (§6a) |
 
 Die Frequenz in vier Regeln, **in dieser Reihenfolge**:
 1. **Bandbezeichner-Tabelle zuerst** (`1.2G`→1240, `2.3G`→2300, `10G`→10000, dazu
@@ -702,13 +741,21 @@ class Card:
                                #   weiterhin die Trennlinie
     # Empfängeradresse nur bei Bedarf gefüllt (Export), NICHT auf der Karte:
     recipient: LookupResult | None = None
+    dxcc: int | None = None    # ADIF-DXCC-Nummer der Gegenstation (§6a), NICHT
+                               #   auf der Karte; None = unbekannt
 ```
 
 Der tatsächlich zu druckende Weg ist **nicht** direkt am Card, sondern wird über
 `effective_via(card, active_priority)` ermittelt (höchstpriorisierter aktiver Weg
 aus `via_routes`, ggf. per `via_override` erzwungen; `None` = nicht drucken).
 
-### 5.2 Ablauf `build_cards(qsos, config, lookups=None)`
+Ob eine Karte überhaupt gedruckt wird, sagt **`is_printable(card,
+active_priority, mostwanted=None)`** — die einzige Quelle der Wahrheit für die
+Spalte „Drucken": ein aktiver Weg (`effective_via`) **und**, wenn der
+Most-Wanted-Filter an ist (`mostwanted` ein `MostWantedFilter`), ein Gebiet unter
+den ersten N. `mostwanted_rank(card, rule)` liefert den Rang für die Spalte „MW".
+
+### 5.2 Ablauf `build_cards(qsos, config, lookups=None, *, resolve_dxcc=None)`
 1. **Kein Via-Filter!** `build_cards` behält **alle** QSOs. Die Via kommt nicht
    aus dem Log, sondern aus dem Lookup (§6): `lookups` ist eine Map
    `CALL -> LookupResult`. Je Karte wird gesetzt:
@@ -718,9 +765,12 @@ aus `via_routes`, ggf. per `via_override` erzwungen; `None` = nicht drucken).
      Manager-Rufzeichen oder leer) → Feld „Via:".
    - `recipient = lookups[call]` (Adresse, nur für den Export; nicht auf der Karte).
    Fehlt `lookups` oder der Eintrag → `via_routes = (default_via,)`, `via_text` leer.
-   Das **Drucken/Abwählen** ermittelt die GUI über `effective_via` anhand der
-   Priorität + Trennlinie (Wege unter der Linie standardmäßig abgewählt), nicht der
-   Builder.
+   Das **Drucken/Abwählen** ermittelt die GUI über `is_printable` anhand der
+   Priorität + Trennlinie (Wege unter der Linie standardmäßig abgewählt) und des
+   Most-Wanted-Filters, nicht der Builder.
+   - `dxcc` je Karte, in dieser Reihenfolge (§6a): Log-Feld `DXCC` →
+     `resolve_dxcc(call)` (die `cty.dat`) → `lookups[call].dxcc`. Bei „pro
+     Station" gilt das erste bekannte Gebiet der Station.
 2. **Datum splitten**: `qso_date` "YYYYMMDD" → `date_y=YY` (2-stellig, wie
    Referenz „D M Y"), `date_m=MM`, `date_d=DD`. (Reihenfolge auf der Karte: D M Y.)
 3. **UTC**: `time_on` → "HH:MM" (Sekunden abschneiden, sofern vorhanden).
@@ -771,6 +821,14 @@ zusätzlich die QSL-Routing-Felder:
 - `accepts_bureau: str | None` — HamQTH `qsl` („Y"/„N"/„?").
 - `accepts_direct: str | None` — HamQTH `qsldirect` („Y"/„N"/„?").
 - `lotw: str | None`, `eqsl: str | None` — HamQTH `lotw`/`eqsl` („Y"/„N"/„?").
+- `dxcc: str | None` — ADIF-DXCC-Nummer des **Rufzeichens**: HamQTH `adif`, QRZ
+  `dxcc`. **Nicht** HamQTH `adr_adif` bzw. QRZ `ccode`/`country` — die beziehen
+  sich auf die Postanschrift. `normalize_dxcc` macht aus leer/`0`/Unlesbarem
+  `None` (HamQTH meldet „kein Gebiet" als `0`), damit es beim Zusammenführen als
+  Lücke gilt. Steht in `DATA_FIELDS`; ein Treffer mit **nur** dem Gebiet ist nicht
+  leer. Alte Cache-Einträge ohne das Feld laden mit `None` — **keine Migration**
+  (vom Nutzer so entschieden). Im Most-Wanted-Filter ist der Lookup nur noch die
+  letzte Quelle (§6a).
 
 Fürs Zusammenführen zweier Anbieter (§6.2a) zusätzlich `missing_fields()` (welche
 Datenfelder dieser Treffer offen lässt) und `merged_with(other)` (füllt die
@@ -907,6 +965,99 @@ gefunden" und die Meldung stünde allein im Log. Deshalb:
 
 ---
 
+## 6a. Most Wanted (`mostwanted/`) und DXCC (`dxcc/`)
+
+Der Filter druckt auf Wunsch nur Karten an die **gesuchtesten DXCC-Gebiete** der
+German DX Foundation (https://gdxf.de/mostwanted/, aus Sicht Mitteleuropas, auf
+Grundlage des DARC-DXCC-Scoreboards, seit 2020 bandbezogen 160–6 m). Die
+Rangliste kommt **allein** von der GDXF (vom Nutzer so entschieden); das
+DXCC-Gebiet jedes QSOs liefert der Rest dieses Kapitels.
+
+### 6a.1 Die GDXF-Liste (`mostwanted/gdxf.py`)
+- **Keine API, kein CSV** — nur die HTML-Seite. Ein einziger
+  `POST https://gdxf.de/mostwanted/index.php` mit `show=500` („all") liefert
+  **alle vier** Tabellen (Mixed/CW/Phone/Digital, je 340 Zeilen, ~1 MB) mit dem
+  neuesten Jahrgang. Der DXCC-Filter des Kollegen holte stattdessen je Gebiet
+  `entity.php?entity=N` (~100 Abrufe je Contest-Log), weil er die Übersicht für
+  „nur Top 25" hielt — so viel Last ist unnötig.
+- Tabellen-`id` = Kategorie; je Zeile Rang, Präfix-Link `entity.php?entity=N`,
+  Name (Flaggenbild davor), „needed by" in %. **`N` ist die ADIF-DXCC-Nummer** und
+  der einzige Schlüssel: die Präfixspalte (`9M6,8`, `FT-J,E`, `3D2-C`) taugt nicht.
+- Parser mit `html.parser` aus der Standardbibliothek; Zeilen ohne Rang oder ohne
+  gültigen Link werden übersprungen. Keine Tabelle → `MostWantedFormatError`.
+- Abruf mit `User-Agent: QSL-Karten-Generator/<version>`.
+
+### 6a.2 Ablage und Neuladen (`mostwanted/store.py`)
+- `mostwanted.json` im Datenordner (`paths.mostwanted_path`), `format: 1`; ein
+  anderes Format oder eine kaputte Datei zählt als „nicht vorhanden".
+- `refresh(path)`: ohne Bedarf kein Netz; neu abgerufen wird, wenn die Kopie
+  fehlt oder **älter als 30 Tage** ist (`MAX_AGE_DAYS`). Die GDXF aktualisiert
+  einmal im Jahr. Jeder Fehler landet in `RefreshResult.error`, die alte Kopie
+  bleibt gültig.
+- Die GUI ruft nur bei **eingeschaltetem** Filter ab (Start oder Einschalten),
+  im Hintergrund-Thread; „PDF erzeugen" ist solange gesperrt.
+- **Keine Kopie der Liste im Programm oder Repository**: die Seite hat keinen
+  Lizenzvermerk, es sind Daten der GDXF. Die Tests nutzen einen selbst gebauten
+  HTML-Ausschnitt.
+
+### 6a.3 Rufzeichen → DXCC (`dxcc/`)
+Reihenfolge je QSO (`builder._card_dxcc`):
+1. **Log-Feld `DXCC`** — der Logger kannte das Gebiet zur QSO-Zeit.
+2. **`cty.dat`** von AD1C (https://www.country-files.com/, MIT-Lizenz) — ohne
+   Netz, auch für Cabrillo, mit gepflegten Ausnahmen für DXpeditionen.
+3. **Lookup** (`LookupResult.dxcc`) — nur noch für Rufzeichen, die die `cty.dat`
+   nicht kennt.
+
+*Verworfen:* das Gebiet aus der GDXF-Präfixspalte abzuleiten. Gemessen gegen die
+DXCC-Werte von QARTest im CQ-WW-Beispiel-Log: 150/294 Stationen richtig, 141
+unbekannt, 3 falsch — und genau die seltenen fehlten (HF0PAS, VK9DX, AH2R; die
+GDXF nennt `VP0-H`, `VK9N`, `KH2`). Die `cty.dat` kam auf **294/294**.
+
+Nachgebaut nach dem Programm „DXCC-Filter" eines Vereinskollegen (Regeln und
+Nummerntabelle mit seinem Einverständnis übernommen):
+- `cty.dat` nennt Gebiete nur über ihren **Hauptpräfix**; `dxcc-numbers.csv`
+  (`Hauptpräfix;Nummer;Name`, 340 Zeilen) bildet ihn auf die ADIF-Nummer ab. Ein
+  Test hält fest, dass jedes Gebiet der mitgelieferten `cty.dat` eine Nummer hat
+  und jede Nummer genau einmal vorkommt.
+- Zuordnung: exakter Eintrag (`=VK9DX`, Überschreibungen wie `(15)[28]` werden
+  abgeschnitten) vor dem **längsten** passenden Präfix. Bei Schrägstrich zählt
+  der Standort (`location_part`): `CT9/M0CCC` → `CT9`, `DL1ABC/EA8` → `EA8`,
+  `W1AW/4` → `W4AW`, `/P` `/M` `/QRP` `/QRPP` `/A` `/B` `/LH` `/J` `/R` sagen
+  nichts; `/MM` und `/AM` zählen für **kein** Gebiet. Nur-WAE-Gebiete (`*TA1`)
+  werden übersprungen.
+- **Drei Stufen** (`dxcc/store.py`): die zuletzt abgerufene `cty.dat` im
+  Datenordner (`paths.cty_path`), sonst die **mitgelieferte**
+  (`qslcards/assets/dxcc/cty.dat`, Lizenz daneben in `LICENSE-cty.txt`) — der
+  Filter funktioniert damit ab dem ersten Start auch offline. Neu abgerufen wird
+  von `https://www.country-files.com/cty/cty.dat`, wenn die Kopie im Datenordner
+  fehlt oder **älter als 14 Tage** ist (Dateidatum), zusammen mit der GDXF-Liste
+  im selben Hintergrund-Thread. Ein Abruf zählt nur, wenn er sich als `cty.dat`
+  lesen lässt (Versionsvermerk `=VERYYYYMMDD`, ≥ 1000 Präfixe) — eine Fehlerseite
+  überschreibt nie eine gute Kopie. Gelesen und geschrieben wird als Latin-1
+  (jedes Byte bleibt erhalten). Die Startseite von country-files.com blockt
+  automatische Abrufe, die Datei selbst nicht.
+- Kommt eine **neue** `cty.dat` herein, baut die Vorschau die Karten neu auf
+  (Gebiete können sich geändert haben); Korrekturen in der Vorschau gehen dabei
+  verloren. Kommt höchstens alle 14 Tage beim Einschalten vor.
+
+### 6a.4 Die Filterregel (`mostwanted.MostWantedFilter`)
+- **Top N**: gedruckt wird, was unter den ersten `top` Rängen liegt (1–340).
+- **Kategorie** (`category_for_mode`): CW → `cw`; SSB/USB/LSB/AM/FM/PH/
+  DIGITALVOICE/DV → `phone`; alles andere (FT8, RTTY, DIGI …) → `digital`; ohne
+  Mode → `mixed`.
+  - `auto` (Default): jedes QSO an der Liste **seines** Modes.
+  - `mixed`: alle QSOs an der Mixed-Liste.
+  - `cw`/`phone`/`digital`: **nur QSOs in dieser Betriebsart** zählen (wie im
+    DXCC-Filter). Ein SSB-QSO an der CW-Liste zu messen ergäbe keinen Sinn.
+- Eine Karte mit mehreren QSOs („pro Station") zählt mit ihrem **besten** Rang —
+  sie kommt durch, sobald **ein** QSO darauf die Bedingung erfüllt.
+- **Unbekanntes Gebiet** oder **keine Liste** → nicht drucken (vom Nutzer so
+  entschieden). Die Statusanzeige von Abschnitt 7 sagt, wenn die Liste fehlt.
+- Eine Änderung an Filter/Top/Kategorie setzt die Spalte „Drucken" neu; manuelle
+  Umschaltungen gehen dabei verloren — wie bei der Trennlinie der Zustellwege.
+
+---
+
 ## 7. PDF-Erzeugung (`pdf/`)
 
 - **Seitengröße**: A6 quer (bzw. A4 quer im Bogenmodus, siehe unten). Querformat
@@ -919,7 +1070,7 @@ gefunden" und die Meldung stünde allein im Log. Deshalb:
     Drucker ohne beidseitigen Druck: erst alle Vorderseiten drucken, Papier
     umgedreht neu einlegen, dann die Rückseiten. Da **ein** Frontbild für alle
     Karten gilt, sind alle Vorderseiten identisch (keine Umkehrung nötig).
-- **Bogendruck** (`generation.sheet_mode`, GUI-Abschnitt 9, `pdf/layout_sheet.py`):
+- **Bogendruck** (`generation.sheet_mode`, GUI-Abschnitt 10, `pdf/layout_sheet.py`):
   quer zum Druckmodus, beide Modi funktionieren damit unverändert — nur trägt eine
   „Seite" dann bis zu vier Karten.
   - `"single"`: eine Karte je PDF-Seite (A6 quer), wie bisher.
@@ -942,7 +1093,7 @@ gefunden" und die Meldung stünde allein im Log. Deshalb:
     Frontbild für alle Karten, alle vier Vorderseiten eines Bogens sind also
     identisch — egal um welche Kante der Drucker wendet, hinter jeder Rückseite
     liegt dieselbe Vorderseite (gleiche Begründung wie bei `"separate"`).
-- **Druckrand** (`generation.print_margin_*`, GUI-Abschnitt 9): Viele Drucker
+- **Druckrand** (`generation.print_margin_*`, GUI-Abschnitt 10): Viele Drucker
   drucken nicht bis zur Blattkante und beschneiden sonst den Inhalt. Die vier
   Werte bedeuten „so viel Rand **muss** frei bleiben", und zwar **je Karte** —
   im Bogen also in jeder der vier Zellen. Zwischen zwei Karten steht dadurch der
@@ -1032,7 +1183,7 @@ gefunden" und die Meldung stünde allein im Log. Deshalb:
   braucht man für den Stapel, der gerade gedruckt wird. Format simpel
   (Adressblöcke), separat von den Karten. Die Datei hängt am **Basis-Ausgabepfad**
   (`…_addresses.csv`), unabhängig vom Druckmodus — deshalb steht ihre Checkbox in
-  GUI-Abschnitt 10 bei der Zielwahl. Schlägt **nur** das Schreiben der CSV fehl
+  GUI-Abschnitt 11 bei der Zielwahl. Schlägt **nur** das Schreiben der CSV fehl
   (Schreibrechte, Datei im Tabellenprogramm geöffnet), wird das geloggt und der
   Lauf gilt trotzdem als erfolgreich: die PDF ist zu dem Zeitpunkt fertig.
 
@@ -1056,7 +1207,11 @@ gefunden" und die Meldung stünde allein im Log. Deshalb:
 | zu viele QSOs pro Station für Tabelle  | Folge-Karte(n) anlegen                      |
 | Umlaute/UTF-8 im Namen                 | korrekt kodieren (ReportLab-Font mit Umlauten) |
 | Wert zu lang für seinen Platz (Name, Antenne, Rufzeichen, Remarks) | kleiner setzen, **nie** abschneiden (§7 „Textbreiten") |
-| QSO ohne `QSO_DATE`, Sortierung nach „Datum" | leere Datumsteile sortieren vorn, kein `int("")` (§2 Abschnitt 8) |
+| QSO ohne `QSO_DATE`, Sortierung nach „Datum" | leere Datumsteile sortieren vorn, kein `int("")` (§2 Abschnitt 9) |
+| Most-Wanted-Filter an, DXCC-Gebiet unbekannt | Karte „Drucken: Nein", Spalte „MW" zeigt `?` (§6a.4) |
+| GDXF-Seite nicht erreichbar | alte `mostwanted.json` gilt weiter; ohne Kopie keine Karte auf „Ja", Statusanzeige rot (§6a.2) |
+| GDXF-Layout geändert (keine Tabelle) | `MostWantedFormatError` → wie nicht erreichbar, nichts überschrieben |
+| `cty.dat` nicht abrufbar / Fehlerseite | gespeicherte bzw. mitgelieferte Kopie gilt, nur geloggt (§6a.3) |
 | Adress-CSV nicht schreibbar            | loggen; die fertige PDF gilt trotzdem als Erfolg (§7) |
 
 **Fonts/Umlaute**: Standard-PDF-Fonts (Helvetica) unterstützen Latin-1-Umlaute.
@@ -1085,7 +1240,21 @@ in `geometry.py` referenzieren.
   und dass ein vollständiger Treffer den zweiten Anbieter erspart.
 - `test_config.py`: Laden/Speichern, fehlende Felder → Defaults, `appearance`/
   `recent` (Roundtrip, defensives Laden, Kappung, `push_recent`), `sheet_mode`
-  (Default `single`, Roundtrip, alte Config ohne das Feld).
+  (Default `single`, Roundtrip, alte Config ohne das Feld), `mostwanted`
+  (Defaults, Roundtrip, alte Config ohne den Abschnitt).
+- `test_mostwanted.py`: GDXF-Parser an einem selbst gebauten Ausschnitt (alle
+  vier Tabellen, kaputte Zeilen, fremde Tabelle, Jahr/Stand), keine Tabelle →
+  Fehler, Mode → Kategorie, `clamp_top`/`normalize_category`, die Filterregel
+  (Auto, Mixed, feste Betriebsart zählt nur ihre QSOs, Top-Grenze, ohne Liste/
+  Gebiet), Ablage und Neuladen (frisch → kein Netz, fehlt → Abruf, Fehler →
+  alte Kopie bleibt), Abruf mit `show=500` und eigenem User-Agent.
+- `test_dxcc.py`: Zuordnung nach den Fällen des DXCC-Filters (exakt vor Präfix,
+  längster Präfix, Schrägstrich-Regeln, `/MM`/`/AM`, WAE übersprungen, Version),
+  Vollständigkeit der mitgelieferten Daten, Laden mit Rückfall auf die
+  mitgelieferte Kopie, Alter am Dateidatum, Neuladen (frisch → kein Netz,
+  Fehlerseite/Bruchstück überschreibt nichts). Dazu ein Abgleich mit allen
+  DXCC-Werten von QARTest in `beispiel-logs/cqww26.adi` — **nur lokal**, die
+  Datei ist nicht im Repository (persönliche Daten), der Test überspringt sich.
 - `test_geometry.py`: mm-Umrechnung, Seitenmaße, dass alle Konstanten definiert
   sind und im Blattbereich liegen; Druckrand (Clamping, Rahmen, elastisches
   Layout) und **Bogendruck**: Raster kachelt A4 lückenlos und hängt nicht am
@@ -1109,7 +1278,18 @@ in `geometry.py` referenzieren.
   Icon-Reihenfolge, Zebra-/Icon-Hintergründe, Zeichenzähler, Seiten-Scroll;
   **Pflichtangaben** (§2.4: Popup statt Erzeugung, Markierung an Log/Bild/Feldern,
   Markierung geht beim Ausfüllen weg, Fußnote unter allen Abschnitten) und dass
-  „Drucken → Nein" die Zeile sofort ausgraut (Auswahl aufgehoben).
+  „Drucken → Nein" die Zeile sofort ausgraut (Auswahl aufgehoben). Abschnitt 7:
+  volle Breite zwischen Lookups und Bemerkungen, Top N/Kategorie setzen nur die
+  Markierung, frische Daten → kein Abruf, nach einem Fehlschlag kein Abruf je
+  Tastendruck, ohne Liste nichts auf „Ja", „PDF erzeugen" wartet auf die Liste,
+  Cabrillo ohne Lookup bekommt sein Gebiet aus der mitgelieferten `cty.dat`.
+  Das Fixture lenkt `CONFIG_PATH`, `MOSTWANTED_PATH` und `CTY_PATH` in den
+  Temp-Ordner und ersetzt `dxcc.refresh` — **kein GUI-Test geht ins Netz** (eine
+  Zeit lang holten sie die echte `cty.dat`). Es ruft außerdem einmal `update()`:
+  an ein noch nicht abgebildetes Fenster verschickt `event_generate` nichts, und
+  unter python.org-Tk 9.0.4 gingen `<FocusOut>`/`<Button-1>` dadurch verloren.
+  Spalten der Vorschau werden über ihren **Namen** gelesen (`_row_values`), nicht
+  über die Position — die Spalte „MW" hätte sonst jeden Index still verschoben.
 - `test_theme.py`: Paletten vollständig, Modus-Auflösung, `clam` + gesetzte
   Style-Farben, `restyle_tree` für klassische tk-Widgets.
 - `test_menu.py`: Menüstruktur, dynamische Teile („Zuletzt verwendet", Sperre von
@@ -1126,7 +1306,8 @@ in `geometry.py` referenzieren.
   hat seinen Anker `{#abschnitt-N}`, jeder interne Verweis trifft ein Ziel.
 - `test_paths.py`: §10 — Quellmodus zeigt in die Projektwurzel (auch aus fremdem
   Arbeitsverzeichnis), gebündelt Portable- vs. Benutzerordner, macOS-Sonderfall
-  `.app/Contents/MacOS`, Config und Cache im selben Ordner, `subprocess_env`.
+  `.app/Contents/MacOS`, Config, Cache, `mostwanted.json` und `cty.dat` im selben
+  Ordner, mitgelieferte `cty.dat`/Nummerntabelle vorhanden, `subprocess_env`.
 - `test_release.py`: der Versionssprung (§10.5) — vor allem, was **nicht**
   passieren darf: eine rückwärts laufende Nummer, ein Commit mit mehr als der
   Versionszeile, und eine angehobene Version, die nach einem gescheiterten Build
@@ -1157,13 +1338,14 @@ Drei Orte werden streng auseinandergehalten:
 
 | Funktion | Bedeutung | gebündelt | aus der Quelle |
 |---|---|---|---|
-| `resource_path(*teile)` | mitgeliefert, **nur lesbar**: Schriften, Icons, `handbuch.md`, `config.example.yaml` | `sys._MEIPASS/…` | Projektwurzel |
+| `resource_path(*teile)` | mitgeliefert, **nur lesbar**: Schriften, Icons, `cty.dat` + Nummerntabelle (`bundled_cty_path`, `dxcc_numbers_path`), `handbuch.md`, `config.example.yaml` | `sys._MEIPASS/…` | Projektwurzel |
 | `program_dir()` | wo das Programm für den Anwender „liegt" | Ordner der Binary (macOS: **über** der `.app`) | Projektwurzel |
 | `user_data_dir()` | plattformüblich, immer beschreibbar | `%APPDATA%` / `~/Library/Application Support` / `$XDG_CONFIG_HOME` | (dito, ungenutzt) |
 
 ### 10.2 Datenablage (hybrid)
 
-`data_dir()` entscheidet **einmal** für Config, Lookup-Cache und Protokoll —
+`data_dir()` entscheidet **einmal** für Config, Lookup-Cache, Most-Wanted-Liste
+(`mostwanted_path`), zuletzt abgerufene `cty.dat` (`cty_path`) und Protokoll —
 laufen sie auseinander, gehört der Cache zu einem anderen Konto.
 
 - **Nicht gebündelt** → immer `program_dir()` (Projektwurzel). Der

@@ -24,5 +24,6 @@ SOFTWARE.
 ---
 
 dxcc-numbers.csv (Hauptpräfix der cty.dat -> ADIF-DXCC-Nummer) stammt aus dem
-Programm „DXCC-Filter" (daten/dxcc-nummern.csv). Sie muss nur ergänzt werden,
-wenn die ARRL ein neues DXCC-Gebiet aufnimmt.
+Programm „DXCC-Filter" eines Vereinskollegen (daten/dxcc-nummern.csv) und ist mit
+seinem Einverständnis übernommen. Sie muss nur ergänzt werden, wenn die ARRL ein
+neues DXCC-Gebiet aufnimmt.

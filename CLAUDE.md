@@ -31,6 +31,10 @@ Cabrillo) automatisch **QSL-Karten** erzeugt und als **eine große PDF** ausgibt
   **getrennt** (zwei PDFs: alle Vorderseiten, alle Rückseiten).
 - **Bogendruck** (quer dazu): wahlweise eine Karte je A6-Seite oder **vier Karten
   auf einem A4-Bogen** (quer, 2×2) mit gestrichelten Schnitt-Hilfslinien.
+- **Most-Wanted-Filter** (optional, GUI-Abschnitt 7): nur Karten an die
+  gesuchtesten DXCC-Gebiete der **GDXF-Liste** (https://gdxf.de/mostwanted/),
+  Top N je Kategorie. Das DXCC-Gebiet kommt aus dem Log-Feld `DXCC`, sonst aus der
+  mitgelieferten **`cty.dat`** (AD1C) — damit auch für Cabrillo und ohne Lookup.
 
 ---
 
@@ -72,6 +76,15 @@ qslcards/
     hamqth.py             # HamQTH-Client (Session-basiert)
     qrz.py                # QRZ-Client (optional)
     cache.py              # lokaler Cache (JSON), spart API-Calls
+  mostwanted/
+    __init__.py           # Fassade + CATEGORY_LABELS
+    models.py             # MostWantedList/RankedEntity/MostWantedFilter, Mode->Kategorie
+    gdxf.py               # GDXF-Seite abrufen (1 POST, show=500) + HTML-Parser
+    store.py              # mostwanted.json: laden/speichern, Neuladen nach 30 Tagen
+  dxcc/
+    __init__.py
+    cty.py                # Rufzeichen -> DXCC über cty.dat + Nummerntabelle
+    store.py              # cty.dat: gespeichert > mitgeliefert, Neuladen nach 14 Tagen
   cards/
     __init__.py
     models.py             # Card, CardEntry (Recipient) Dataclasses
@@ -97,6 +110,7 @@ qslcards/
   assets/
     fonts/                # DejaVuSans (Umlaute auf der Karte)
     icons/                # Tabellen-Icons + app_icon.svg und dessen Renderings
+    dxcc/                 # cty.dat (AD1C, MIT) + dxcc-numbers.csv + LICENSE-cty.txt
 tests/
   test_adif_parser.py     test_theme.py
   test_cabrillo_parser.py test_menu.py
@@ -107,7 +121,8 @@ tests/
   test_config.py          test_help.py
   test_generator.py       test_paths.py
   test_layout_back.py     test_build_app.py
-  test_release.py
+  test_release.py         test_mostwanted.py
+  test_dxcc.py
 scripts/
   preview_card.py         # Karten-Preview als PDF (`--4up [RAND_MM]` = A4-Bogen)
   make_icon.py            # app_icon.svg -> PNG (16–1024) + .ico + .icns
@@ -140,15 +155,19 @@ docs/
 Logdatei ──logbook (erkennt ADIF|Cabrillo)──> [QSO, QSO, ...]
                             │
 HamQTH/QRZ (auto beim Laden, alle Stationen, gecacht)
-   └─> je CALL: akzeptierte Wege {B,D,Q,L} + Manager + Adresse
+   └─> je CALL: akzeptierte Wege {B,D,Q,L} + Manager + Adresse (+ DXCC)
+cty.dat (mitgeliefert/gespeichert) ──> je CALL: DXCC-Nummer (ohne Netz)
                             │
                             ▼
-        builder(alle QSOs, via_routes aus Lookup, Gruppierung) ──> [Card, ...]
+        builder(alle QSOs, via_routes aus Lookup, DXCC Log>cty>Lookup,
+                Gruppierung) ──> [Card, ...]
                                                     │
 Config (Absender) ──────────────────────────────────┤
 Frontbild ──────────────────────────────────────────┤
+GDXF-Liste (mostwanted.json, nur bei Filter an) ────┤
                                                     ▼
-GUI: Priorität + Trennlinie (effective_via) ──> generator ──> PDF(s) (+ Adress-CSV)
+GUI: Priorität + Trennlinie + Most Wanted (is_printable)
+                       ──> generator ──> PDF(s) (+ Adress-CSV)
 ```
 
 Jede `Card` erzeugt genau zwei Seiten: `layout_front` + `layout_back`.
@@ -203,6 +222,13 @@ Jede `Card` erzeugt genau zwei Seiten: `layout_front` + `layout_back`.
    Treffer gewinnt bei seinen Feldern, die folgenden Anbieter füllen die Lücken
    (`source` = z. B. `"qrz+hamqth"`). Preis: mit beiden Zugangsdaten wird fast
    jede Station **zweimal** abgefragt, der Lookup dauert rund doppelt so lange.
+8. **Most Wanted: Rangliste allein von der GDXF, DXCC aus Log > cty.dat >
+   Lookup.** Ist der Filter an, wird eine Karte nur gedruckt, wenn sie einen
+   aktiven Zustellweg hat **und** ihr Gebiet unter den ersten `top` Rängen liegt
+   (`builder.is_printable`). Kategorie `auto` misst jedes QSO an der Liste seines
+   Modes, `mixed` alle an Mixed, `cw`/`phone`/`digital` zählen **nur** QSOs in
+   dieser Betriebsart. Karte „pro Station" = bester Rang. **Unbekanntes Gebiet
+   oder keine Liste → nicht drucken.** Der Rang steht nie auf der Karte.
 
 ---
 
@@ -226,6 +252,7 @@ class QSO:
     gridsquare: str | None
     qth: str | None            # Ort der Gegenstation (falls im Log)
     country: str | None        # Land der Gegenstation (falls im Log)
+    dxcc: str | None           # ADIF-Feld DXCC (roh); Cabrillo: immer None
     raw: dict[str, str]        # alle Felder roh, kleingeschrieben
 ```
 
@@ -274,6 +301,7 @@ class LookupResult:
     accepts_direct: str | None  # HamQTH qsldirect
     lotw: str | None            # HamQTH lotw
     eqsl: str | None            # HamQTH eqsl
+    dxcc: str | None            # HamQTH adif / QRZ dxcc (NICHT adr_adif/ccode)
     source: str          # "hamqth" | "qrz" | "cache" | "none"
 
 @dataclass
@@ -316,13 +344,35 @@ def active_via_priority(priority, cut) -> list[str]: ...
   `via_routes`/`via_text`/`recipient`. Netz-/Auth-Fehler nie fatal.
 
 ### `cards/builder.py`
-- `build_cards(qsos, config, lookups=None) -> list[Card]`
+- `build_cards(qsos, config, lookups=None, *, resolve_dxcc=None) -> list[Card]`
+  — `resolve_dxcc(call) -> int | None` ist die cty.dat (`CtyDatabase.dxcc`);
+  `card.dxcc` = Log-Feld > `resolve_dxcc` > `lookups[call].dxcc`.
 - **kein Via-Filter**: baut Karten für **alle** QSOs; `via_routes` via
   `accepted_routes(lookups[call], config.default_via)`, `via_text` =
   `extract_manager_callsign(...)`. Gruppiert nach `config.card_mode`
   (`per_qso`|`per_station`), sortiert deterministisch.
 - `effective_via(card, active_priority)` = der tatsächlich zu druckende Weg (oder
-  `None` = nicht drucken); einzige Quelle der Wahrheit für Vorschau **und** Export.
+  `None` = nicht drucken).
+- `is_printable(card, active_priority, mostwanted=None)` = Drucken-Voreinstellung:
+  `effective_via` **und** (Filter an) Most-Wanted-Regel; einzige Quelle der
+  Wahrheit für die Vorschau, der Export druckt genau die „Ja"-Zeilen.
+  `mostwanted_rank(card, rule)` = Rang für die Spalte „MW".
+
+### `mostwanted/` (§6a SPECIFICATION)
+- `parse_html(text) -> MostWantedList` (wirft `MostWantedFormatError`),
+  `fetch_html()` (POST `show=500`, eigener User-Agent).
+- `load(path)` / `is_stale(ranking)` / `refresh(path, force=False) -> RefreshResult`
+  (`ranking`, `error`, `fetched`; Fehler nie fatal, alte Kopie bleibt).
+- `MostWantedFilter(ranking, top, category)`: `rank(dxcc, modes)`,
+  `accepts(dxcc, modes)`; `ranking=None` → nichts besteht.
+- `category_for_mode`, `clamp_top` (1..340), `normalize_category`, `CATEGORY_LABELS`.
+
+### `dxcc/`
+- `CtyDatabase(cty_text, numbers_text)`: `lookup(call) -> Entity | None`,
+  `dxcc(call) -> int | None`, `version`. `location_part(call)` (Schrägstrich-Regeln).
+- `load(stored, bundled, numbers)` (gespeichert > mitgeliefert),
+  `is_stale(stored)` (Dateidatum, 14 Tage), `refresh(stored, bundled, numbers)`
+  → `CtyRefreshResult` (eine Fehlerseite überschreibt nie eine gute Kopie).
 
 ### `pdf/generator.py`
 - `generate(cards, config, front_image_path, output_path, progress_cb=None) -> list[Path]`
@@ -434,6 +484,10 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
 - [x] **Anwender-Handbuch** im Programm (`Hilfe ▸ Handbuch`, F1 / ⌘?) aus
       `handbuch.md`, mit Kapitelliste, klickbaren Verweisen und einem „?" je
       Abschnitt, das ins passende Kapitel springt.
+- [x] **Most-Wanted-Filter** (Abschnitt 7) nach der GDXF-Liste: Top N +
+      Kategorie, Spalte „MW" in der Vorschau, Liste und `cty.dat` automatisch
+      aktuell gehalten. Nachgewiesen: das Cabrillo-Beispiel-Log liefert **ohne**
+      Lookup dieselben 4 Karten (Top 100) wie das ADIF mit DXCC-Feld.
 
 ### Darüber hinaus: Auslieferung
 
@@ -481,14 +535,24 @@ So ist alles ohne GUI testbar; die GUI ist nur die Fernbedienung.
 - Exakte Layout-Koordinaten: `docs/CARD_LAYOUT.md`.
 - API-Endpunkte/Session-Flow: `docs/SPECIFICATION.md` §Lookups. Vor Implementierung
   gegen die **aktuelle** HamQTH-/QRZ-Doku gegenprüfen (APIs können sich ändern).
+- GDXF-Seite, `cty.dat`-Format und die Zuordnungsregeln: `docs/SPECIFICATION.md`
+  §6a. Ändert die GDXF ihr Layout, schlägt `parse_html` fehl und die alte Liste
+  gilt weiter — dann den Parser gegen die echte Seite nachziehen.
 
 ---
 
 ## 11. Arbeitsweise & gelernte Fakten (schnelles Wiedereinsteigen)
 
 **Umgebung / Tooling**
-- Python liegt im venv: **`.venv/bin/python`** benutzen (Interpreter ist 3.14,
-  Homebrew, mit **Tk 9.0.4** — deshalb funktionieren die SVG-Icons hier).
+- Python liegt im venv: **`.venv/bin/python`** benutzen (Interpreter ist
+  **python.org 3.15.2** mit **Tk 9.0.4** — deshalb funktionieren die SVG-Icons
+  hier). Seit 2026-10-26: das alte `.venv` (Homebrew 3.14.6, angelegt unter
+  `/Users/johannes/…`) und `.venv-build` (python.org 3.14.7) zeigten auf
+  Interpreter, die es auf diesem Rechner nicht gibt; Homebrew-Python ist hier
+  nicht installiert. `.venv-build` ist deshalb **kaputt**, bis python.org 3.14.7+
+  wieder installiert ist — 3.15 ist zum Bauen noch nicht geprüft. PyCharm startet
+  die App über die Startkonfiguration `.idea/runConfigurations/QSL_Karten_Generator.xml`
+  (`.venv/bin/python -m qslcards`).
   Abhängigkeiten: `.venv/bin/python -m pip install -r requirements.txt`
   (das ist `-e .[dev]`); zum Bündeln zusätzlich `pip install -e ".[build]"`.
 - Auslieferbare Anwendung: `.venv/bin/python scripts/build_app.py --clean`
@@ -579,6 +643,10 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
 - Ein per `withdraw()` verstecktes Fenster nimmt **keine** synthetischen
   Tastenereignisse an — Testfenster off-screen öffnen (`geometry("+3000+3000")`),
   sonst sieht ein funktionierendes Kürzel wie ein kaputtes aus.
+- **Auch ein noch nicht abgebildetes Fenster nicht.** Unter python.org-Tk 9.0.4
+  ist `App()` direkt nach dem Bau noch nicht gemappt; `event_generate("<FocusOut>")`
+  bzw. `<Button-1>` verpuffen dann, unter Homebrew-Tk fiel es nie auf. Das
+  GUI-Fixture ruft deshalb einmal `update()`.
 - Screenshots der laufenden App sind hier **nicht** möglich (`screencapture`
   scheitert ohne die macOS-Berechtigung „Bildschirmaufnahme"). Optische Änderungen
   headless prüfen (Style-Werte, `winfo`-Maße) und den Nutzer draufschauen lassen.
@@ -718,10 +786,11 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   globale Markierungen QSL/Bestätigung), 4 Zustellwege (priorisierbare
   Liste + Trennlinie), 5 Kartenmodus, 6 Lookups (nur Zugangsdaten — QRZ oben,
   HamQTH darunter — + Hinweiszeile),
-  **7 Bemerkungen**, 8 Vorschau, 9 Druckmodus (inkl. Bogendruck + Druckrand),
-  10 Ausgabe (inkl. Adress-/Label-Export).
+  **7 Most Wanted** (eine Zeile über die volle Breite), **8 Bemerkungen**,
+  9 Vorschau, 10 Druckmodus (inkl. Bogendruck + Druckrand),
+  11 Ausgabe (inkl. Adress-/Label-Export).
 - **Adress-/Label-Export steht bei der Ausgabe, nicht bei den Lookups** (vom
-  Nutzer so entschieden): die Checkbox sitzt in Abschnitt 10 **über** der
+  Nutzer so entschieden): die Checkbox sitzt in Abschnitt 11 **über** der
   Zielwahl, weil die CSV erst beim Erzeugen entsteht und am Basis-Ausgabepfad
   landet (`…_addresses.csv`). Der Config-Schlüssel bleibt bewusst
   `lookup.address_export` — die Anschriften kommen aus dem Lookup, und ein
@@ -869,12 +938,46 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   ein leeres ADIF „0 QSOs geladen"; jetzt kommt für beide Formate eine Meldung
   (`LogFormatError`, getrennt von `OSError`) und die bisher geladenen QSOs
   bleiben stehen. `SPECIFICATION.md` §8 forderte das ohnehin schon.
+- **Most-Wanted-Filter** (mit dem Nutzer Schritt für Schritt abgestimmt, die
+  verworfenen Varianten stehen bewusst mit da):
+  * **Filter, kein Aufdruck**: der Rang steht nur in der Vorschau-Spalte „MW",
+    nie auf der Karte. Maß ist **Top N** (keine Prozent-Schwelle), Default 100.
+  * **Kategorie „Automatisch (nach Mode)" ist Default.** Feste Listen
+    (CW/Phone/Digital) zählen **nur** QSOs ihrer Betriebsart — übernommen aus
+    dem DXCC-Filter des Kollegen; vorher maß die CW-Liste auch SSB-QSOs.
+  * **Unbekanntes Gebiet → nicht drucken**, ebenso ohne Liste. „Pro Station":
+    die Karte zählt, sobald **ein** QSO darauf passt (bester Rang).
+  * **Platz in der GUI**: eine Zeile über die volle Breite vor den Bemerkungen
+    („lang gezogen wie Bereich 8"). *Verworfen:* rechts unter den Lookups (erst
+    so gebaut, ließ links 114 px Lücke). Die Statusanzeige steht rechtsbündig in
+    derselben Zeile und muss **kurz** bleiben (Standardfenster 969 px).
+  * **Liste automatisch aktuell**: nur bei eingeschaltetem Filter, nach 30
+    Tagen; **nur das Einschalten** ruft ab, Top/Kategorie nie (sonst nach einem
+    Fehlschlag ein Abruf je Tastendruck). **Eine** Anfrage (`show=500`) statt je
+    Gebiet eine Seite wie im DXCC-Filter.
+  * **Rangliste nur von der GDXF** — vom Nutzer ausdrücklich so gewollt. Das
+    **Gebiet** aus der GDXF-Präfixspalte abzuleiten wurde gemessen und verworfen
+    (51 % richtig, die seltenen Gebiete fehlten). Stattdessen die `cty.dat` von
+    AD1C (MIT, mitgeliefert, Neuladen nach 14 Tagen) mit der Nummerntabelle aus
+    dem DXCC-Filter des Kollegen — **mit seinem Einverständnis** übernommen.
+    Reihenfolge Log > cty.dat > Lookup.
+  * **Keine Cache-Migration**: alte `lookup_cache.json`-Einträge ohne `dxcc`
+    bleiben, wie sie sind (seit der cty.dat ohnehin kaum noch nötig).
+  * **Keine Kopie der GDXF-Liste** im Programm oder Repository (fremde Daten
+    ohne Lizenzvermerk); `mostwanted.json` ist gitignored.
 
-**Realität der Testdaten (`Log.adi`)**
+**Realität der Testdaten (`Log.adi`, `beispiel-logs/`)**
 - Enthält **kein** `QSL_SENT_VIA` (und keine Via-Info) — das ist der **Normalfall**:
   die Via kommt aus dem Lookup, nicht aus dem Log. Ohne Lookup-Credentials fallen
   alle Karten auf `default_via` (Default `B`); mit Credentials liefert der Lookup
   je Station die akzeptierten Wege {B,D,Q,L}.
+- **`beispiel-logs/`** (gitignored, persönliche Daten im Cabrillo-Kopf): CQ WW SSB
+  2026 von DL0MT, **341 QSOs, 294 Stationen**, einmal als Cabrillo
+  (`DL0MT.log`, Windows-1252, Mode `PH`, **kein** DXCC) und einmal als ADIF aus
+  QARTest (`cqww26.adi`, **mit** `DXCC` für alle 341). Ideal zum Prüfen der
+  `cty.dat`: QARTest hat die Gebiete selbst gesetzt; `tests/test_dxcc.py`
+  vergleicht dagegen, wenn die Datei lokal da ist. Mit der GDXF-Liste 2025 und
+  Top 100 bleiben 4 Karten: HF0PAS, VK9DX, XX9TXN, AH2R.
 - **40 QSOs, 36 eindeutige Rufzeichen**: `PA3BRB` kommt fünfmal vor, alle übrigen
   einmal. Damit unterscheiden sich „pro QSO" (40 Karten) und „pro Station"
   (36 Karten) sichtbar — genau dafür taugt die Datei.

@@ -26,6 +26,12 @@ Rückseite im DARC-QSL-Layout.
 - **Bogendruck**: wahlweise eine Karte je A6-Seite oder **vier Karten auf einem
   A4-Bogen** (quer, 2×2) mit gestrichelten Schnitt-Hilfslinien; der einstellbare
   Druckrand gilt dabei je Karte, jede geschnittene Karte hat ihn ringsum.
+- **Most-Wanted-Filter**: auf Wunsch nur Karten an die gesuchtesten DXCC-Gebiete
+  der **GDXF-Liste** ([gdxf.de/mostwanted](https://gdxf.de/mostwanted/)) — Top N,
+  wahlweise je Mode (CW/Phone/Digital) oder Mixed. Das Gebiet kommt aus dem
+  ADIF-Feld `DXCC`, sonst aus der mitgelieferten `cty.dat` von AD1C — damit auch
+  für Cabrillo-Logs und **ohne** Lookup-Zugangsdaten. Liste und `cty.dat` hält das
+  Programm selbst aktuell; die Vorschau zeigt den Rang in der Spalte „MW".
 - Lookup über QRZ (erste Wahl) / HamQTH (kostenlos) — **automatisch beim Log-Laden**
   im Hintergrund, gecacht. Liefert Via, QSL-Manager (aufs Feld „Via:") und Adresse
   (nur für optionalen Kuvert-/Label-Export, nicht auf der Karte).
@@ -62,6 +68,7 @@ nirgends gespeichert und gelten nur für die laufende Sitzung.
    und füllt Via/Manager/Adresse; „PDF erzeugen" ist gesperrt, bis er fertig ist.
 3. Frontbild wählen, Absenderdaten prüfen (läuft parallel zum Lookup).
 4. Zustellwege priorisieren (Liste + Trennlinie) und Kartenmodus wählen.
+   Optional in Abschnitt 7 den Most-Wanted-Filter einschalten (Top N, Kategorie).
 5. Vorschau prüfen (alle QSOs mit Via/Route), ggf. einzelne Karten ab-/anwählen
    (auch reine eQSL-/LOTW-Stationen manuell aktivierbar); bei Bedarf „Neu abrufen".
 6. Druckmodus wählen und „PDF erzeugen".
@@ -198,6 +205,12 @@ Für die **Implementierung**:
 - Der Signalrapport auf der Karte ist `RST_SENT` (wie wir die Gegenstation gehört
   haben). In einem Contest-Log fehlt er oft ganz — viele Contests tauschen statt
   eines Rapports einen Locator oder eine Sektion aus; die Spalte bleibt dann leer.
+- **Most Wanted**: die Rangliste stammt allein von der German DX Foundation und
+  wird nur abgerufen, wenn der Filter an ist (eine Anfrage, danach höchstens alle
+  30 Tage). Eine Kopie liegt bewusst **nicht** im Repository — es sind Daten der
+  GDXF. Die `cty.dat` (AD1C, MIT-Lizenz, `qslcards/assets/dxcc/LICENSE-cty.txt`)
+  liegt dagegen bei und wird nach 14 Tagen erneuert; die Nummerntabelle dazu
+  stammt mit Einverständnis aus dem „DXCC-Filter" eines Vereinskollegen.
 - Das Programm-Icon wird aus `qslcards/assets/icons/app_icon.svg` erzeugt. Nach
   einer Änderung am SVG die PNG/ICO/ICNS-Dateien neu rendern:
   `python scripts/make_icon.py`.
