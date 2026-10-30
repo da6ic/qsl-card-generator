@@ -447,6 +447,7 @@ class App(tk.Tk):
         # Modus/Markierungen ändern die Karten selbst -> Rebuild (mit Lookups).
         self.mode_section.radio_qso.config(command=self._rebuild_cards)
         self.mode_section.radio_station.config(command=self._rebuild_cards)
+        self.printmode_section.qr_check.config(command=self._rebuild_cards)
         self.sender_section.qsl_combo.bind("<<ComboboxSelected>>", lambda _e: self._rebuild_cards())
         self.sender_section.confirm_combo.bind(
             "<<ComboboxSelected>>", lambda _e: self._rebuild_cards()
@@ -511,6 +512,7 @@ class App(tk.Tk):
             self.printmode_section.sheet_mode.set(
                 normalize_sheet_mode(config.generation.sheet_mode)
             )
+            self.printmode_section.qr_code.set(bool(config.generation.qr_code))
             # Druckrand: Umschalter + die vier Randfelder (Feldname in der
             # Section = Config-Feld ohne das „print_"-Präfix).
             self.printmode_section.advanced.set(config.generation.print_margin_enabled)
@@ -564,6 +566,7 @@ class App(tk.Tk):
             remarks=self.remarks_section.remarks.get(),
             qsl_mark=QSL_MARK_TO_CODE.get(self.sender_section.qsl_mark.get(), "none"),
             confirm_mark=CONFIRM_MARK_TO_CODE.get(self.sender_section.confirm_mark.get(), "none"),
+            qr_code=self.printmode_section.qr_code.get(),
         )
         most_wanted = MostWantedConfig(
             enabled=self.mostwanted_section.enabled.get(),
@@ -626,6 +629,7 @@ class App(tk.Tk):
             self.mode_section.card_mode,
             self.printmode_section.print_mode,
             self.printmode_section.sheet_mode,
+            self.printmode_section.qr_code,
             self.printmode_section.advanced,
             *self.printmode_section.margin_vars.values(),
             self.mostwanted_section.enabled,

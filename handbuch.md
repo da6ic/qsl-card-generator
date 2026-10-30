@@ -40,7 +40,7 @@ Reihenfolge arbeitest du sie ab:
    (optional).
 9. [Vorschau prüfen](#abschnitt-9) — Liste aller Karten, hier korrigierst du
    Einzelfälle.
-10. [Druckmodus einstellen](#abschnitt-10) — Duplex, Bogen, Seitenrand.
+10. [Druckmodus einstellen](#abschnitt-10) — Duplex, Bogen, QR-Code, Seitenrand.
 11. [PDF erzeugen](#abschnitt-11) — Ziel wählen und drucken lassen.
 
 Die unterstrichenen Verweise kannst du anklicken — auch überall sonst im
@@ -343,7 +343,8 @@ REMARKS-Kasten, zum Beispiel „Vielen Dank für das nette QSO im 40-m-Band".
 - Maximal **80 Zeichen**. Ein gewöhnlicher Satz dieser Länge passt in die Zeile;
   wird er breiter, druckt das Programm ihn kleiner, statt ihn abzuschneiden.
 - Lässt du das Feld leer, gibt es keinen Kasten und es passen wieder 6 QSOs auf
-  eine Karte statt 3 ([Kapitel 5](#abschnitt-5)).
+  eine Karte statt 3 ([Kapitel 5](#abschnitt-5)) — außer der DARC-QR-Code ist an
+  ([Kapitel 10](#abschnitt-10)), der braucht denselben Platz.
 - Der Text wird übernommen, sobald du das Feld verlässt oder Enter drückst.
 - In der Vorschau kannst du die Bemerkung **je Karte** überschreiben. Änderst du
   danach den globalen Text, fragt das Programm nach, ob es die von Hand
@@ -412,6 +413,18 @@ Einlegerichtung deines Druckers zu finden.
 kombinieren. Dann stehen vier Karten im 2×2-Raster auf einem A4-Blatt quer, das
 du hinterher zerschneidest. Auf den Rückseitenbögen sind dafür gestrichelte
 Schnittlinien eingezeichnet.
+
+**DARC-QR-Code auf die Rückseite** druckt rechts unten auf jede Karte einen
+QR-Code von 2 × 2 cm. Er enthält dein Rufzeichen, den Manager (falls vorhanden),
+den Empfänger und je QSO Datum, Uhrzeit, Band, Mode, Rapport und PSE/TNX — im
+Format, das die DARC-QSL-Vermittlung maschinell lesen kann. Der Code braucht den
+Platz unter der Tabelle: Ist er an, passen höchstens **3 QSOs** auf eine Karte
+(wie mit Bemerkung), weitere QSOs mit derselben Station kommen auf Folgekarten.
+REMARKS-Kasten und Fußtext werden dafür etwas schmaler.
+
+Gut zu wissen: Karten mit QR-Code werden derzeit nur **innerhalb Deutschlands**
+maschinell vermittelt und sollen beim DARC-Büro **getrennt sortiert** abgegeben
+werden. Frag im Zweifel bei der QSL-Vermittlung nach.
 
 Hinter **Erweiterte Einstellungen** liegt der **Seitenrand (mm)**. Die meisten
 Drucker können nicht bis an die Blattkante drucken; hier stellst du ein, wie

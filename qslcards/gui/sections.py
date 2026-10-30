@@ -902,6 +902,16 @@ class PrintModeSection:
         )
         self.sheet_check.grid(row=3, column=0, pady=GAP_ROW, sticky="w")
 
+        # DARC-QR-Code auf der Rückseite: ändert die Karten selbst (höchstens drei
+        # QSO-Zeilen je Karte), deshalb hängt app.py hier einen Rebuild an.
+        self.qr_code = tk.BooleanVar(value=False)
+        self.qr_check = ttk.Checkbutton(
+            self.modes_frame,
+            text="DARC-QR-Code auf die Rückseite",
+            variable=self.qr_code,
+        )
+        self.qr_check.grid(row=4, column=0, pady=GAP_ROW, sticky="w")
+
         # Rechte Spalte: Umschalter oben, darunter der ein-/ausblendbare Block.
         # Ausgeschaltet werden die Werte ignoriert (aber nicht vergessen) ->
         # Ausgabe wie ohne Druckrand.

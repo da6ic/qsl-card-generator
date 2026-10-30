@@ -26,6 +26,10 @@ Rückseite im DARC-QSL-Layout.
 - **Bogendruck**: wahlweise eine Karte je A6-Seite oder **vier Karten auf einem
   A4-Bogen** (quer, 2×2) mit gestrichelten Schnitt-Hilfslinien; der einstellbare
   Druckrand gilt dabei je Karte, jede geschnittene Karte hat ihn ringsum.
+- **DARC-QR-Code** (optional): rechts unten auf der Rückseite, 20 × 20 mm, mit
+  Absender, Manager, Empfänger und den QSOs im Format von
+  [DM2PF/QSL_QR_Label](https://github.com/DM2PF/QSL_QR_Label). Dann höchstens
+  drei QSOs je Karte.
 - **Most-Wanted-Filter**: auf Wunsch nur Karten an die gesuchtesten DXCC-Gebiete
   der **GDXF-Liste** ([gdxf.de/mostwanted](https://gdxf.de/mostwanted/)) — Top N,
   wahlweise je Mode (CW/Phone/Digital) oder Mixed. Das Gebiet kommt aus dem

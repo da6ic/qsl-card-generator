@@ -15,7 +15,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from reportlab.graphics import renderPDF
+from reportlab.graphics.barcode.qr import QrCodeWidget
+from reportlab.graphics.shapes import Drawing
 from reportlab.pdfbase.pdfmetrics import getAscent, getDescent, stringWidth
+
+from qslcards.cards.qr import qr_text
 
 from . import geometry as g
 
@@ -499,6 +504,10 @@ def _draw_footer(c: Canvas, page: PageLayout, card: Card, config: AppConfig) -> 
     # (static_footer) steht unabhängig davon immer unten.
     # Der ganze Fußblock ist an der Unterkante verankert (page.*_yt), damit er
     # beim Druckrand mit nach unten wandert statt an der Tabelle zu kleben.
+    # Mit QR-Code rücken Kasten und Footer-Text links vom Code zusammen.
+    foot_w = page.remarks_box_w
+    if card.qr_code:
+        foot_w -= g.QR_SIZE + g.QR_GAP
     remarks = (card.remarks or "").strip()
     if remarks:
         text(
@@ -510,7 +519,7 @@ def _draw_footer(c: Canvas, page: PageLayout, card: Card, config: AppConfig) -> 
             g.FONT_REGULAR,
             g.SIZE_LABEL,
         )
-        _box(c, page, g.REMARKS_BOX_X, page.remarks_box_yt, page.remarks_box_w, g.REMARKS_BOX_H)
+        _box(c, page, g.REMARKS_BOX_X, page.remarks_box_yt, foot_w, g.REMARKS_BOX_H)
         _text_in_band(
             c,
             page,
@@ -521,7 +530,7 @@ def _draw_footer(c: Canvas, page: PageLayout, card: Card, config: AppConfig) -> 
             g.FONT_REGULAR,
             g.SIZE_REMARKS,
             align="left",
-            max_w=page.remarks_box_w - 2 * g.REMARKS_TEXT_PAD,
+            max_w=foot_w - 2 * g.REMARKS_TEXT_PAD,
         )
     text(
         c,
@@ -531,5 +540,21 @@ def _draw_footer(c: Canvas, page: PageLayout, card: Card, config: AppConfig) -> 
         config.generation.static_footer,
         g.FONT_BOLD,
         g.SIZE_FOOTER,
-        max_w=page.table_width,
+        max_w=foot_w,
     )
+    if card.qr_code:
+        _draw_qr(c, page, card, config)
+
+
+def _draw_qr(c: Canvas, page: PageLayout, card: Card, config: AppConfig) -> None:
+    """DARC-QR-Code rechts unten, rechtsbündig mit der Tabelle. Wie der Fußblock
+    von der Unterkante her verankert (wandert beim Druckrand mit nach unten).
+    Als Vektorgrafik gezeichnet, ohne Ruhezone im Widget: der Abstand zu Tabelle
+    und Kartenrand ergibt die Ruhezone."""
+    widget = QrCodeWidget(qr_text(card, config.sender.callsign), barLevel="M", barBorder=0)
+    x0, y0, x1, y1 = widget.getBounds()
+    size = g.QR_SIZE
+    drawing = Drawing(size, size, transform=[size / (x1 - x0), 0, 0, size / (y1 - y0), 0, 0])
+    drawing.add(widget)
+    top = page.page_h - (g.PAGE_H - g.QR_YT)
+    renderPDF.draw(drawing, c, page.table_x1 - size, page.page_h - top - size)

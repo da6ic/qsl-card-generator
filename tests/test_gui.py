@@ -800,6 +800,24 @@ def test_sheet_mode_falls_back_on_broken_config(app, tmp_path):
     assert app.printmode_section.sheet_mode.get() == "single"
 
 
+def test_qr_checkbox_rebuilds_cards_and_survives_autosave(app, tmp_path):
+    """Abschnitt 10: der QR-Schalter landet in der Config und auf allen Karten."""
+    _load(app, tmp_path)
+    assert app._gather_config().generation.qr_code is False
+    assert not any(c.qr_code for c, _ in app.preview._rows.values())
+
+    app.printmode_section.qr_check.invoke()
+    assert app._gather_config().generation.qr_code is True
+    assert all(c.qr_code for c, _ in app.preview._rows.values())
+
+    app._auto_save()
+    saved = cfg.load(appmod.CONFIG_PATH)
+    assert saved.generation.qr_code is True
+    app.printmode_section.qr_code.set(False)
+    app._apply_config_to_widgets(saved)
+    assert app.printmode_section.qr_code.get() is True
+
+
 def test_print_margins_survive_autosave(app, tmp_path):
     """Neue Variablen müssen am Auto-Save hängen, sonst gehen sie verloren."""
     _load(app, tmp_path)

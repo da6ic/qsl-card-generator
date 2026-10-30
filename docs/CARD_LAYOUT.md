@@ -302,6 +302,11 @@ Eingabefeldern der GUI (global + je Karte). Eine Zeile fasst 80 Zeichen nur bei
 gewöhnlichem Text — 80 *breite* Zeichen wären 219 mm bei 138 mm Platz. Solche
 Texte werden verkleinert (§1 „Textbreiten"), die Zeichenzahl bleibt bei 80.
 
+### DARC-QR-Code (optional, `generation.qr_code`)
+Rechts unten, rechtsbündig mit der Tabelle (x = 125 … 145), `yt` = 76.5 … 96.5,
+20 × 20 mm. Mit QR hat die Tabelle höchstens 3 Zeilen (wie mit Remarks);
+REMARKS-Kasten und Footer-Text enden 3 mm vor dem Code (Breite 119 statt 142).
+
 ---
 
 ## 4. Hilfsfunktionen (in `layout_back.py`)

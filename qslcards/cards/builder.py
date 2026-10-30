@@ -202,8 +202,9 @@ def build_cards(
     # (dynamisch) — und damit, wie viele QSO-Zeilen je Karte Platz haben: mit
     # Remarks weniger (der Kasten braucht Raum), ohne Remarks mehr. Der Builder
     # splittet je Station nach dieser Grenze in Folge-Karten.
+    # Der QR-Code belegt denselben Platz unter der Tabelle wie der Kasten.
     remarks = (gen.remarks or "").strip()
-    max_rows = MAX_ROWS_WITH_REMARKS if remarks else MAX_ROWS_PLAIN
+    max_rows = max_rows_for_remarks(remarks, gen.qr_code)
 
     if gen.card_mode == "per_station":
         cards = _group_per_station(qsos, lookups, gen.default_via, max_rows, resolve_dxcc)
@@ -214,6 +215,7 @@ def build_cards(
     for card in cards:
         card.qsl_mark = gen.qsl_mark
         card.confirm_mark = gen.confirm_mark
+        card.qr_code = gen.qr_code
         card.remarks = remarks
 
     # Deterministische Sortierung: Call, dann Datum/Zeit, dann Via.
@@ -221,10 +223,13 @@ def build_cards(
     return cards
 
 
-def max_rows_for_remarks(remarks: str | None) -> int:
+def max_rows_for_remarks(remarks: str | None, qr_code: bool = False) -> int:
     """Zeilen je Karte abhängig vom Remarks-Zustand: mit Remarks weniger (der
-    Kasten braucht Platz), ohne Remarks mehr (siehe geometry.MAX_ROWS_*)."""
-    return MAX_ROWS_WITH_REMARKS if (remarks or "").strip() else MAX_ROWS_PLAIN
+    Kasten braucht Platz), ohne Remarks mehr (siehe geometry.MAX_ROWS_*). Ein
+    QR-Code braucht denselben Platz wie der Kasten und zählt deshalb gleich."""
+    if qr_code or (remarks or "").strip():
+        return MAX_ROWS_WITH_REMARKS
+    return MAX_ROWS_PLAIN
 
 
 def regroup_card_by_remarks(card: Card) -> list[Card]:
@@ -236,7 +241,7 @@ def regroup_card_by_remarks(card: Card) -> list[Card]:
     durchreichen (so macht es die Vorschau bei einer Remarks-Änderung). Ohne
     Überlauf bleibt es bei genau dieser einen Karte. Idempotent.
     """
-    max_rows = max_rows_for_remarks(card.remarks)
+    max_rows = max_rows_for_remarks(card.remarks, card.qr_code)
     if len(card.rows) <= max_rows:
         return [card]
     return [

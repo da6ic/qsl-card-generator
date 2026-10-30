@@ -307,6 +307,15 @@ REMARKS_TEXT_PAD = mm(2)  # linker Innenabstand des Remarks-Textes in der Box
 FOOTER_TEXT_X = MARGIN
 FOOTER_TEXT_YT = mm(98.5)
 
+# DARC-QR-Code (generation.qr_code) rechts unten, rechtsbündig mit der Tabelle.
+# Er nutzt den Platz, den die kurze Tabelle (MAX_ROWS_WITH_REMARKS) frei lässt:
+# die endet mit Funk-Block bei 75.5 mm, der Code beginnt 1 mm darunter. 20 mm
+# fassen den Text von drei QSOs (QR-Version ~10, Modul ~0,35 mm) gut lesbar.
+# REMARKS-Kasten und Footer-Text werden um QR_SIZE + QR_GAP schmaler.
+QR_SIZE = mm(20)
+QR_GAP = mm(3)  # Abstand REMARKS-Kasten/Footer -> QR-Code
+QR_YT = mm(76.5)  # Oberkante (von oben)
+
 # --------------------------------------------------------------------------- #
 # Bogendruck: vier A6-Karten auf einem A4-Bogen (config.generation.sheet_mode)
 #

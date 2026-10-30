@@ -1070,6 +1070,17 @@ Nummerntabelle mit seinem Einverständnis übernommen):
     Drucker ohne beidseitigen Druck: erst alle Vorderseiten drucken, Papier
     umgedreht neu einlegen, dann die Rückseiten. Da **ein** Frontbild für alle
     Karten gilt, sind alle Vorderseiten identisch (keine Umkehrung nötig).
+- **DARC-QR-Code** (`generation.qr_code`, GUI-Abschnitt 10, `cards/qr.py`):
+  `card.qr_code` übernimmt den Schalter. Der Code (ReportLab `QrCodeWidget`,
+  Fehlerkorrektur M, Vektorgrafik) sitzt rechts unten, rechtsbündig mit der
+  Tabelle (`QR_SIZE`/`QR_YT`/`QR_GAP` in `geometry.py`), von der Unterkante her
+  verankert wie der Fußblock. Er belegt den Platz des REMARKS-Kastens neben sich,
+  deshalb gilt mit QR **immer** `MAX_ROWS_WITH_REMARKS`
+  (`max_rows_for_remarks(remarks, qr_code)`), und Kasten wie Footer-Text werden
+  um `QR_SIZE + QR_GAP` schmaler. Text-Format nach DM2PF/QSL_QR_Label
+  (nachgebaut, das Repository hat keine Lizenz): Kopfzeile
+  `From: <eigenes Call> [Via: <Manager> ]To: <Call>`, je QSO
+  `Date: TT.MM.JJ Time: HH:MM Band: <aus FREQ> Mode: … RST: … QSL: TNX|PSE|-|-`.
 - **Bogendruck** (`generation.sheet_mode`, GUI-Abschnitt 10, `pdf/layout_sheet.py`):
   quer zum Druckmodus, beide Modi funktionieren damit unverändert — nur trägt eine
   „Seite" dann bis zu vier Karten.

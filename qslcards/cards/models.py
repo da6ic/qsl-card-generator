@@ -31,6 +31,9 @@ class Card:
     qsl_mark: str = "none"  # global aus config: "pse" | "tnx" | "none"
     # Keine Portabel-Kennung mehr: sie steht im Rufzeichen des Absenders (Config).
     confirm_mark: str = "none"  # global aus config: "qso" | "swl" | "none"
+    # DARC-QR-Code auf der Rückseite (global aus config). Verkürzt die Tabelle
+    # wie ein Remarks-Text (siehe builder.max_rows_for_remarks).
+    qr_code: bool = False
     remarks: str = ""  # REMARKS-Text der Karte; leer -> kein Kasten (dynamisch).
     #   Default = globaler Config-Wert; in der Vorschau je Karte überschreibbar.
     # True, sobald der Remarks-Text in der Vorschau manuell gesetzt wurde (≠ globaler

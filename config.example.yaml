@@ -37,6 +37,7 @@ generation:
   remarks: ''
   qsl_mark: none
   confirm_mark: none
+  qr_code: false
 mostwanted:
   enabled: false
   top: 100

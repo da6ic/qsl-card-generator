@@ -610,7 +610,7 @@ class PreviewTable:
 
         parts: list[Card] = []
         for text, run_rows, manual in runs:
-            max_rows = max_rows_for_remarks(text)
+            max_rows = max_rows_for_remarks(text, template.qr_code)
             for start in range(0, len(run_rows), max_rows):
                 parts.append(
                     replace(

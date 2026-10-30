@@ -92,6 +92,11 @@ class GenerationConfig:
     # weniger, und Gastrufzeichen, `/QRP`, `/MM` oder `/4` brauchen keine
     # Sonderbehandlung mehr.
     confirm_mark: str = "none"  # "qso" | "swl" | "none" (global)
+    # DARC-QR-Code rechts unten auf der Rückseite (GUI-Abschnitt 10). Der Text
+    # folgt dem Format von DM2PF/QSL_QR_Label (siehe `cards/qr.py`). Der Code
+    # braucht den Platz unter der Tabelle: an -> höchstens
+    # MAX_ROWS_WITH_REMARKS QSO-Zeilen je Karte, wie mit Remarks.
+    qr_code: bool = False
 
 
 @dataclass
