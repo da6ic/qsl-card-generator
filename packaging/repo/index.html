@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QSL-Karten-Generator – Paketquellen</title>
+<style>
+  :root { --bg: #ffffff; --fg: #1b1f24; --muted: #57606a; --code: #f3f5f7; --accent: #1f6feb; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d1117; --fg: #e6edf3; --muted: #9da7b3; --code: #161b22; --accent: #4c93ff; }
+  }
+  body { background: var(--bg); color: var(--fg); font: 16px/1.55 system-ui, sans-serif;
+         max-width: 46rem; margin: 2.5rem auto; padding: 0 16px; }
+  h1 { font-size: 1.6rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.15rem; margin-top: 2rem; color: var(--accent); }
+  p.sub { color: var(--muted); margin-top: 0; }
+  pre { background: var(--code); padding: .8rem 1rem; border-radius: 6px; overflow-x: auto;
+        font-size: .88rem; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<h1>QSL-Karten-Generator</h1>
+<p class="sub">Paketquellen für Debian/Ubuntu (apt) und Fedora (dnf), 64-Bit-PC (x86_64).</p>
+
+<h2>Debian / Ubuntu</h2>
+<p>Debian 12 oder neuer, Ubuntu 22.04 oder neuer.</p>
+<pre>sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL @BASE_URL@/qsl-karten-generator.gpg | sudo tee /etc/apt/keyrings/qsl-karten-generator.gpg &gt;/dev/null
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/qsl-karten-generator.gpg] @BASE_URL@/apt stable main" \
+  | sudo tee /etc/apt/sources.list.d/qsl-karten-generator.list
+sudo apt update
+sudo apt install qsl-karten-generator</pre>
+
+<h2>Fedora</h2>
+<pre>sudo curl -fsSL -o /etc/yum.repos.d/qsl-karten-generator.repo @BASE_URL@/qsl-karten-generator.repo
+sudo dnf install qsl-karten-generator</pre>
+
+<h2>Aktualisieren und entfernen</h2>
+<p>Neue Fassungen kommen mit dem normalen Systemupdate (<code>sudo apt upgrade</code>
+bzw. <code>sudo dnf upgrade</code>). Entfernen mit <code>sudo apt remove qsl-karten-generator</code>
+bzw. <code>sudo dnf remove qsl-karten-generator</code>. Einstellungen und Cache liegen in
+<code>~/.config/qsl-karten-generator/</code> und bleiben dabei erhalten.</p>
+
+<h2>Andere Systeme</h2>
+<p>AppImage für andere Linux-Distributionen, Windows und macOS gibt es unter
+<a href="https://github.com/da6ic/qsl-card-generator/releases">Releases</a>.</p>
+</body>
+</html>

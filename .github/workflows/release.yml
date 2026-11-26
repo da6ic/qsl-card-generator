@@ -1,0 +1,207 @@
+# Baut bei einem Versions-Tag (v0.4.0, …) die auslieferbaren Programme für alle
+# drei Systeme, legt sie als GitHub-Release ab und aktualisiert das signierte
+# APT-/DNF-Repository auf GitHub Pages.
+#
+#   Windows   QSL-Karten-Generator-<v>-windows-x64.zip       (Ordner mit .exe)
+#   macOS     QSL-Karten-Generator-<v>-macos-arm64.dmg/.zip  (Apple Silicon)
+#   Linux     QSL-Karten-Generator-<v>-x86_64.AppImage
+#             qsl-karten-generator_<v>_amd64.deb             (Debian/Ubuntu)
+#             qsl-karten-generator-<v>-1.x86_64.rpm          (Fedora)
+#             QSL-Karten-Generator-<v>-linux-x86_64.tar.gz
+#
+# Der Tag entsteht wie bisher mit `scripts/release.py`; hochgeladen wird er mit
+# `git push origin vX.Y.Z`. Von Hand („Run workflow") gestartet, baut der
+# Workflow nur und hängt die Dateien als Artefakte an den Lauf — ohne Release
+# und ohne Repository-Update. So lässt sich ein Stand vorab ausprobieren.
+#
+# Tk 9 ist überall Pflicht (sonst fehlen die SVG-Symbole der Vorschautabelle);
+# `scripts/build_app.py` bricht mit Tk 8.6 von selbst ab.
+#
+# Einmalig einzurichten (siehe packaging/repo/README.md):
+#   * Secret REPO_GPG_PRIVATE_KEY  — privater Signierschlüssel (ASCII-armored)
+#   * Secret REPO_GPG_PASSPHRASE   — nur, falls der Schlüssel eine Passphrase hat
+#   * Settings ▸ Pages ▸ Source: „GitHub Actions"
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Version prüfen
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        name: Tag gegen qslcards/__init__.py
+        run: |
+          version="$(python3 -c 'import re,pathlib; print(re.search(r"__version__ = \"([^\"]+)\"", pathlib.Path("qslcards/__init__.py").read_text()).group(1))')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "v$version" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} passt nicht zur Version $version in qslcards/__init__.py"
+            exit 1
+          fi
+
+  linux:
+    name: Linux (AppImage, .deb, .rpm)
+    needs: version
+    # Ubuntu 22.04 = glibc 2.35: das älteste noch verfügbare Abbild. PyInstaller
+    # bündelt keine glibc, das Ergebnis läuft nur auf Systemen mit mindestens
+    # dieser Version — so reicht es für Debian 12, Ubuntu 22.04 und Fedora.
+    runs-on: ubuntu-22.04
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      # Python von python-build-standalone (über uv): bringt Tcl/Tk 9 mit, X11
+      # statisch gelinkt — das Bündel braucht vom System nur die glibc.
+      - run: uv python install 3.14
+      - run: uv venv -p 3.14 --python-preference only-managed .venv
+      - run: uv pip install -p .venv -e ".[build]"
+      - run: .venv/bin/python -c "import tkinter; print('Tk', tkinter.TkVersion); assert tkinter.TkVersion >= 9.0"
+      - run: .venv/bin/python scripts/build_app.py --clean
+      - name: Werkzeuge für die Pakete
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq rpm
+          curl -fsSL -o /tmp/appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          chmod +x /tmp/appimagetool
+      - name: Signierschlüssel laden (für das .rpm)
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.REPO_GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.REPO_GPG_PASSPHRASE }}
+        run: packaging/repo/import_key.sh
+      - name: Pakete bauen
+        env:
+          APPIMAGETOOL: /tmp/appimagetool
+        run: |
+          packaging/linux/build_packages.sh dist/QSL-Karten-Generator "$VERSION" dist/pakete
+          mv dist/*.tar.gz dist/pakete/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/pakete/*
+          if-no-files-found: error
+
+  windows:
+    name: Windows (x64)
+    needs: version
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      # Der Installer von python.org bringt Tcl/Tk 9 erst ab 3.14.7 mit; davor
+      # 8.6 — dann bricht build_app.py mit einer klaren Meldung ab.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          architecture: x64
+      - run: python -m pip install --upgrade pip
+      # PyInstaller ab 6.22 sammelt das in die DLL eingebettete Tcl-Archiv
+      # (`//zipfs:/`) selbst ein — der Umweg über `develop` entfällt.
+      - run: python -m pip install -e ".[build]"
+      - run: python scripts/build_app.py --clean
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*.zip
+          if-no-files-found: error
+
+  macos:
+    name: macOS (Apple Silicon)
+    needs: version
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      # python.org-Build (Deployment-Target 11.0 statt „nur dieses macOS" wie bei
+      # Homebrew) mit Tcl/Tk 9 ab 3.14.7 — siehe packaging/macos/README.md.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[build]"
+      - run: python scripts/build_app.py --clean
+      - name: DMG anlegen
+        run: |
+          stem="$(python -c 'import sys; sys.path.insert(0, "scripts"); import build_app; print(build_app.archive_stem())')"
+          # Der Auslieferordner (.app + LIESMICH.txt) plus Verknüpfung auf
+          # „Programme" — der übliche Ziehen-und-fertig-Aufbau eines DMG.
+          ln -s /Applications "dist/$stem/Programme"
+          hdiutil create -volname "QSL-Karten-Generator" -srcfolder "dist/$stem" \
+            -ov -format UDZO "dist/$stem.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            dist/*.dmg
+            dist/*.zip
+          if-no-files-found: error
+
+  release:
+    name: GitHub-Release
+    if: github.ref_type == 'tag'
+    needs: [version, linux, windows, macos]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: files
+          merge-multiple: true
+      - run: cd files && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: QSL-Karten-Generator ${{ needs.version.outputs.version }}
+          files: files/*
+          generate_release_notes: true
+
+  repository:
+    name: APT-/DNF-Repository (GitHub Pages)
+    if: github.ref_type == 'tag'
+    needs: [version, linux]
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux
+          path: pakete
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq apt-utils createrepo-c
+      - name: Signierschlüssel laden
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.REPO_GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.REPO_GPG_PASSPHRASE }}
+          REQUIRE_KEY: "1"
+        run: packaging/repo/import_key.sh
+      - id: pages
+        uses: actions/configure-pages@v5
+      - name: Repository bauen
+        env:
+          BASE_URL: ${{ steps.pages.outputs.base_url }}
+        run: |
+          rm -f pakete/*.AppImage pakete/*.tar.gz
+          packaging/repo/build_repo.sh pakete site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4

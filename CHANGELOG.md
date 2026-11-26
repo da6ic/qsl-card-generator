@@ -10,6 +10,11 @@ Freigabe erst nach dem Test gegen eine echte Wavelog-Instanz
 `python scripts/release.py 0.4.0`.
 
 ### Neu
+- **Release-Workflow** (`.github/workflows/release.yml`): ein Tag `vX.Y.Z`
+  baut Windows (ZIP), macOS (DMG + ZIP), Linux (AppImage, .deb, .rpm, tar.gz)
+  mit Tcl/Tk 9 und legt sie als GitHub-Release ab. Dazu ein signiertes
+  **APT-/DNF-Repository auf GitHub Pages** (`packaging/repo/`), Installation per
+  `apt install`/`dnf install qsl-karten-generator`.
 - **Schritt-Assistent** statt einer langen Seite, sechs Schritte: Quelle,
   Absender, Abfrage, Gestalten, Prüfen, Druck. Farbschema aus einer Grundfarbe
   abgeleitet, hell und dunkel.
@@ -26,6 +31,11 @@ Freigabe erst nach dem Test gegen eine echte Wavelog-Instanz
 - CI für GitLab und GitHub (Tk 9, ruff, black, pytest unter Xvfb).
 
 ### Behoben
+- Gebündeltes Programm startete nicht mehr („No module named
+  'reportlab.graphics.barcode.code128'"): der QR-Code zieht alle Barcode-Module
+  dynamisch nach, die Spec nimmt sie jetzt mit. Linux-Bündel mit einem Python
+  aus python-build-standalone (uv) bekommen `libtcl9.0.so`/`libtcl9tk9.0.so`
+  ausdrücklich mit — PyInstaller fand sie dort nicht.
 - HamQTH-/QRZ-**Passwörter standen bei Netzfehlern im Protokoll** (aus der URL
   in der Fehlermeldung). Jetzt maskiert; ein Filter am Protokoll fängt den Rest.
   Wer eine alte `qslcards.log` hat, sollte sie löschen.
