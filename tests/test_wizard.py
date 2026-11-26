@@ -292,3 +292,23 @@ def test_second_log_during_lookup_gets_its_own_lookup(app, tmp_path):  # noqa: F
     assert not app._lookup_running
     assert seen_calls[-1] == ["ZZ9ZZZ"]
     assert set(app.lookups) == {"ZZ9ZZZ"}  # nichts aus Log A beigemischt
+
+
+def test_wavelog_dates_are_checked_before_asking_the_server(app):  # noqa: F811
+    station = WavelogStation(1, "Home", "DL0QSL")
+    app._wavelog_stations = [station]
+    app.wavelog_section.set_stations([station], 1)
+    app.wavelog_section.since.set("1.10.2026")
+    with mock.patch.object(app, "_run_wavelog") as run:
+        app._wavelog_load_qsos()
+    run.assert_not_called()
+    assert "JJJJ-MM-TT" in app.wizard.hint_var.get()
+    assert str(app.wavelog_section.since_entry.cget("style")) == "Invalid.TEntry"
+
+
+def test_plain_http_to_the_internet_warns(app):  # noqa: F811
+    app.wavelog_section.url.set("http://log.example.com")
+    app.wavelog_section.key.set("wl2_x")
+    with mock.patch.object(app, "_run_wavelog"):
+        app._wavelog_load_stations()
+    assert "unverschlüsselt" in app.wavelog_section.warning_var.get()

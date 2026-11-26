@@ -1192,6 +1192,11 @@ class WavelogSection:
         self.warning_label.grid(row=8, column=0, columnspan=4, pady=(GAP_ROW, 0), sticky="w")
         f.columnconfigure(2, weight=1)
 
+    def mark_dates(self, *, since_bad: bool, until_bad: bool) -> None:
+        """Ungültige Datumsfelder rot umranden (wie Pflichtfelder)."""
+        self.since_entry.configure(style="Invalid.TEntry" if since_bad else "TEntry")
+        self.until_entry.configure(style="Invalid.TEntry" if until_bad else "TEntry")
+
     def set_warning(self, text: str, *, error: bool = False) -> None:
         self.warning_var.set(text)
         self.warning_label.configure(style="Danger.TLabel" if error else "Warning.TLabel")

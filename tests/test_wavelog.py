@@ -147,9 +147,125 @@ def test_qsos_pages_until_has_more_is_false():
     [(401, "abgelehnt"), (403, "Berechtigung"), (404, "3.2.5"), (500, "500")],
 )
 def test_http_errors_become_readable_messages(status, text):
-    client = WavelogClient("https://h", "wl2_x", session=_Session(_Resp(status, {})))
-    with pytest.raises(WavelogError, match=text):
+    # Zwei Antworten: bei 404 wird die Adresse einmal ohne index.php versucht.
+    session = _Session(_Resp(status, {}), _Resp(status, {}))
+    client = WavelogClient("https://h", "wl2_x", session=session)
+    with pytest.raises(WavelogError, match=text) as info:
         client.stations()
+    assert info.value.status == status
+
+
+# -- Bewertung 2.1 ----------------------------------------------------------
+
+
+def _client(*responses, **kw):
+    session = _Session(*responses)
+    slept: list[float] = []
+    client = WavelogClient(
+        "https://h", "wl2_x", session=session, sleep=slept.append, clock=lambda: 0.0, **kw
+    )
+    return client, session, slept
+
+
+def test_429_waits_retry_after_and_continues():
+    busy = _Resp(429, {"error": {"code": "rate_limited", "details": {"retry_after": 7}}})
+    client, session, slept = _client(busy, _Resp(200, {}))
+    client.mark_paper_sent(PaperQslMark("1"))
+    assert slept == [7.0]
+    assert len(session.calls) == 2
+
+
+def test_429_gives_up_after_a_few_tries():
+    busy = _Resp(429, {})
+    client, session, slept = _client(*([busy] * 10))
+    with pytest.raises(WavelogError) as info:
+        client.mark_paper_sent(PaperQslMark("1"))
+    assert info.value.status == 429
+    assert len(slept) == 5 and all(s == 10.0 for s in slept)
+
+
+def test_mark_many_paces_requests():
+    client, session, slept = _client(_Resp(200, {}), _Resp(200, {}), _Resp(200, {}))
+    done, errors = client.mark_many([PaperQslMark(str(i)) for i in range(3)])
+    assert done == ["0", "1", "2"] and not errors
+    assert slept == [0.5, 0.5]  # Uhr steht im Test -> volle Pause je Anfrage
+
+
+def test_expired_token_is_named():
+    body = {"error": {"code": "token_expired", "message": "Token expired"}}
+    client, _s, _sl = _client(_Resp(401, body))
+    with pytest.raises(WavelogError, match="abgelaufen") as info:
+        client.mark_paper_sent(PaperQslMark("1"))
+    assert info.value.code == "token_expired" and info.value.auth_failed
+
+
+def test_old_instance_400_on_patch_mentions_version():
+    client, _s, _sl = _client(_Resp(400, {"error": {"message": "Unknown field qsl_sent"}}))
+    with pytest.raises(WavelogError, match="3.2.5"):
+        client.mark_paper_sent(PaperQslMark("1"))
+
+
+def test_paging_stops_at_total_pages_even_if_has_more_lies():
+    page = {"data": [QSO_JSON], "meta": {"has_more": True, "total": 1, "total_pages": 2}}
+    client, session, _sl = _client(_Resp(200, page), _Resp(200, page), _Resp(200, page))
+    client.qsos(1)
+    assert len(session.calls) == 2
+
+
+def test_stations_fall_back_to_url_without_index_php():
+    client, session, _sl = _client(_Resp(404, {}), _Resp(200, {"data": []}))
+    client.stations()
+    assert session.calls[1][1] == "https://h/api/v2/station"
+    assert client.api == "https://h/api/v2"
+
+
+def test_typed_index_php_is_never_dropped():
+    session = _Session(_Resp(404, {}))
+    client = WavelogClient("https://h/index.php", "wl2_x", session=session)
+    with pytest.raises(WavelogError):
+        client.stations()
+    assert len(session.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "url, warns",
+    [
+        ("http://log.example.com", True),
+        ("https://log.example.com", False),
+        ("log.example.com", False),
+        ("http://192.168.1.20/wavelog", False),
+        ("http://localhost:8086", False),
+        ("http://raspberrypi.local", False),
+        ("http://8.8.8.8", True),
+    ],
+)
+def test_insecure_url_warning(url, warns):
+    from qslcards.wavelog.client import insecure_url_warning
+
+    assert (insecure_url_warning(url) is not None) is warns
+
+
+@pytest.mark.parametrize(
+    "text, ok",
+    [("", True), ("2026-10-01", True), ("2026-13-01", False), ("1.10.2026", False)],
+)
+def test_validate_date(text, ok):
+    from qslcards.wavelog.client import validate_date
+
+    assert validate_date(text) is ok
+
+
+def test_network_error_message_never_contains_the_token():
+    import requests as rq
+
+    class _Boom:
+        def request(self, *a, **k):
+            raise rq.ConnectionError("Authorization: Bearer wl2_secret")
+
+    client = WavelogClient("https://h", "wl2_secret", session=_Boom())
+    with pytest.raises(WavelogError) as info:
+        client.stations()
+    assert "wl2_secret" not in str(info.value)
 
 
 def test_mark_paper_sent_patches_the_qso():
@@ -180,3 +296,31 @@ def test_wavelog_settings_roundtrip_without_the_key(tmp_path):
     assert loaded.wavelog.station_id == 3 and loaded.wavelog.mark_sent is False
     assert "wl2_" not in path.read_text(encoding="utf-8")
     assert "\n  key:" not in path.read_text(encoding="utf-8")
+
+
+class _FakeKeyring:
+    def __init__(self):
+        self.store: dict[tuple[str, str], str] = {}
+
+    def get_password(self, service, name):
+        return self.store.get((service, name))
+
+    def set_password(self, service, name, value):
+        self.store[(service, name)] = value
+
+    def delete_password(self, service, name):
+        self.store.pop((service, name), None)
+
+
+def test_keyring_entry_uses_the_normalized_address(monkeypatch):
+    from qslcards.wavelog import secret
+
+    fake = _FakeKeyring()
+    monkeypatch.setattr(secret, "_keyring", lambda: fake)
+    secret.save_key("log.example.com", "wl2_a")
+    assert secret.load_key("https://log.example.com/") == "wl2_a"
+    # Alter, wie getippt gespeicherter Eintrag wird weiter gefunden.
+    fake.set_password(secret.SERVICE, "old.example.com", "wl2_old")
+    assert secret.load_key("old.example.com") == "wl2_old"
+    secret.delete_key("old.example.com")
+    assert secret.load_key("old.example.com") == ""

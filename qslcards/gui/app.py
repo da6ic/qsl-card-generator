@@ -51,7 +51,12 @@ from qslcards.pdf.generator import generate
 from qslcards.pdf.geometry import clamp_print_margin, normalize_sheet_mode
 from qslcards.wavelog import secret as wavelog_secret
 from qslcards.wavelog import sent_store
-from qslcards.wavelog.client import paper_qsl_already_sent, reports_qsl_sent
+from qslcards.wavelog.client import (
+    insecure_url_warning,
+    paper_qsl_already_sent,
+    reports_qsl_sent,
+    validate_date,
+)
 
 from . import theme
 from .help import HelpWindow, open_help
@@ -1521,7 +1526,19 @@ class App(tk.Tk):
 
     # --------------------------------------------------------- Wavelog
     def _wavelog_client(self) -> wavelog.WavelogClient:
-        return wavelog.WavelogClient(self.wavelog_section.url.get(), self.wavelog_section.key.get())
+        """Client für Adresse + Key; derselbe, solange sich beides nicht ändert.
+
+        Wiederverwendet, weil `stations()` beim ersten Kontakt lernen kann, dass
+        die Instanz ohne `index.php` antwortet — das soll für QSOs und
+        Markieren gelten.
+        """
+        url, key = self.wavelog_section.url.get(), self.wavelog_section.key.get()
+        cached = getattr(self, "_wavelog_client_cache", None)
+        if cached is not None and cached[0] == (url, key):
+            return cached[1]
+        client = wavelog.WavelogClient(url, key)
+        self._wavelog_client_cache = ((url, key), client)
+        return client
 
     def _wavelog_api(self) -> str:
         try:
@@ -1579,6 +1596,8 @@ class App(tk.Tk):
         threading.Thread(target=worker, daemon=True).start()
 
     def _wavelog_load_stations(self) -> None:
+        # Token im Klartext über fremdes Netz? Deutlich sagen (2.1), nicht sperren.
+        self.wavelog_section.set_warning(insecure_url_warning(self.wavelog_section.url.get()) or "")
         self.status.set("Lade Stationen aus Wavelog…", "busy")
         if self.wavelog_section.remember_key.get():
             wavelog_secret.save_key(self.wavelog_section.url.get(), self.wavelog_section.key.get())
@@ -1616,6 +1635,21 @@ class App(tk.Tk):
             return
         since = self.wavelog_section.since.get().strip()
         until = self.wavelog_section.until.get().strip()
+        bad = [
+            label for label, value in (("von", since), ("bis", until)) if not validate_date(value)
+        ]
+        self.wavelog_section.mark_dates(
+            since_bad=not validate_date(since), until_bad=not validate_date(until)
+        )
+        if bad:
+            problem = "Datum „" + "“/„".join(bad) + "“ bitte als JJJJ-MM-TT angeben."
+            self.wizard.show_problem(problem)
+            self.status.set(problem, "error")
+            return
+        if since and until and since > until:
+            self.wavelog_section.mark_dates(since_bad=True, until_bad=True)
+            self.wizard.show_problem("„von“ liegt nach „bis“.")
+            return
         self.status.set(f"Lade QSOs von {station.callsign} aus Wavelog…", "busy")
 
         def progress(done: int, total: int) -> None:
