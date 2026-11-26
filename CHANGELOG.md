@@ -3,11 +3,10 @@
 Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 Versionsnummern setzt `scripts/release.py`, nie die Hand.
 
-## [0.4.0] – vorbereitet, noch nicht getaggt
+## [0.4.0] – 2026-11-26
 
-Freigabe erst nach dem Test gegen eine echte Wavelog-Instanz
-(`scripts/wavelog_check.py`, siehe Bewertung 1.5), dann
-`python scripts/release.py 0.4.0`.
+Freigegeben nach dem Test gegen eine echte Wavelog-Instanz. Erste Fassung, die
+der Release-Workflow für Windows, macOS und Linux baut.
 
 ### Neu
 - **Release-Workflow** (`.github/workflows/release.yml`): ein Tag `vX.Y.Z`
