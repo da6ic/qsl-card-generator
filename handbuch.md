@@ -25,7 +25,7 @@ noch fehlt, und markiert die betroffenen Felder rot.
 
 ## Der Weg zur fertigen PDF {#ueberblick}
 
-Das Programm führt dich als **Assistent** in fünf Schritten zur PDF. Es zeigt
+Das Programm führt dich als **Assistent** in sechs Schritten zur PDF. Es zeigt
 immer nur den aktuellen Schritt; oben siehst du, wo du stehst (blau = aktuell,
 grün = erledigt), unten geht es mit **Weiter** und **Zurück** voran. Fehlt noch
 etwas Wichtiges, bleibt **Weiter** stehen und sagt rot daneben, was fehlt. Auf
@@ -36,11 +36,12 @@ einen Schritt oben kannst du auch direkt klicken.
 2. **Absender** — [deine Stationsdaten](#abschnitt-3).
 3. **Abfrage** — [Lookups einrichten](#abschnitt-6) (optional),
    [Zustellwege ordnen](#abschnitt-4) und den [Kartenmodus](#abschnitt-5) wählen.
-4. **Karten** — [Frontbild wählen](#abschnitt-2),
-   [Bemerkung eintragen](#abschnitt-8) (optional),
-   [Most Wanted](#abschnitt-7) (optional) und in der [Vorschau](#abschnitt-9)
-   Einzelfälle korrigieren.
-5. **Druck** — [Druckmodus einstellen](#abschnitt-10) (Duplex, Bogen,
+4. **Gestalten** — [Frontbild wählen](#abschnitt-2),
+   [Bemerkung eintragen](#abschnitt-8) (optional) und
+   [Most Wanted](#abschnitt-7) (optional).
+5. **Prüfen** — in der [Vorschau](#abschnitt-9) Einzelfälle korrigieren. Die
+   Tabelle nutzt hier die ganze Fensterhöhe.
+6. **Druck** — [Druckmodus einstellen](#abschnitt-10) (Duplex, Bogen,
    QR-Code, Seitenrand) und die [PDF erzeugen](#abschnitt-11). Kamen die QSOs
    aus Wavelog, markiert das Programm sie danach auf Wunsch als
    „Papier-QSL gesendet".
@@ -131,10 +132,14 @@ Wavelog**:
 2. **API-Key** eintragen. Gebraucht wird ein Token der API v2 (beginnt mit
    `wl2_`, in Wavelog unter den API-Einstellungen deines Kontos) mit den Rechten
    `station:read` und `qso:read`, zum Markieren zusätzlich `qso:write`. Wavelog
-   muss mindestens Version 3.2.5 haben.
+   muss mindestens Version 3.2.5 haben (die API v2 gibt es ab 3.1, das
+   Markieren als gesendet erst ab 3.2.5). Beginnt die Adresse mit `http://` und
+   zeigt nicht in dein Heimnetz, warnt das Programm: der Key ginge dann
+   unverschlüsselt über das Internet.
 3. **Stationen laden** drücken und im Dropdown den Stationsstandort wählen, für
    den du Karten drucken willst. Die aktive Station steht oben und trägt einen ★.
-4. Optional einen **Zeitraum** (JJJJ-MM-TT) eingeben.
+4. Optional einen **Zeitraum** (JJJJ-MM-TT) eingeben. Ein Tippfehler wird
+   sofort rot markiert, bevor Wavelog gefragt wird.
 5. **QSOs laden** drücken.
 
 QSOs, für die schon eine Papier-QSL gesendet wurde, lässt das Programm
@@ -144,14 +149,37 @@ hat (`wavelog_sent.json` neben der `config.yaml`). So wird auch dann keine Karte
 doppelt gedruckt, wenn eine Wavelog-Version den Versandstatus beim Abruf nicht
 mitliefert.
 
+**Achtung, Grenze dieser Liste:** Sie kennt nur, was *dieses* Programm auf
+*diesem* Rechner markiert hat. Liefert deine Wavelog-Instanz den Versandstatus
+nicht mit, zeigt Schritt 1 nach dem Laden einen gelben Hinweis mit der Zahl der
+betroffenen QSOs. Dann gilt: was du in Wavelog von Hand oder von einem anderen
+Rechner aus als gesendet gesetzt hast, steht wieder in der Liste. Prüfe die
+Vorschau in dem Fall besonders genau. Ist die Datei `wavelog_sent.json`
+beschädigt, meldet das Programm das rot und überschreibt sie **nicht** — sonst
+wäre das Sicherheitsnetz unbemerkt weg.
+
+**Bewusst nachdrucken** (Karte verloren, Rückläufer vom Büro): In der
+[Vorschau](#abschnitt-9) **Schon gesendete anzeigen** anhaken. Die gesendeten
+QSOs erscheinen als eigene Karten auf „Drucken: Nein"; hake die gewünschten an.
+Nachdrucke werden in Wavelog nicht noch einmal markiert.
+
+**Bei Logdateien** vermerkt das Programm nach dem Druck nichts: wer dieselbe
+ADIF-Datei zweimal lädt, druckt zweimal. Setze die gedruckten QSOs deshalb in
+deinem Logprogramm auf „QSL gesendet" und exportiere neu.
+
 Leere Absenderfelder (Rufzeichen, Locator, CQ-Zone, ITU) füllt das Programm aus
 dem Stationsstandort; was du schon eingetragen hast, bleibt stehen.
 
-**Nach dem Druck:** Ist in Schritt 5 „als Papier-QSL gesendet markieren" an,
+**Nach dem Druck:** Ist in Schritt 6 „als Papier-QSL gesendet markieren" an,
 fragt das Programm nach dem Erzeugen der PDF, ob es die QSOs der gedruckten
 Karten in Wavelog markieren soll. Es setzt dann *QSL gesendet = Ja*, das heutige
 Datum und den Weg (Büro, Direkt oder Manager). Sagst du „Abbrechen", kannst du
-das später mit **Jetzt markieren** nachholen.
+das später mit **Jetzt markieren** nachholen — auch nach einem Neustart: die
+offenen Markierungen merkt sich das Programm in `wavelog_sent.json`. Karten über
+**eQSL oder LoTW** werden nie als Papier-QSL markiert. Nach dem Markieren steht
+auf der Druckseite eine kurze Zusammenfassung; Fehler kannst du dort markieren
+und kopieren. Bremst Wavelog wegen zu vieler Anfragen, wartet das Programm die
+verlangte Zeit ab und macht dann weiter.
 
 Der API-Key wird **nicht** in die `config.yaml` geschrieben. Mit **Im
 Schlüsselbund merken** legt das Programm ihn im Schlüsselbund deines Systems ab
@@ -278,10 +306,14 @@ drei Dinge, die im Logbuch nicht stehen:
 
 Der Lookup startet **automatisch**, sobald du ein Logbuch lädst, und läuft im
 Hintergrund für alle Stationen. Solange er läuft, steht in der Vorschau `…` und
-du kannst noch keine Karten erzeugen.
+du kannst noch keine Karten erzeugen. Die Vorschau zeigt den Fortschritt und
+eine geschätzte Restzeit; mit **Abbrechen** hältst du ihn an (schon Gefundenes
+bleibt, **Neu abrufen** holt den Rest). Lädst du während eines Lookups ein
+anderes Log, wird der alte abgebrochen und das neue Log nachgeschlagen.
 
 **QRZ** wird zuerst gefragt. Trage Benutzername und Passwort in die beiden
-QRZ-Felder ein — bei jedem Programmstart neu, siehe unten. Ohne bezahltes
+QRZ-Felder ein — bei jedem Programmstart neu oder aus dem Schlüsselbund, siehe
+unten. Ohne bezahltes
 XML-Abo liefert QRZ allerdings eingeschränkte Angaben und in keinem Fall die
 Zustellwege.
 
@@ -317,12 +349,16 @@ dafür steht bei der Ausgabe ([Kapitel 11](#abschnitt-11)), weil die Datei dort
 entsteht. Auf der Karte selbst steht die Anschrift des Empfängers grundsätzlich
 nicht, dort erscheint nur sein Rufzeichen.
 
-**Die Zugangsdaten werden nicht gespeichert.** Sie gelten nur für die laufende
-Sitzung und stehen in keiner Datei — weder in der `config.yaml` noch sonst wo
-(siehe [Wo liegen meine Dateien?](#dateien)). Beim nächsten Start sind die vier
-Felder deshalb wieder leer und du trägst sie erneut ein. Das ist Absicht: ein
-Passwort im Klartext auf der Platte wäre für jeden lesbar, der an deinen Rechner
-kommt. Alle übrigen Einstellungen bleiben natürlich erhalten.
+**Die Zugangsdaten stehen nie in einer Datei.** Ohne weiteres Zutun gelten sie
+nur für die laufende Sitzung — weder in der `config.yaml` noch sonst wo (siehe
+[Wo liegen meine Dateien?](#dateien)). Beim nächsten Start sind die vier Felder
+wieder leer. Das ist Absicht: ein Passwort im Klartext auf der Platte wäre für
+jeden lesbar, der an deinen Rechner kommt.
+
+Wer sie nicht jedes Mal eintippen mag, hakt **Im Schlüsselbund merken** an.
+Dann legt das Programm Benutzer und Passwort in den Schlüsselbund deines
+Systems (wie den Wavelog-Key) und trägt sie beim Start selbst ein. Haken weg
+löscht den Eintrag wieder. Auch im Protokoll tauchen Passwörter nicht auf.
 
 ## 7. Most Wanted {#abschnitt-7}
 
@@ -434,6 +470,11 @@ schließt sie aus.
 
 Steht in Via und Route noch `…`, läuft der Lookup — dann ist nichts änderbar,
 warte kurz.
+
+**Schon gesendete anzeigen** (oben in der Vorschau, mit Anzahl) blendet QSOs
+ein, für die schon eine Papier-QSL gesendet wurde — für einen bewussten
+Nachdruck. Sie stehen als eigene Karten auf „Nein"; hake an, was du nachdrucken
+willst.
 
 Alle Korrekturen hier gelten **nur für diese Sitzung**. „Log laden" oder „Neu
 abrufen" bauen die Liste neu auf und verwerfen sie.
@@ -592,14 +633,17 @@ dich direkt hin ([Menü](#menue)).
   (der Finder versteckt `Library`; nimm den Menüeintrag)
 - **Linux** — `~/.config/qsl-karten-generator/`
 
-Darin liegen bis zu fünf Dateien:
+Darin liegen bis zu sieben Dateien:
 
 - `config.yaml` — alle deine Einstellungen. Das Programm schreibt sie bei jeder
   Änderung selbst; bearbeite sie nicht von Hand, sonst überschreibt der nächste
   Klick deine Änderung. Zum Sichern oder Umziehen auf einen neuen Rechner
   kopierst du einfach diese eine Datei. Die Zugangsdaten für die Lookups stehen
   **nicht** darin ([Kapitel 6](#abschnitt-6)) — die gibst du auf dem neuen
-  Rechner einmal neu ein.
+  Rechner einmal neu ein. Bei jedem Speichern bleibt die vorige Fassung als
+  `config.yaml.bak` liegen. Ist die `config.yaml` einmal beschädigt (Absturz,
+  Stromausfall), lädt das Programm diese Sicherung, sagt es dir und legt die
+  kaputte Datei als `config.yaml.defekt` daneben.
 - `lookup_cache.json` — die gemerkten Antworten der Lookups
   ([Kapitel 6](#abschnitt-6)).
 - `mostwanted.json` — die zuletzt abgerufene Most-Wanted-Liste der GDXF
@@ -608,7 +652,10 @@ Darin liegen bis zu fünf Dateien:
 - `cty.dat` — die zuletzt abgerufene Präfixliste von AD1C, mit der das Programm
   Rufzeichen ihrem DXCC-Gebiet zuordnet ([Kapitel 7](#abschnitt-7)). Fehlt sie,
   gilt die mitgelieferte.
+- `wavelog_sent.json` — nur mit Wavelog: die QSOs, die das Programm dort
+  selbst als gesendet markiert hat, und noch offene Markierungen.
 - `qslcards.log` — das Protokoll. Klemmt etwas, steht hier der Grund.
+  Zugangsdaten stehen darin nie.
 
 Die fertigen PDFs landen dort, wo du sie in [Abschnitt 11](#abschnitt-11)
 hinlegst; vorgeschlagen wird dein Dokumentenordner.
@@ -626,9 +673,13 @@ Das geht nur, wenn der Programmordner beschreibbar ist — unter Windows also
 
 ## Wenn etwas nicht klappt {#probleme}
 
-**„Pflichtangaben fehlen"** — es fehlt eine der mit `*` markierten Angaben. Das
-Fenster listet alle auf einmal auf, danach sind die Stellen rot markiert und die
-Ansicht springt zur ersten davon.
+**„Pflichtangaben fehlen"** — es fehlt eine der mit `*` markierten Angaben. Die
+Leiste unten nennt alle auf einmal, die Stellen sind rot markiert und der
+Assistent springt zur ersten davon.
+
+**„Einstellungen beschädigt"** — die `config.yaml` war nicht lesbar (meist ein
+Absturz beim Speichern). Das Programm hat die letzte Sicherung geladen; die
+kaputte Datei liegt als `config.yaml.defekt` daneben ([Dateien](#dateien)).
 
 **„Logbuch nicht verwertbar"** — die Datei ist weder ADIF noch Cabrillo.
 Hast du vielleicht eine Auswertung oder eine Tabelle erwischt statt der
@@ -650,7 +701,8 @@ nicht unter den ersten Plätzen — oder es ist unbekannt (`?` in der Spalte „
 
 **Alle Karten stehen auf Büro** — dann gibt es keine Lookup-Zugangsdaten oder
 die Abfrage ist fehlgeschlagen. Prüfe [Abschnitt 6](#abschnitt-6). Nach jedem
-Programmstart sind die vier Felder leer; sie werden bewusst nicht gespeichert.
+Programmstart sind die vier Felder leer, außer du hast **Im Schlüsselbund
+merken** angehakt.
 
 **Der Manager stimmt nicht** — die Datenbank ist nicht immer aktuell. Korrigiere
 das Feld „Route/Manager" in der Vorschau, oder leere den Cache und frage neu ab.

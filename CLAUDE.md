@@ -64,7 +64,16 @@ qslcards/
   __main__.py             # `python -m qslcards`
   main.py                 # Einstiegspunkt: GUI starten (+ Protokoll im Bündel)
   paths.py                # ALLE Datei-/Verzeichnispfade (Bündel vs. Quelle)
-  config.py               # Config-Dataclasses + Laden/Speichern (YAML)
+  config.py               # Config-Dataclasses + Laden/Speichern (YAML, atomar + .bak)
+  fileio.py               # atomic_write_text (Temp-Datei + os.replace)
+  redact.py               # Zugangsdaten aus Log-/Fehlertexten maskieren
+  controllers/            # Abläufe OHNE Tk (testbar ohne Xvfb)
+    session.py            # SessionState (QSOs/gesendete/Lookups/Markierungen)
+    lookup_runner.py      # Hintergrund-Lookup: Generation, Warteschlange, Abbruch
+  wavelog/
+    client.py             # API v2: Stationen, QSOs, PATCH qsl_sent (429/Retry)
+    sent_store.py         # wavelog_sent.json: selbst markierte + offene IDs
+    secret.py             # API-Key im System-Schlüsselbund (optional)
   logbook/
     __init__.py           # Formaterkennung + Dispatcher (die öffentliche API)
     models.py             # QSO-Dataclass (für BEIDE Formate)
@@ -76,6 +85,7 @@ qslcards/
     hamqth.py             # HamQTH-Client (Session-basiert)
     qrz.py                # QRZ-Client (optional)
     cache.py              # lokaler Cache (JSON), spart API-Calls
+    secret.py             # QRZ/HamQTH optional im Schlüsselbund (seit 0.4.0)
   mostwanted/
     __init__.py           # Fassade + CATEGORY_LABELS
     models.py             # MostWantedList/RankedEntity/MostWantedFilter, Mode->Kategorie
@@ -98,7 +108,10 @@ qslcards/
     generator.py          # orchestriert die Gesamt-PDF (alle Karten)
   gui/
     __init__.py
-    app.py                # Hauptfenster, verdrahtet alles
+    app.py                # Hauptfenster + Assistent, verdrahtet alles
+    wizard.py             # Schritt-Assistent (Kopfleiste, Seiten, Navigation)
+    desktop.py            # Datei öffnen/zeigen, Programm-Icons
+    scrollframe.py        # scrollbare Seite; set_fill() für die Vorschau
     sections.py           # UI-Abschnitte (Datei, Bild, Absender, Filter, ...)
     preview.py            # Tabelle: ALLE QSOs/Karten + Via/Route, Drucken-Flag
     theme.py              # Farbthema (hell/dunkel) + ALLE Farben/Abstände der GUI
@@ -128,6 +141,11 @@ scripts/
   make_icon.py            # app_icon.svg -> PNG (16–1024) + .ico + .icns
   build_app.py            # auslieferbare Anwendung bauen + verpacken
   release.py              # Version anheben -> Tests -> bauen -> Commit + Tag
+  mock_wavelog.py         # Mini-Wavelog (API v2) zum Ausprobieren/Testen
+  wavelog_check.py        # Prüfung gegen eine ECHTE Instanz (Bericht als Fixture)
+.gitlab-ci.yml            # CI: ruff, black --check, pytest/xvfb, uv-Python mit Tk 9
+.github/workflows/        #   dasselbe für GitHub
+CHANGELOG.md              # Änderungen je Version (Pflege bei jedem Release)
 packaging/
   qslcards.spec           # PyInstaller: eine Spec für alle drei Plattformen
   linux/                  # .desktop, install.sh, LIESMICH.txt, Dockerfile.fedora,
@@ -1238,6 +1256,61 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
     `build_app.py --clean` — die Versionszeile ist dann schon committet.
 - **Kein „Schließen" im „Über"-Dialog** — wie beim Handbuchfenster macht das die
   Fenstersteuerung des Systems (Escape bleibt gebunden).
+
+**Stand 0.4.0: Assistent, Wavelog, Robustheit (Bewertung vom 26.11.2026)**
+- Die Oberfläche ist ein **Schritt-Assistent** mit sechs Schritten: 1 Quelle
+  (Datei oder Wavelog), 2 Absender, 3 Abfrage (Lookups, Zustellwege,
+  Kartenmodus), 4 Gestalten (Frontbild, Bemerkungen, Most Wanted), 5 Prüfen
+  (Vorschau), 6 Druck. Die alten **Abschnittsnummern 1–11** leben als Anker im
+  Handbuch (`abschnitt-N`) und im Menü weiter; `app.SECTION_STEP` bildet sie auf
+  Schritte ab. In Texten für den Anwender „Schritt" sagen, nicht „Abschnitt".
+- **Prüfen füllt das Fenster** (`ScrollableFrame.set_fill`): die Vorschau
+  scrollt nur in sich, der Außen-Scroll ruht. Vorher zwei verschachtelte
+  Scrollbalken mit ~6 sichtbaren Zeilen.
+- **Pflichtangaben**: kein Popup mehr, die Navigationsleiste nennt alles
+  Fehlende (`wizard.show_problem`), die Felder werden weiter rot markiert.
+- **Schon gesendet = keine Karte** (`QSL_SENT = Y`, auch ADIF; bei Wavelog
+  zusätzlich `wavelog_sent.json`). Bewusster Nachdruck über „Schon gesendete
+  anzeigen": eigene Karten mit `Card.already_sent`, nie vorausgewählt
+  (`is_printable`), nie mit offenen QSOs zusammengelegt
+  (`normalize_station_cards`), nie erneut markiert (`marks_for_cards`).
+- **Markiert wird nur Papier**: Wege B/D (B mit Manager -> `M`); eQSL/LoTW nie.
+  Offene Markierungen stehen in `wavelog_sent.json` (`pending`) und überleben
+  einen Neustart.
+- **Dateien atomar schreiben** (`fileio.atomic_write_text`): config.yaml (mit
+  `.bak`, Rückfall + `.defekt` in `config.load_safely`), Lookup-Cache,
+  `wavelog_sent.json`. Eine **unlesbare** `wavelog_sent.json` wird nie
+  überschrieben (`SentStoreError`), sonst wäre das Sicherheitsnetz still weg.
+  `config.load` wirft für leere Dateien `ConfigError` — eine leere Datei ist
+  abgebrochen geschrieben, kein „alles Standard".
+- **Zugangsdaten nie in Protokoll oder Fehlermeldung**: HamQTH/QRZ tragen das
+  Passwort in der URL, `requests` hängt sie an Fehler. `redact.describe_error`
+  in den Clients, `RedactingFilter` am Datei-Handler. Der Wavelog-Client nennt
+  bei Netzfehlern nur den Typ.
+- **Lookups laufen über `LookupRunner`**: jede Anfrage eine Generation, nur die
+  neueste liefert ab; ein laufender Lauf wird per `threading.Event` (geprüft vor
+  jedem Rufzeichen in `lookup_calls`) abgebrochen und der neue startet, wenn er
+  endet — nie zwei Threads gleichzeitig am Cache. `App._lookup_running` ist
+  eine Eigenschaft darauf. Tests ersetzen weiter `appmod.threading.Thread` und
+  `appmod.lookup_calls` (der Runner löst beide erst beim Aufruf auf).
+- **Wavelog-Client**: `WavelogError.status/code` statt Textsuche; 429 ->
+  `retry_after` abwarten (max. 5×), 0,5 s Abstand beim Markieren; Seitenlimit
+  (`total_pages`, `MAX_PAGES`); `index.php` wird bei 404 einmal weggelassen,
+  wenn der Nutzer es nicht selbst getippt hat (Client wird deshalb in der App
+  wiederverwendet). Schlüsselbund-Eintrag unter der **normalisierten** Adresse.
+- **Zugangsdaten nur zur Laufzeit — mit Ausnahme auf Wunsch**: seit 0.4.0 darf
+  der Nutzer QRZ/HamQTH per Haken in den **Schlüsselbund** legen
+  (`lookup/secret.py`, Config nur `lookup.remember`, Standard aus). Die
+  Grundregel „nie im Klartext in einer Datei" gilt unverändert.
+- **Config-Überwachung (mtime-Poll) bleibt bewusst**: sie gleicht zwei offene
+  Fenster bzw. einen Netzlaufwerk-Ordner ab. Eine extern kaputt geschriebene
+  Datei wird dabei ignoriert (Werte im Fenster gelten weiter), der nächste
+  Auto-Save repariert sie. (Bewertung 3.4)
+- **Noch nie gegen echtes Wavelog getestet.** Vor dem Release 0.4.0
+  `scripts/wavelog_check.py` gegen die Instanz laufen lassen und den Bericht
+  als Fixture in `tests/test_wavelog.py` übernehmen.
+- **CI**: `.gitlab-ci.yml` (Remote ist GitLab) und GitHub-Workflow; beide holen
+  per `uv` ein Python mit **Tk 9** und brechen ab, wenn es Tk 8.6 ist.
 
 **Workflow-Konventionen**
 - Branch **`build/mvp`**. **Nicht selbst committen** — erst nach Review; committen,

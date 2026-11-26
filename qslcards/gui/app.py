@@ -353,7 +353,7 @@ class App(tk.Tk):
         page.columnconfigure(0, weight=1)
         page.columnconfigure(1, weight=1)
 
-        # --- Schritt 4: Karten
+        # --- Schritt 4: Gestalten
         page = wiz.page(STEP_CARDS)
         top = ttk.Frame(page)
         top.pack(side="top", fill="x")
@@ -1275,7 +1275,7 @@ class App(tk.Tk):
             "Anmeldung fehlgeschlagen",
             "Die Zugangsdaten wurden vom Anbieter abgelehnt:\n\n"
             f"{details}\n\n"
-            "Bitte in Abschnitt 6 (Lookups) prüfen. Ohne Anmeldung bleiben alle "
+            "Bitte in Schritt 3 (Abfrage) prüfen. Ohne Anmeldung bleiben alle "
             "Zustellwege auf dem Standard.",
         )
 

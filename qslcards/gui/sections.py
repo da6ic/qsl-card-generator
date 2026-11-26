@@ -1232,7 +1232,7 @@ class WavelogSection:
 
 
 class WavelogMarkSection:
-    """Schritt 5: nach dem Druck „Papier-QSL gesendet" in Wavelog setzen."""
+    """Schritt 6: nach dem Druck „Papier-QSL gesendet" in Wavelog setzen."""
 
     def __init__(self, parent: tk.Misc) -> None:
         self.frame = ttk.LabelFrame(parent, text="Wavelog")
