@@ -8,6 +8,7 @@ wavelog_sent.json
 # Zuletzt geladene cty.dat im Projektordner (die mitgelieferte liegt in qslcards/assets/dxcc/)
 /cty.dat
 *.png
+!docs/screenshots/*.png
 
 # Ausnahme: das Programm-Icon gehört zum Code (aus app_icon.svg gerendert,
 # siehe scripts/make_icon.py) und muss mit eingecheckt werden.
