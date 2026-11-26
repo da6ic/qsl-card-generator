@@ -165,18 +165,18 @@ def test_mark_many_stops_when_the_key_is_rejected():
     session = _Session(_Resp(200, {}), _Resp(401, {}), _Resp(200, {}))
     client = WavelogClient("https://h", "wl2_x", session=session)
     done, errors = client.mark_many([PaperQslMark(str(i)) for i in range(3)])
-    assert done == 1 and len(errors) == 1
+    assert done == ["0"] and len(errors) == 1
     assert len(session.calls) == 2  # der dritte wird gar nicht mehr versucht
 
 
 def test_wavelog_settings_roundtrip_without_the_key(tmp_path):
     config = cfg.AppConfig()
     config.source = cfg.SourceConfig(kind="wavelog")
-    config.wavelog = cfg.WavelogConfig(url="https://h", station_id=3, only_unsent=False)
+    config.wavelog = cfg.WavelogConfig(url="https://h", station_id=3, mark_sent=False)
     path = tmp_path / "config.yaml"
     cfg.save(config, path)
     loaded = cfg.load(path)
     assert loaded.source.kind == "wavelog"
-    assert loaded.wavelog.station_id == 3 and loaded.wavelog.only_unsent is False
+    assert loaded.wavelog.station_id == 3 and loaded.wavelog.mark_sent is False
     assert "wl2_" not in path.read_text(encoding="utf-8")
     assert "\n  key:" not in path.read_text(encoding="utf-8")

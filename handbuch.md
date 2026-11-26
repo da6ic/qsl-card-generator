@@ -134,10 +134,15 @@ Wavelog**:
    muss mindestens Version 3.2.5 haben.
 3. **Stationen laden** drücken und im Dropdown den Stationsstandort wählen, für
    den du Karten drucken willst. Die aktive Station steht oben und trägt einen ★.
-4. Optional einen **Zeitraum** (JJJJ-MM-TT) eingeben. **Nur QSOs, für die noch
-   keine Papier-QSL gesendet wurde** lässt QSOs weg, die Wavelog schon als
-   gesendet führt.
+4. Optional einen **Zeitraum** (JJJJ-MM-TT) eingeben.
 5. **QSOs laden** drücken.
+
+QSOs, für die schon eine Papier-QSL gesendet wurde, lässt das Programm
+**immer** weg — das gilt auch für Logdateien (ADIF-Feld `QSL_SENT` = Y). Bei
+Wavelog merkt es sich zusätzlich jedes QSO, das es selbst als gesendet markiert
+hat (`wavelog_sent.json` neben der `config.yaml`). So wird auch dann keine Karte
+doppelt gedruckt, wenn eine Wavelog-Version den Versandstatus beim Abruf nicht
+mitliefert.
 
 Leere Absenderfelder (Rufzeichen, Locator, CQ-Zone, ITU) füllt das Programm aus
 dem Stationsstandort; was du schon eingetragen hast, bleibt stehen.

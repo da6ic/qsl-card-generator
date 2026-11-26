@@ -134,3 +134,44 @@ def test_marking_needs_confirmation(app, answer):  # noqa: F811
     mark.assert_not_called()
     # Später nachholbar über „Jetzt markieren".
     assert str(app.wavelog_mark_section.mark_now_btn.cget("state")) == "normal"
+
+
+SENT_ADIF = (
+    "<EOH>\n"
+    "<CALL:6>EA8ABC <QSO_DATE:8>20261019 <TIME_ON:4>1438 <BAND:3>20m <MODE:3>SSB "
+    "<RST_SENT:2>59 <QSL_SENT:1>Y <EOR>\n"
+    "<CALL:6>JA1XYZ <QSO_DATE:8>20261020 <TIME_ON:4>0800 <BAND:3>40m <MODE:2>CW "
+    "<RST_SENT:3>599 <QSL_SENT:1>N <EOR>\n"
+)
+
+
+def test_log_file_skips_already_sent_cards(app, tmp_path):  # noqa: F811
+    _load(app, tmp_path, log=SENT_ADIF)
+    assert [q.call for q in app.qsos] == ["JA1XYZ"]
+    assert "1 schon gesendet" in app.file_section.count_var.get()
+
+
+def test_marked_qsos_leave_the_session_and_stay_skipped(app):  # noqa: F811
+    station = WavelogStation(1, "Home", "DL0QSL")
+    app.source_section.kind.set("wavelog")
+    app.wavelog_section.url.set("https://log.example.org")
+    app._wavelog_qsos_done(station, _wavelog_qsos(), None)
+    app._pending_marks = app._marks_for(app.preview.included_cards())
+    app._wavelog_mark_done((["10"], []), None)
+    assert app.qsos == []  # gesendet -> keine Karte mehr in dieser Sitzung
+
+    # Neuer Abruf: Wavelog meldet den Status diesmal NICHT mit (Feld fehlt).
+    fresh = [
+        qso_from_json(
+            {
+                "id": 10,
+                "call": "EA8ABC",
+                "qso_date": "2026-10-19 14:38:00",
+                "mode": "SSB",
+                "freq": 14230000,
+                "rst_sent": "59",
+            }
+        )
+    ]
+    app._wavelog_qsos_done(station, fresh, None)
+    assert app.qsos == []  # die eigene Liste fängt es ab

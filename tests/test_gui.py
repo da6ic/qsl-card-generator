@@ -61,6 +61,8 @@ def app(tmp_path, monkeypatch):
     monkeypatch.setattr(appmod, "MOSTWANTED_PATH", str(tmp_path / "mostwanted.json"))
     # Die zuletzt abgerufene cty.dat ebenso; es gilt die mitgelieferte Kopie.
     monkeypatch.setattr(appmod, "CTY_PATH", str(tmp_path / "cty.dat"))
+    # Selbst markierte Wavelog-QSOs: je Test eine eigene, leere Liste.
+    monkeypatch.setattr(appmod, "WAVELOG_SENT_PATH", str(tmp_path / "wavelog_sent.json"))
     # Und nie ins Netz: der cty.dat-Abruf liefert im Test nur die lokale Kopie.
     monkeypatch.setattr(
         appmod.dxcc,

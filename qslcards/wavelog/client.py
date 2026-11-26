@@ -129,9 +129,14 @@ def paper_qsl_already_sent(qso: QSO) -> bool:
     """True, wenn Wavelog für das QSO schon „Papier-QSL gesendet" meldet.
 
     Nur verlässlich, wenn die Instanz das Feld `qsl_sent` mitliefert; fehlt es,
-    gilt das QSO als offen.
+    hilft die lokale Liste der selbst markierten QSOs (`sent_store`).
     """
     return qso.raw.get("qsl_sent", "").upper() == "Y"
+
+
+def reports_qsl_sent(qsos: list[QSO]) -> bool:
+    """Liefert diese Wavelog-Instanz den Versandstatus überhaupt mit?"""
+    return any("qsl_sent" in q.raw for q in qsos)
 
 
 class WavelogClient:
@@ -277,14 +282,15 @@ class WavelogClient:
         *,
         date: str = "",
         progress_cb: Callable[[int, int], None] | None = None,
-    ) -> tuple[int, list[str]]:
-        """Markiert mehrere QSOs. Liefert (Anzahl erfolgreich, Fehlermeldungen)."""
+    ) -> tuple[list[str], list[str]]:
+        """Markiert mehrere QSOs. Liefert (IDs der markierten QSOs, Fehlermeldungen)."""
         marks = list(marks)
-        done, errors = 0, []
+        done: list[str] = []
+        errors: list[str] = []
         for index, mark in enumerate(marks, start=1):
             try:
                 self.mark_paper_sent(mark, date)
-                done += 1
+                done.append(mark.qso_id)
             except WavelogError as exc:
                 errors.append(f"QSO {mark.qso_id}: {exc}")
                 if "401" in str(exc) or "403" in str(exc):

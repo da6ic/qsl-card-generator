@@ -33,7 +33,7 @@ from qslcards.config import (
     WavelogConfig,
     push_recent,
 )
-from qslcards.logbook import LogFormatError, parse_file
+from qslcards.logbook import LogFormatError, parse_file, qsl_already_sent
 from qslcards.lookup import (
     DEFAULT_CACHE_PATH,
     LookupCredentials,
@@ -44,7 +44,8 @@ from qslcards.lookup import (
 from qslcards.pdf.generator import generate
 from qslcards.pdf.geometry import clamp_print_margin, normalize_sheet_mode
 from qslcards.wavelog import secret as wavelog_secret
-from qslcards.wavelog.client import paper_qsl_already_sent
+from qslcards.wavelog import sent_store
+from qslcards.wavelog.client import paper_qsl_already_sent, reports_qsl_sent
 
 from . import theme
 from .help import HelpWindow, open_help
@@ -122,6 +123,8 @@ MOSTWANTED_PATH = str(paths.mostwanted_path())
 CTY_PATH = str(paths.cty_path())
 BUNDLED_CTY_PATH = str(paths.bundled_cty_path())
 DXCC_NUMBERS_PATH = str(paths.dxcc_numbers_path())
+# Selbst in Wavelog markierte QSOs (Sicherheitsnetz gegen Doppeldruck).
+WAVELOG_SENT_PATH = str(paths.wavelog_sent_path())
 
 # Fenster-/Programm-Icon: die von `scripts/make_icon.py` gerenderten PNGs.
 ICON_DIR = paths.resource_path("qslcards", "assets", "icons")
@@ -640,7 +643,6 @@ class App(tk.Tk):
             wl = config.wavelog
             self.wavelog_section.url.set(wl.url)
             self.wavelog_section.remember_key.set(bool(wl.remember_key))
-            self.wavelog_section.only_unsent.set(bool(wl.only_unsent))
             self.wavelog_section.since.set(wl.qso_since)
             self.wavelog_section.until.set(wl.qso_until)
             self.wavelog_mark_section.mark_sent.set(bool(wl.mark_sent))
@@ -702,7 +704,6 @@ class App(tk.Tk):
                 station_id=self.wavelog_section.selected_station_id()
                 or self.base_config.wavelog.station_id,
                 remember_key=self.wavelog_section.remember_key.get(),
-                only_unsent=self.wavelog_section.only_unsent.get(),
                 qso_since=self.wavelog_section.since.get().strip(),
                 qso_until=self.wavelog_section.until.get().strip(),
                 mark_sent=self.wavelog_mark_section.mark_sent.get(),
@@ -763,7 +764,6 @@ class App(tk.Tk):
             self.wavelog_section.url,
             self.wavelog_section.station,
             self.wavelog_section.remember_key,
-            self.wavelog_section.only_unsent,
             self.wavelog_section.since,
             self.wavelog_section.until,
             self.wavelog_mark_section.mark_sent,
@@ -871,11 +871,14 @@ class App(tk.Tk):
             messagebox.showerror("Fehler", f"Logbuch nicht verwertbar:\n{exc}")
             self.status.set(f"Logbuch nicht verwertbar: {exc}", "error")
             return
-        self.qsos = qsos
+        # Schon gesendete Karten (QSL_SENT = Y) bekommen keine neue.
+        sent = sum(1 for q in qsos if qsl_already_sent(q))
+        self.qsos = [q for q in qsos if not qsl_already_sent(q)]
         self.qsos_source = "file"
         self._pending_marks = []
         self.file_section.set_missing(False)  # Markierung eines Druckversuchs weg
-        self.file_section.count_var.set(f"{len(self.qsos)} QSOs geladen")
+        note = f" ({sent} schon gesendet, ausgelassen)" if sent else ""
+        self.file_section.count_var.set(f"{len(self.qsos)} QSOs geladen{note}")
         self.status.set_info(f"{len(self.qsos)} QSOs · {Path(path).name}")
         self._remember_recent("logs", path)
         # Frische Lookups: alte Ergebnisse verwerfen und automatisch neu abrufen.
@@ -1425,6 +1428,12 @@ class App(tk.Tk):
     def _wavelog_client(self) -> wavelog.WavelogClient:
         return wavelog.WavelogClient(self.wavelog_section.url.get(), self.wavelog_section.key.get())
 
+    def _wavelog_api(self) -> str:
+        try:
+            return wavelog.normalize_base_url(self.wavelog_section.url.get())
+        except wavelog.WavelogError:
+            return ""
+
     def _restore_wavelog_key(self) -> None:
         """Beim Start: einen gemerkten API-Key aus dem Schlüsselbund holen."""
         if not self.wavelog_section.remember_key.get():
@@ -1528,12 +1537,18 @@ class App(tk.Tk):
             self.status.set(str(error), "error")
             self.wizard.show_problem(str(error))
             return
+        # Schon gesendete Karten nie wieder drucken: was Wavelog als gesendet
+        # meldet, und was dieses Programm selbst dort markiert hat (falls die
+        # Instanz den Status beim Abruf nicht mitliefert).
         total = len(qsos)
-        skipped = 0
-        if self.wavelog_section.only_unsent.get():
-            kept = [q for q in qsos if not paper_qsl_already_sent(q)]
-            skipped = total - len(kept)
-            qsos = kept
+        marked = sent_store.load(WAVELOG_SENT_PATH, self._wavelog_api())
+        status_known = reports_qsl_sent(qsos)
+        qsos = [
+            q
+            for q in qsos
+            if not paper_qsl_already_sent(q) and q.raw.get("wavelog_id") not in marked
+        ]
+        skipped = total - len(qsos)
         self.qsos = qsos
         self.qsos_source = "wavelog"
         self._pending_marks = []
@@ -1541,7 +1556,14 @@ class App(tk.Tk):
         note = f" ({skipped} schon gesendet, ausgelassen)" if skipped else ""
         self.wavelog_section.count_var.set(f"{len(qsos)} QSOs geladen{note}")
         self.status.set_info(f"{len(qsos)} QSOs · Wavelog {station.callsign}")
-        self.status.set(f"Wavelog: {len(qsos)} QSOs geladen{note}.", "ok")
+        if status_known or not total:
+            self.status.set(f"Wavelog: {len(qsos)} QSOs geladen{note}.", "ok")
+        else:
+            self.status.set(
+                "Wavelog meldet den Versandstatus nicht mit – ausgelassen werden nur "
+                "die hier markierten QSOs.",
+                "busy",
+            )
         self.wizard.show_hint("")
         self.wizard.refresh()
         self.lookups = {}
@@ -1620,16 +1642,26 @@ class App(tk.Tk):
         if error is not None:
             self.status.set(str(error), "error")
             return
-        done, errors = result
+        done_ids, errors = result
+        done = len(done_ids)
+        if done_ids:
+            # Merken (Sicherheitsnetz für den nächsten Abruf) und aus der
+            # aktuellen Sitzung nehmen: gesendete Karten werden nie neu gedruckt.
+            try:
+                sent_store.add(WAVELOG_SENT_PATH, self._wavelog_api(), done_ids)
+            except OSError as exc:
+                self.status.set(f"Liste der gesendeten QSOs nicht speicherbar: {exc}", "error")
+            gone = set(done_ids)
+            self.qsos = [q for q in self.qsos if q.raw.get("wavelog_id") not in gone]
+            self._pending_marks = [m for m in self._pending_marks if m.qso_id not in gone]
+            self._rebuild_cards()
+            self.wavelog_section.count_var.set(f"{len(self.qsos)} offene QSOs")
         if errors:
-            # Erneutes Markieren ist harmlos (setzt nur wieder „Y"), deshalb
-            # bleiben alle zur Wiederholung stehen.
             self.status.set(f"Wavelog: {done} markiert, {len(errors)} Fehler.", "error")
             messagebox.showwarning(
                 "Wavelog", "Nicht alle QSOs konnten markiert werden:\n\n" + "\n".join(errors[:8])
             )
         else:
-            self._pending_marks = []
             self.status.set(f"Wavelog: {done} QSO(s) als Papier-QSL gesendet markiert.", "ok")
         self.wavelog_mark_section.status_var.set(
             f"{done} QSO(s) markiert" + (f", {len(errors)} Fehler" if errors else "")

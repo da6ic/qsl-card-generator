@@ -138,7 +138,6 @@ class WavelogConfig:
     url: str = ""
     station_id: int = 0  # zuletzt gewählter Stationsstandort (0 = keiner)
     remember_key: bool = False
-    only_unsent: bool = True  # QSOs mit bereits gesendeter Papier-QSL auslassen
     qso_since: str = ""  # optionaler Zeitraum, „JJJJ-MM-TT"
     qso_until: str = ""
     mark_sent: bool = True  # nach dem PDF „Papier-QSL gesendet" setzen (mit Rückfrage)

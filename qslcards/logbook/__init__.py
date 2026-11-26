@@ -22,6 +22,7 @@ from qslcards.logbook import adif, cabrillo
 from qslcards.logbook.models import QSO
 
 __all__ = [
+    "qsl_already_sent",
     "QSO",
     "LogFormatError",
     "FORMAT_ADIF",
@@ -49,6 +50,15 @@ _ADIF_RE = re.compile(r"<(?:eoh|eor)>|<call:\d", re.IGNORECASE)
 
 class LogFormatError(ValueError):
     """Die Datei ist kein verwertbares Logbuch (Format unbekannt oder ohne QSOs)."""
+
+
+def qsl_already_sent(qso: QSO) -> bool:
+    """True, wenn das Log für das QSO schon „Papier-QSL gesendet" führt.
+
+    ADIF-Feld `QSL_SENT` = Y (bei Wavelog das gleichnamige Feld der API).
+    Solche QSOs bekommen keine Karte mehr.
+    """
+    return (qso.raw.get("qsl_sent") or "").strip().upper() == "Y"
 
 
 def detect_format(text: str) -> str | None:

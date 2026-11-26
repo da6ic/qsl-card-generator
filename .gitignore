@@ -3,6 +3,8 @@ config.yaml
 lookup_cache.json
 # GDXF-Most-Wanted-Rangliste, vom Programm abgerufen (fremde Daten, nicht einchecken)
 mostwanted.json
+# In Wavelog als „Papier-QSL gesendet" markierte QSO-IDs (lokale Daten)
+wavelog_sent.json
 # Zuletzt geladene cty.dat im Projektordner (die mitgelieferte liegt in qslcards/assets/dxcc/)
 /cty.dat
 *.png

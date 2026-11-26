@@ -87,7 +87,9 @@ immer nur ein Schritt zu sehen, oben die Schrittleiste, unten Zurück/Weiter.
 
 1. **Quelle** — Logbuch (ADIF/Cabrillo) laden *oder* „Direkt aus Wavelog":
    URL + API-v2-Key, „Stationen laden", Station wählen, „QSOs laden"
-   (`qslcards/wavelog/`, braucht Wavelog ≥ 3.2.5).
+   (`qslcards/wavelog/`, braucht Wavelog ≥ 3.2.5). Schon gesendete QSLs
+   (`QSL_SENT = Y`, bzw. selbst markierte laut `wavelog_sent.json`) werden immer
+   ausgelassen.
 2. **Absender** — eigene Stationsdaten (leere Felder füllt der Wavelog-Standort).
 3. **Abfrage** — QRZ-/HamQTH-Zugangsdaten (jede Sitzung neu, nie gespeichert),
    Zustellwege priorisieren, Kartenmodus. Neue Zugangsdaten starten beim

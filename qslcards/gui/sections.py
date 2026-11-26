@@ -1126,7 +1126,6 @@ class WavelogSection:
         self.station = tk.StringVar()
         self.since = tk.StringVar()
         self.until = tk.StringVar()
-        self.only_unsent = tk.BooleanVar(value=True)
         self.count_var = tk.StringVar(value="Noch keine QSOs geladen")
         self.station_ids: dict[str, int] = {}  # Dropdown-Text -> Stations-ID
 
@@ -1173,14 +1172,11 @@ class WavelogSection:
         self.until_entry.pack(side="left", padx=GAP_COL)
         ttk.Label(span, text="JJJJ-MM-TT, leer = alles", style="Muted.TLabel").pack(side="left")
 
-        self.only_unsent_check = ttk.Checkbutton(
+        ttk.Label(
             f,
-            text="Nur QSOs, für die noch keine Papier-QSL gesendet wurde",
-            variable=self.only_unsent,
-        )
-        self.only_unsent_check.grid(
-            row=6, column=1, columnspan=3, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="w"
-        )
+            text="QSOs, für die schon eine Papier-QSL gesendet wurde, werden immer ausgelassen.",
+            style="Muted.TLabel",
+        ).grid(row=6, column=1, columnspan=3, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="w")
 
         self.load_qsos_btn = ttk.Button(f, text="QSOs laden", state="disabled")
         self.load_qsos_btn.grid(row=7, column=1, padx=(GAP_COL, 0), pady=GAP_ROW * 2, sticky="w")

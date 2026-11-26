@@ -42,6 +42,7 @@ CONFIG_NAME = "config.yaml"
 EXAMPLE_CONFIG_NAME = "config.example.yaml"
 CACHE_NAME = "lookup_cache.json"
 MOSTWANTED_NAME = "mostwanted.json"
+WAVELOG_SENT_NAME = "wavelog_sent.json"
 CTY_NAME = "cty.dat"
 HANDBOOK_NAME = "handbuch.md"
 LOG_NAME = "qslcards.log"
@@ -137,6 +138,11 @@ def config_path() -> Path:
 
 def cache_path() -> Path:
     return data_dir() / CACHE_NAME
+
+
+def wavelog_sent_path() -> Path:
+    """Selbst in Wavelog markierte QSOs (wavelog/sent_store.py) — neben der Config."""
+    return data_dir() / WAVELOG_SENT_NAME
 
 
 def mostwanted_path() -> Path:
