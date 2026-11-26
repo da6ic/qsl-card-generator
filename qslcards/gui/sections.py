@@ -1250,3 +1250,23 @@ class WavelogMarkSection:
             row=1, column=1, padx=GAP_COL, sticky="w"
         )
         self.frame.columnconfigure(1, weight=1)
+        # Zusammenfassung nach dem Markieren (Bewertung 2.5): markiert/Fehler,
+        # die Fehler als markierbarer Text zum Kopieren. Leer = ausgeblendet.
+        self.summary = tk.Text(
+            self.frame, height=5, wrap="word", relief="flat", borderwidth=0, takefocus=0
+        )
+
+    def show_summary(self, done: int, errors: list[str]) -> None:
+        """Ergebnis des Markierens anzeigen (oder ausblenden, wenn nichts da ist)."""
+        if not done and not errors:
+            self.summary.grid_remove()
+            return
+        lines = [f"{done} QSO(s) in Wavelog als „Papier-QSL gesendet“ markiert."]
+        if errors:
+            lines.append(f"{len(errors)} Fehler:")
+            lines += errors
+        self.summary.configure(state="normal", height=min(10, len(lines) + 1))
+        self.summary.delete("1.0", "end")
+        self.summary.insert("1.0", "\n".join(lines))
+        self.summary.configure(state="disabled")  # lesbar, markier- und kopierbar
+        self.summary.grid(row=2, column=0, columnspan=2, pady=(GAP_ROW, 0), sticky="we")

@@ -915,7 +915,7 @@ def test_wheel_over_table_scrolls_the_page_at_the_end(app, tmp_path):
     scrollen kann — sonst hinge die Seite fest, sobald der Zeiger über der
     Tabelle steht (sie ist das größte Element der Oberfläche)."""
     _load(app, tmp_path)  # 3 Zeilen -> Tabelle ist nicht scrollbar
-    app.wizard.go(appmod.STEP_CARDS, check=False)  # die Vorschau steht auf Schritt 4
+    app.wizard.go(appmod.STEP_REVIEW, check=False)  # die Vorschau steht auf Schritt 5
     app.update()
     tree = app.preview.tree
 
@@ -925,7 +925,7 @@ def test_wheel_over_table_scrolls_the_page_at_the_end(app, tmp_path):
     assert app.preview._on_wheel(_wheel(120)) is None  # nach oben
 
     # Mit vielen Zeilen scrollt die Tabelle selbst und behält das Ereignis…
-    _load(app, tmp_path, log=ADIF * 6)
+    _load(app, tmp_path, log=ADIF * 60)
     app.update()
     assert app.preview._on_wheel(_wheel(-120)) == "break"
     # …bis sie unten angekommen ist.
@@ -1054,8 +1054,9 @@ def _set_front_image(app, tmp_path):
 
 
 def test_generate_blocked_while_required_fields_are_empty(app, tmp_path):
-    """Leere Pflichtfelder: ein Popup mit allen fehlenden Angaben, rote Rahmen
-    an genau diesen Feldern — und nichts wird erzeugt."""
+    """Leere Pflichtfelder: die Navigationsleiste nennt alle fehlenden Angaben
+    (seit 0.4.0 kein Popup mehr), rote Rahmen an genau diesen Feldern — und
+    nichts wird erzeugt."""
     _load(app, tmp_path)
     _set_front_image(app, tmp_path)
     _fill_required(app)
@@ -1068,8 +1069,8 @@ def test_generate_blocked_while_required_fields_are_empty(app, tmp_path):
     ):
         app._on_generate()
 
-    box.showerror.assert_called_once()
-    message = box.showerror.call_args[0][1]
+    box.showerror.assert_not_called()
+    message = app.wizard.hint_var.get()
     assert "Rufzeichen" in message and "DOK" in message
     assert "Name" not in message  # gefüllte Pflichtfelder tauchen nicht auf
     entries = app.sender_section.entries
@@ -1090,8 +1091,8 @@ def test_missing_log_is_a_required_field(app, tmp_path):
     ):
         app._on_generate()
 
-    message = box.showerror.call_args[0][1]
-    assert "Logbuch" in message
+    box.showerror.assert_not_called()
+    assert "Logbuch" in app.wizard.hint_var.get()
     assert str(app.file_section.path_entry.cget("style")) == "Invalid.TEntry"
 
     _load(app, tmp_path)
@@ -1132,7 +1133,8 @@ def test_missing_front_image_colors_the_preview_frame(app, tmp_path):
     ):
         app._on_generate()
 
-    assert "Frontbild" in box.showerror.call_args[0][1]
+    box.showerror.assert_not_called()
+    assert "Frontbild" in app.wizard.hint_var.get()
     assert str(app.image_section.thumb_label.cget("style")) == "Invalid.Thumb.TLabel"
 
     _set_front_image(app, tmp_path)
@@ -1450,3 +1452,21 @@ def test_lookup_credentials_only_in_keyring_when_asked(app, monkeypatch):
     assert app.lookup_section.qrz_pass.get() == "geheim"
     app.lookup_section.remember.set(False)
     assert store == {}
+
+
+def test_review_step_fills_the_window_without_page_scroll(app, tmp_path):
+    """Bewertung 2.5: auf „Prüfen" scrollt nur die Tabelle, nicht die Seite."""
+    _load(app, tmp_path, log=ADIF * 60)
+    app.wizard.go(appmod.STEP_REVIEW, check=False)
+    app.update()
+    assert app.body.fill
+    assert not app.body.vscroll.winfo_ismapped()
+    # Die Tabelle bekommt deutlich mehr als die früheren ~6 Zeilen Höhe.
+    assert app.preview.tree.winfo_height() > 300
+    scrolled = []
+    app.body.canvas.yview_scroll = lambda step, what: scrolled.append(step)
+    app.body._on_mousewheel(_wheel(-120))
+    assert scrolled == []
+    app.wizard.go(appmod.STEP_CARDS, check=False)
+    app.update()
+    assert not app.body.fill and app.body.vscroll.winfo_ismapped()

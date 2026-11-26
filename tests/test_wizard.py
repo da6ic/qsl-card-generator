@@ -312,3 +312,15 @@ def test_plain_http_to_the_internet_warns(app):  # noqa: F811
     with mock.patch.object(app, "_run_wavelog"):
         app._wavelog_load_stations()
     assert "unverschlüsselt" in app.wavelog_section.warning_var.get()
+
+
+def test_mark_summary_on_the_print_page(app):  # noqa: F811
+    station = WavelogStation(1, "Home", "DL0QSL")
+    app.source_section.kind.set("wavelog")
+    app._wavelog_qsos_done(station, _wavelog_qsos(), None)
+    app._pending_marks = app._marks_for(app.preview.included_cards())
+    with mock.patch.object(appmod, "messagebox") as box:
+        app._wavelog_mark_done(([], ["QSO 10: Wavelog meldet Fehler 500."]), None)
+    box.showwarning.assert_not_called()
+    text = app.wavelog_mark_section.summary.get("1.0", "end")
+    assert "0 QSO(s)" in text and "QSO 10: Wavelog meldet Fehler 500." in text

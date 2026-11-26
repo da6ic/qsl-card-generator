@@ -92,7 +92,7 @@ from .textedit import install_entry_shortcuts
 from .wizard import Step, Wizard
 
 # Die Schritte des Assistenten (Reihenfolge = Arbeitsablauf).
-STEP_SOURCE, STEP_SENDER, STEP_LOOKUP, STEP_CARDS, STEP_PRINT = range(5)
+STEP_SOURCE, STEP_SENDER, STEP_LOOKUP, STEP_CARDS, STEP_REVIEW, STEP_PRINT = range(6)
 WIZARD_STEPS = [
     Step(
         "source",
@@ -113,17 +113,27 @@ WIZARD_STEPS = [
         "Mit QRZ/HamQTH erfährt das Programm, wie jede Station QSL-Karten möchte. "
         "Ohne Zugangsdaten gehen alle Karten über das Büro.",
     ),
+    # Früher ein Schritt „Karten" mit Bild, Bemerkungen, Most Wanted UND
+    # Vorschau — die Tabelle zeigte dort nur ~6 Zeilen in einer selbst
+    # scrollenden Seite (Bewertung 2.5). Jetzt zwei Schritte; „Prüfen" gibt
+    # der Tabelle die ganze Höhe und scrollt außen nicht.
     Step(
         "cards",
-        "Karten",
-        "Karten gestalten und prüfen",
-        "Frontbild wählen, Bemerkungen setzen und in der Vorschau festlegen, "
-        "welche Karten gedruckt werden.",
+        "Gestalten",
+        "Karten gestalten",
+        "Frontbild wählen, Bemerkungen setzen und auf Wunsch nur Most Wanted drucken.",
+    ),
+    Step(
+        "review",
+        "Prüfen",
+        "Karten prüfen",
+        "In der Vorschau festlegen, welche Karten gedruckt werden. "
+        "Ein Klick auf „Drucken“ schaltet eine Zeile um.",
     ),
     Step("print", "Druck", "Drucken und exportieren", "Druckart wählen und die PDF erzeugen."),
 ]
 # Abschnittsnummer (Handbuch/Menü) -> Schritt, auf dem der Abschnitt steht.
-SECTION_STEP = {1: 0, 2: 3, 3: 1, 4: 2, 5: 2, 6: 2, 7: 3, 8: 3, 9: 3, 10: 4, 11: 4}
+SECTION_STEP = {1: 0, 2: 3, 3: 1, 4: 2, 5: 2, 6: 2, 7: 3, 8: 3, 9: 4, 10: 5, 11: 5}
 
 # Aus der Quelle die Projektwurzel, gebündelt der Programm- bzw. Benutzerordner
 # (siehe `paths.data_dir`). Bleiben bewusst Modulattribute: die Tests setzen sie um.
@@ -265,6 +275,8 @@ class _ScrollableFrame:
 
         self.inner = ttk.Frame(self.canvas)
         self._window = self.canvas.create_window((0, 0), window=self.inner, anchor="nw")
+        self.fill = False
+        self._height = 1
         self.inner.bind("<Configure>", self._on_inner_configure)
         self.canvas.bind("<Configure>", self._on_canvas_configure)
         # Mausrad überall im Fenster (bind_all) -> Seite scrollen. Welche
@@ -277,9 +289,32 @@ class _ScrollableFrame:
     def _on_canvas_configure(self, event: tk.Event) -> None:
         # Inneres Frame auf Canvas-Breite ziehen (horizontal füllen).
         self.canvas.itemconfigure(self._window, width=event.width)
+        self._height = event.height
+        if self.fill:
+            self.canvas.itemconfigure(self._window, height=event.height)
+
+    def set_fill(self, fill: bool) -> None:
+        """Seite auf genau Fensterhöhe ziehen und den Außen-Scroll abschalten.
+
+        Für Seiten mit eigenem Scrollbereich (Vorschautabelle): zwei
+        verschachtelte Scrollbalken ließen sich mit dem Mausrad schlecht
+        bedienen (Bewertung 2.5).
+        """
+        if fill == self.fill:
+            return
+        self.fill = fill
+        if fill:
+            self.canvas.itemconfigure(self._window, height=max(1, self._height))
+            self.canvas.yview_moveto(0.0)
+            self.vscroll.pack_forget()
+        else:
+            self.canvas.itemconfigure(self._window, height=0)  # 0 = natürliche Höhe
+            self.vscroll.pack(side="right", fill="y", before=self.canvas)
 
     def _on_mousewheel(self, event: tk.Event) -> None:
         """Mausrad/Trackpad -> Seite scrollen (Schrittweite siehe `scrolling`)."""
+        if self.fill:
+            return
         step = wheel_step(event)
         if step:
             self.canvas.yview_scroll(step, "units")
@@ -387,8 +422,9 @@ class App(tk.Tk):
         1 Quelle    Logdatei ODER Wavelog
         2 Absender  eigene Stationsdaten
         3 Abfrage   Lookups, Zustellwege, Kartenmodus
-        4 Karten    Frontbild, Bemerkungen, Most Wanted, Vorschau
-        5 Druck     Druckmodus (inkl. QR), Ausgabe, Wavelog-Markierung
+        4 Gestalten Frontbild, Bemerkungen, Most Wanted
+        5 Prüfen    Vorschau (füllt die Seite, kein Außen-Scroll)
+        6 Druck     Druckmodus (inkl. QR), Ausgabe, Wavelog-Markierung
         """
         # Statusleiste und Navigation zuerst packen (side="bottom"), damit sie
         # beim Verkleinern stehen bleiben und nur die Seite darüber schrumpft.
@@ -457,10 +493,13 @@ class App(tk.Tk):
         side.grid(row=0, column=1, padx=(pad // 2, 0), sticky="nsew")
         top.columnconfigure(0, weight=0)  # Thumbnail hat eine feste Höchstgröße
         top.columnconfigure(1, weight=1)
-        self.preview = PreviewTable(page, palette=self.palette)
-        self.preview.frame.pack(side="top", fill="both", expand=True, pady=(pad, 0))
 
-        # --- Schritt 5: Druck & Export
+        # --- Schritt 5: Prüfen (Vorschau über die ganze Höhe)
+        page = wiz.page(STEP_REVIEW)
+        self.preview = PreviewTable(page, palette=self.palette)
+        self.preview.frame.pack(side="top", fill="both", expand=True)
+
+        # --- Schritt 6: Druck & Export
         page = wiz.page(STEP_PRINT)
         self.printmode_section = PrintModeSection(page)
         self.output_section = OutputSection(page)
@@ -1516,6 +1555,8 @@ class App(tk.Tk):
             self._maybe_restart_lookups()
 
     def _on_step_enter(self, index: int) -> None:
+        # Auf „Prüfen" füllt die Seite das Fenster, gescrollt wird nur die Tabelle.
+        self.body.set_fill(index == STEP_REVIEW)
         self.body.canvas.yview_moveto(0.0)
         if index == STEP_PRINT:
             self._update_mark_state()
@@ -1884,11 +1925,10 @@ class App(tk.Tk):
             self._update_show_sent()
             self._rebuild_cards()
             self.wavelog_section.count_var.set(f"{len(self.qsos)} offene QSOs")
+        self.wavelog_mark_section.show_summary(done, errors)
         if errors:
+            # Details stehen in der Zusammenfassung auf der Druckseite (kopierbar).
             self.status.set(f"Wavelog: {done} markiert, {len(errors)} Fehler.", "error")
-            messagebox.showwarning(
-                "Wavelog", "Nicht alle QSOs konnten markiert werden:\n\n" + "\n".join(errors[:8])
-            )
         else:
             self.status.set(f"Wavelog: {done} QSO(s) als Papier-QSL gesendet markiert.", "ok")
         self.wavelog_mark_section.status_var.set(
@@ -1941,13 +1981,12 @@ class App(tk.Tk):
             return
         missing, first_section = self._check_required()
         if missing:
-            listed = "\n".join(f"• {label}" for label in missing)
-            messagebox.showerror(
-                "Pflichtangaben fehlen",
-                f"Ohne diese Angaben lassen sich keine Karten drucken:\n\n{listed}",
-            )
+            # Kein Dialog mehr (Bewertung 2.5): der Assistent springt zur ersten
+            # Stelle und nennt alles Fehlende in der Navigationsleiste; die
+            # Felder sind rot markiert.
             self.status.set("Pflichtangaben fehlen – nichts erzeugt.", "error")
             self._goto_section(first_section)  # zur ersten betroffenen Stelle
+            self.wizard.show_problem("Pflichtangaben fehlen: " + ", ".join(missing))
             return
         front = self.image_section.path_var.get().strip()
         cards = self.preview.included_cards()
