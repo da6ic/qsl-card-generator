@@ -1,8 +1,9 @@
 QSL-Karten-Generator — Installation unter Linux
 ================================================
 
-Gebaut für Fedora 42 und neuer (64-Bit-PC, x86_64). Auf anderen Distributionen
-läuft es, sofern deren glibc mindestens 2.41 ist.
+Für 64-Bit-PCs (x86_64) mit glibc 2.35 oder neuer: Debian 12+, Ubuntu 22.04+,
+jedes unterstützte Fedora. Bequemer als dieses Archiv sind die Pakete für
+apt/dnf und das AppImage — siehe https://da6ic.github.io/qsl-card-generator/
 
 1. Dieses Archiv an einen Ort entpacken, den du beschreiben darfst — dein
    Persönlicher Ordner, der Schreibtisch oder ein USB-Stick:

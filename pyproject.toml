@@ -26,9 +26,11 @@ dev = [
     "pypdf>=4.0",       # nur Tests: Seitenzahl der erzeugten PDF prüfen
 ]
 # Zum Bündeln (siehe packaging/ und scripts/build_app.py). PyInstaller erst ab
-# 6.21: davor fehlt die Unterstützung für Tcl/Tk 9 mit eingebettetem Datenarchiv,
-# und ohne Tk 9 verschwinden die SVG-Icons der Vorschautabelle.
-build = ["pyinstaller>=6.21"]
+# 6.22: 6.21 kennt Tcl/Tk 9 zwar, sammelt aber das in die DLL eingebettete
+# Tcl-Archiv des Windows-Installers (`//zipfs:/`) nicht ein; 6.22 kann das, der
+# Umweg über `develop` entfällt. Ohne Tk 9 verschwinden die SVG-Icons der
+# Vorschautabelle.
+build = ["pyinstaller>=6.22"]
 
 # `gui-scripts`, nicht `scripts`: unter Windows blitzt sonst bei jedem Start
 # kurz ein Konsolenfenster auf.

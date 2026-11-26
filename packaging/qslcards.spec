@@ -20,6 +20,8 @@ Modus ist überall **onedir** (ein Ordner statt einer Einzeldatei):
 import sys
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_submodules
+
 # `__file__` ist in einer Spec nicht gesetzt; PyInstaller stellt stattdessen
 # `SPECPATH` bereit.
 PROJECT_ROOT = Path(SPECPATH).resolve().parent  # noqa: F821
@@ -64,7 +66,16 @@ datas = [
 # nicht betroffen (dort geht das Bild über `drawImage(pfad)`, ohne Tk) — genau
 # deshalb fällt es beim Ausprobieren so leicht durchs Raster.
 # Gefunden beim Linux-Bündel, betrifft aber alle drei Plattformen.
-hiddenimports = ["PIL._tkinter_finder"]
+#
+# `reportlab.graphics.barcode.*`: der QR-Code der Rückseite holt sich
+# `QrCodeWidget` aus `reportlab.graphics.barcode.qr`, und dessen Paketkopf
+# importiert beim Laden **alle** Barcode-Arten per `exec("from ... import ...")`
+# (`widgets._BCW`). Die statische Analyse sieht diese Importe nicht; das
+# fertige Programm starb sofort mit „No module named
+# 'reportlab.graphics.barcode.code128'". Gefunden beim ersten Release-Build.
+hiddenimports = ["PIL._tkinter_finder"] + collect_submodules(
+    "reportlab.graphics.barcode"
+)
 
 # Was nicht mit hinein soll. Entwicklungswerkzeuge landen sonst über die
 # venv-Analyse mit im Bündel und blähen es auf.
@@ -85,10 +96,24 @@ excludes = [
     "test",
 ]
 
+# Linux mit einem Python aus python-build-standalone (so installiert es `uv`,
+# und so baut der Release-Workflow): Tcl/Tk 9 liegt dort als eigene
+# Bibliotheken in `<prefix>/lib`, X11 ist statisch hineingelinkt. `_tkinter`
+# trägt aber keinen RPATH — der Interpreter findet sie über seinen eigenen —,
+# und PyInstallers Abhängigkeitsanalyse sieht sie deshalb nicht. Ohne diese
+# Zeilen fehlt dem Bündel Tk ganz (ldd: „libtcl9.0.so => not found"). Auf
+# Fedora liegen sie in /usr/lib64 und werden ohnehin gefunden.
+binaries = []
+if sys.platform.startswith("linux"):
+    for lib_name in ("libtcl9.0.so", "libtcl9tk9.0.so"):
+        candidate = Path(sys.base_prefix) / "lib" / lib_name
+        if candidate.is_file():
+            binaries.append((str(candidate), "."))
+
 a = Analysis(  # noqa: F821
     [str(PROJECT_ROOT / "qslcards" / "__main__.py")],
     pathex=[str(PROJECT_ROOT)],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
