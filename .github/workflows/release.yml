@@ -166,9 +166,12 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Nur die drei Bau-Artefakte: ohne Muster käme auch das Pages-Artefakt
+      # (`github-pages`, eine artifact.tar) mit ins Release.
       - uses: actions/download-artifact@v4
         with:
           path: files
+          pattern: "{linux,windows,macos}"
           merge-multiple: true
       - run: cd files && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
