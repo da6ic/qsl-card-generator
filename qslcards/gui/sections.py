@@ -1253,7 +1253,13 @@ class WavelogMarkSection:
         # Zusammenfassung nach dem Markieren (Bewertung 2.5): markiert/Fehler,
         # die Fehler als markierbarer Text zum Kopieren. Leer = ausgeblendet.
         self.summary = tk.Text(
-            self.frame, height=5, wrap="word", relief="flat", borderwidth=0, takefocus=0
+            self.frame,
+            height=5,
+            wrap="word",
+            relief="flat",
+            borderwidth=0,
+            takefocus=0,
+            font="TkDefaultFont",
         )
 
     def show_summary(self, done: int, errors: list[str]) -> None:
