@@ -335,7 +335,7 @@ class FileSection:
     """
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = required_section(parent, "1. Logbuch (ADIF/Cabrillo)")
+        self.frame = required_section(parent, "Logdatei (ADIF/Cabrillo)")
         self.path_var = tk.StringVar()
         self.count_var = tk.StringVar(value="Keine Datei geladen")
 
@@ -366,7 +366,7 @@ class ImageSection:
     """
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = required_section(parent, "2. Frontbild")
+        self.frame = required_section(parent, "Frontbild")
         self.path_var = tk.StringVar()
 
         self.choose_btn = ttk.Button(self.frame, text="Bild wählen…")
@@ -404,7 +404,7 @@ class SenderSection:
     """
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="3. Absender")
+        self.frame = ttk.LabelFrame(parent, text="Absender")
         self.vars: dict[str, tk.StringVar] = {}
         self.entries: dict[str, ttk.Entry] = {}
         self._marked: set[str] = set()
@@ -529,7 +529,7 @@ class FilterSection:
     """
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="4. Zustellwege")
+        self.frame = ttk.LabelFrame(parent, text="Zustellwege")
 
         # Modell: Folge von Tokens (Weg-Codes + Trennlinie); die Listbox ist nur
         # die Ansicht. Start: alle Wege, Trennlinie nach den ersten zwei.
@@ -603,7 +603,7 @@ class ModeSection:
     """5. Kartenmodus."""
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="5. Kartenmodus")
+        self.frame = ttk.LabelFrame(parent, text="Kartenmodus")
         self.card_mode = tk.StringVar(value="per_qso")
 
         self.radio_qso = ttk.Radiobutton(
@@ -634,7 +634,7 @@ class LookupSection:
     """
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="6. Lookups")
+        self.frame = ttk.LabelFrame(parent, text="Lookups (QRZ / HamQTH)")
         self.qrz_user = tk.StringVar()
         self.qrz_pass = tk.StringVar()
         self.hamqth_user = tk.StringVar()
@@ -713,7 +713,7 @@ class MostWantedSection:
     """
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="7. Most Wanted")
+        self.frame = ttk.LabelFrame(parent, text="Most Wanted")
         self.enabled = tk.BooleanVar(value=False)
         self.top = tk.StringVar(value=str(mostwanted.DEFAULT_TOP))
         self.category = tk.StringVar(value=mostwanted.CATEGORY_LABELS[mostwanted.DEFAULT_CATEGORY])
@@ -757,7 +757,8 @@ class MostWantedSection:
         self.status_label = ttk.Label(
             self.frame, textvariable=self.status_var, style="Muted.TLabel"
         )
-        self.status_label.grid(row=0, column=5, padx=group_gap, pady=GAP_ROW, sticky="e")
+        # Im Assistenten ist die Spalte schmaler: Status in eine eigene Zeile.
+        self.status_label.grid(row=1, column=0, columnspan=6, pady=(0, GAP_ROW), sticky="w")
         self.frame.columnconfigure(5, weight=1)
 
     # -- Zustand (für app.py: gather/apply) -------------------------------
@@ -792,7 +793,7 @@ class RemarksSection:
     """
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="8. Bemerkungen")
+        self.frame = ttk.LabelFrame(parent, text="Bemerkungen")
         self.remarks = tk.StringVar()
 
         ttk.Label(self.frame, text="Text für alle Karten").grid(row=0, column=0, sticky="w")
@@ -859,7 +860,7 @@ class PrintModeSection:
     )
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="10. Druckmodus")
+        self.frame = ttk.LabelFrame(parent, text="Druckmodus")
         self.print_mode = tk.StringVar(value="duplex")
 
         # Zwei nebeneinanderliegende Container: links die Druckmodi, rechts der
@@ -993,7 +994,7 @@ class OutputSection:
     """
 
     def __init__(self, parent: tk.Misc) -> None:
-        self.frame = ttk.LabelFrame(parent, text="11. Ausgabe")
+        self.frame = ttk.LabelFrame(parent, text="Ausgabe")
         # Absoluter Pfad, kein bloßer Dateiname: ein relativer landete beim
         # gebündelten Programm im Arbeitsverzeichnis des Systems.
         self.output_var = tk.StringVar(value=str(paths.default_output_dir() / DEFAULT_OUTPUT_NAME))
@@ -1073,3 +1074,155 @@ def add_section_help(frame: ttk.LabelFrame, command: Callable[[], None]) -> ttk.
     mark.bind("<Enter>", lambda _e: mark.configure(style="SectionHelpHover.TLabel"))
     mark.bind("<Leave>", lambda _e: mark.configure(style="SectionHelp.TLabel"))
     return mark
+
+
+class SourceSection:
+    """Schritt 1: Woher kommen die QSOs? Logdatei ODER Wavelog.
+
+    Zwei Umschalter; darunter steht jeweils nur der passende Abschnitt
+    (`FileSection` bzw. `WavelogSection`). Das Umschalten selbst erledigt
+    `app.py` über `kind` (Tk-Variable, "file" | "wavelog").
+    """
+
+    def __init__(self, parent: tk.Misc) -> None:
+        self.frame = ttk.Frame(parent)
+        self.kind = tk.StringVar(value="file")
+        self.radio_file = ttk.Radiobutton(
+            self.frame,
+            text="Logdatei (ADIF/Cabrillo)",
+            value="file",
+            variable=self.kind,
+            style="Source.TRadiobutton",
+        )
+        self.radio_wavelog = ttk.Radiobutton(
+            self.frame,
+            text="Direkt aus Wavelog",
+            value="wavelog",
+            variable=self.kind,
+            style="Source.TRadiobutton",
+        )
+        self.radio_file.pack(side="left", padx=(0, GAP_COL * 4))
+        self.radio_wavelog.pack(side="left")
+
+
+WAVELOG_KEY_HINT = (
+    "API-v2-Token aus Wavelog (Konto ▸ API-Keys, beginnt mit „wl2_“). "
+    "Nötige Rechte: station:read, qso:read, zum Markieren qso:write."
+)
+
+
+class WavelogSection:
+    """Wavelog als Datenquelle: anmelden, Station wählen, QSOs laden.
+
+    Ablauf: URL + API-Key -> „Stationen laden" -> Station im Dropdown ->
+    „QSOs laden". Die Kommandos bindet `app.py`; hier stehen nur Widgets.
+    """
+
+    def __init__(self, parent: tk.Misc) -> None:
+        self.frame = required_section(parent, "Wavelog")
+        self.url = tk.StringVar()
+        self.key = tk.StringVar()
+        self.remember_key = tk.BooleanVar(value=False)
+        self.station = tk.StringVar()
+        self.since = tk.StringVar()
+        self.until = tk.StringVar()
+        self.only_unsent = tk.BooleanVar(value=True)
+        self.count_var = tk.StringVar(value="Noch keine QSOs geladen")
+        self.station_ids: dict[str, int] = {}  # Dropdown-Text -> Stations-ID
+
+        f = self.frame
+        ttk.Label(f, text="Adresse").grid(row=0, column=0, pady=GAP_ROW, sticky="w")
+        self.url_entry = ttk.Entry(f, textvariable=self.url, width=44)
+        self.url_entry.grid(
+            row=0, column=1, columnspan=3, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="we"
+        )
+        ttk.Label(f, text="API-Key").grid(row=1, column=0, pady=GAP_ROW, sticky="w")
+        self.key_entry = ttk.Entry(f, textvariable=self.key, width=44, show="•")
+        self.key_entry.grid(
+            row=1, column=1, columnspan=2, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="we"
+        )
+        self.remember_check = ttk.Checkbutton(
+            f, text="Im Schlüsselbund merken", variable=self.remember_key
+        )
+        self.remember_check.grid(row=1, column=3, padx=(GAP_COL, 0), sticky="w")
+        ttk.Label(f, text=WAVELOG_KEY_HINT, style="Muted.TLabel", wraplength=560).grid(
+            row=2, column=1, columnspan=3, padx=(GAP_COL, 0), pady=(0, GAP_ROW), sticky="w"
+        )
+
+        self.load_stations_btn = ttk.Button(f, text="Stationen laden")
+        self.load_stations_btn.grid(
+            row=3, column=1, padx=(GAP_COL, 0), pady=GAP_ROW * 2, sticky="w"
+        )
+
+        ttk.Label(f, text="Station").grid(row=4, column=0, pady=GAP_ROW, sticky="w")
+        self.station_combo = ttk.Combobox(
+            f, textvariable=self.station, state="disabled", width=42, values=[]
+        )
+        self.station_combo.grid(
+            row=4, column=1, columnspan=3, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="we"
+        )
+
+        ttk.Label(f, text="Zeitraum").grid(row=5, column=0, pady=GAP_ROW, sticky="w")
+        span = ttk.Frame(f)
+        span.grid(row=5, column=1, columnspan=3, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="w")
+        ttk.Label(span, text="von").pack(side="left")
+        self.since_entry = ttk.Entry(span, textvariable=self.since, width=11)
+        self.since_entry.pack(side="left", padx=GAP_COL)
+        ttk.Label(span, text="bis").pack(side="left")
+        self.until_entry = ttk.Entry(span, textvariable=self.until, width=11)
+        self.until_entry.pack(side="left", padx=GAP_COL)
+        ttk.Label(span, text="JJJJ-MM-TT, leer = alles", style="Muted.TLabel").pack(side="left")
+
+        self.only_unsent_check = ttk.Checkbutton(
+            f,
+            text="Nur QSOs, für die noch keine Papier-QSL gesendet wurde",
+            variable=self.only_unsent,
+        )
+        self.only_unsent_check.grid(
+            row=6, column=1, columnspan=3, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="w"
+        )
+
+        self.load_qsos_btn = ttk.Button(f, text="QSOs laden", state="disabled")
+        self.load_qsos_btn.grid(row=7, column=1, padx=(GAP_COL, 0), pady=GAP_ROW * 2, sticky="w")
+        ttk.Label(f, textvariable=self.count_var, style="Muted.TLabel").grid(
+            row=7, column=2, columnspan=2, padx=GAP_COL, sticky="w"
+        )
+        f.columnconfigure(2, weight=1)
+
+    def set_stations(self, stations, selected_id: int = 0) -> None:
+        """Füllt das Dropdown; wählt `selected_id` bzw. die aktive Station vor."""
+        self.station_ids = {s.label: s.id for s in stations}
+        labels = list(self.station_ids)
+        self.station_combo.configure(values=labels, state="readonly" if labels else "disabled")
+        self.load_qsos_btn.configure(state="normal" if labels else "disabled")
+        choice = next((s.label for s in stations if s.id == selected_id), None)
+        if choice is None and labels:
+            choice = labels[0]  # aktive Station steht vorne (client.stations)
+        self.station.set(choice or "")
+
+    def selected_station_id(self) -> int:
+        return self.station_ids.get(self.station.get(), 0)
+
+    def set_missing(self, missing: bool) -> None:
+        self.station_combo.configure(style="Invalid.TCombobox" if missing else "TCombobox")
+
+
+class WavelogMarkSection:
+    """Schritt 5: nach dem Druck „Papier-QSL gesendet" in Wavelog setzen."""
+
+    def __init__(self, parent: tk.Misc) -> None:
+        self.frame = ttk.LabelFrame(parent, text="Wavelog")
+        self.mark_sent = tk.BooleanVar(value=True)
+        self.mark_check = ttk.Checkbutton(
+            self.frame,
+            text="Nach dem Erzeugen die QSOs der Karten als „Papier-QSL gesendet“ markieren",
+            variable=self.mark_sent,
+        )
+        self.mark_check.grid(row=0, column=0, columnspan=2, pady=GAP_ROW, sticky="w")
+        self.mark_now_btn = ttk.Button(self.frame, text="Jetzt markieren", state="disabled")
+        self.mark_now_btn.grid(row=1, column=0, pady=GAP_ROW, sticky="w")
+        self.status_var = tk.StringVar(value="")
+        ttk.Label(self.frame, textvariable=self.status_var, style="Muted.TLabel").grid(
+            row=1, column=1, padx=GAP_COL, sticky="w"
+        )
+        self.frame.columnconfigure(1, weight=1)

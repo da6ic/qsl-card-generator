@@ -18,9 +18,9 @@ from tkinter import filedialog, messagebox, ttk
 
 from PIL import Image, ImageTk
 
-from qslcards import __version__, dxcc, mostwanted, paths
+from qslcards import __version__, dxcc, mostwanted, paths, wavelog
 from qslcards import config as cfg
-from qslcards.cards.builder import build_cards, is_printable, mostwanted_rank
+from qslcards.cards.builder import build_cards, effective_via, is_printable, mostwanted_rank
 from qslcards.config import (
     AppConfig,
     AppearanceConfig,
@@ -29,6 +29,8 @@ from qslcards.config import (
     MostWantedConfig,
     RecentConfig,
     SenderConfig,
+    SourceConfig,
+    WavelogConfig,
     push_recent,
 )
 from qslcards.logbook import LogFormatError, parse_file
@@ -41,6 +43,8 @@ from qslcards.lookup import (
 )
 from qslcards.pdf.generator import generate
 from qslcards.pdf.geometry import clamp_print_margin, normalize_sheet_mode
+from qslcards.wavelog import secret as wavelog_secret
+from qslcards.wavelog.client import paper_qsl_already_sent
 
 from . import theme
 from .help import HelpWindow, open_help
@@ -60,7 +64,10 @@ from .sections import (
     PrintModeSection,
     RemarksSection,
     SenderSection,
+    SourceSection,
     StatusBar,
+    WavelogMarkSection,
+    WavelogSection,
     add_section_help,
     ask_overwrite_manual_remarks,
     confirm,
@@ -69,6 +76,41 @@ from .sections import (
     show_about_dialog,
 )
 from .textedit import install_entry_shortcuts
+from .wizard import Step, Wizard
+
+# Die Schritte des Assistenten (Reihenfolge = Arbeitsablauf).
+STEP_SOURCE, STEP_SENDER, STEP_LOOKUP, STEP_CARDS, STEP_PRINT = range(5)
+WIZARD_STEPS = [
+    Step(
+        "source",
+        "Quelle",
+        "Woher kommen die QSOs?",
+        "Logdatei öffnen oder die QSOs direkt aus Wavelog holen.",
+    ),
+    Step(
+        "sender",
+        "Absender",
+        "Deine Station",
+        "Diese Angaben stehen als Absender auf jeder Karte. Sie werden gespeichert.",
+    ),
+    Step(
+        "lookup",
+        "Abfrage",
+        "Zustellwege abfragen",
+        "Mit QRZ/HamQTH erfährt das Programm, wie jede Station QSL-Karten möchte. "
+        "Ohne Zugangsdaten gehen alle Karten über das Büro.",
+    ),
+    Step(
+        "cards",
+        "Karten",
+        "Karten gestalten und prüfen",
+        "Frontbild wählen, Bemerkungen setzen und in der Vorschau festlegen, "
+        "welche Karten gedruckt werden.",
+    ),
+    Step("print", "Druck", "Drucken und exportieren", "Druckart wählen und die PDF erzeugen."),
+]
+# Abschnittsnummer (Handbuch/Menü) -> Schritt, auf dem der Abschnitt steht.
+SECTION_STEP = {1: 0, 2: 3, 3: 1, 4: 2, 5: 2, 6: 2, 7: 3, 8: 3, 9: 3, 10: 4, 11: 4}
 
 # Aus der Quelle die Projektwurzel, gebündelt der Programm- bzw. Benutzerordner
 # (siehe `paths.data_dir`). Bleiben bewusst Modulattribute: die Tests setzen sie um.
@@ -278,6 +320,16 @@ class App(tk.Tk):
         self._save_after_id: str | None = None  # laufender Debounce-Timer
         self._last_mtime: float | None = None  # zuletzt bekannte mtime von config.yaml
 
+        # Woher die geladenen QSOs stammen ("file" | "wavelog" | None) und der
+        # Wavelog-Zustand (geladene Stationen, laufender Abruf, zu markierende QSOs).
+        self.qsos_source: str | None = None
+        self._wavelog_stations: list[wavelog.WavelogStation] = []
+        self._wavelog_busy = False
+        self._pending_marks: list[wavelog.PaperQslMark] = []
+        # Zugangsdaten, mit denen zuletzt nachgeschlagen wurde (Schritt 3 startet
+        # den Lookup neu, wenn sie sich geändert haben).
+        self._lookup_signature: tuple | None = None
+
         self._build_ui()
         self._build_menu()
         # Die klassischen tk-Widgets (Listbox, Canvas, Menüs) entstehen erst im
@@ -287,6 +339,7 @@ class App(tk.Tk):
         theme.restyle_tree(self, self.palette)
         self._wire_commands()
         self._apply_config_to_widgets(self.base_config)
+        self._restore_wavelog_key()
         self._last_mtime = self._config_mtime()
         self._wire_autosave()
         self._init_mostwanted()
@@ -294,72 +347,97 @@ class App(tk.Tk):
 
     # ---------------------------------------------------------------- UI
     def _build_ui(self) -> None:
-        # Statusleiste zuerst packen (side="bottom"), damit sie beim Verkleinern
-        # des Fensters stehen bleibt und der scrollbare Rest darüber schrumpft.
+        """Baut den Schritt-Assistenten (siehe `wizard.py`).
+
+        Jeder Abschnitt von früher lebt weiter, nur steht er jetzt auf der
+        Seite seines Schritts — es geht keine Funktion verloren:
+
+        1 Quelle    Logdatei ODER Wavelog
+        2 Absender  eigene Stationsdaten
+        3 Abfrage   Lookups, Zustellwege, Kartenmodus
+        4 Karten    Frontbild, Bemerkungen, Most Wanted, Vorschau
+        5 Druck     Druckmodus (inkl. QR), Ausgabe, Wavelog-Markierung
+        """
+        # Statusleiste und Navigation zuerst packen (side="bottom"), damit sie
+        # beim Verkleinern stehen bleiben und nur die Seite darüber schrumpft.
         self.status = StatusBar(self)
         self.status.frame.pack(side="bottom", fill="x")
         ttk.Separator(self, orient="horizontal").pack(side="bottom", fill="x")
-        # Fußnote zum Stern: sie steht außerhalb des scrollbaren Bereichs, weil
-        # sie für das ganze Fenster gilt (Abschnitte 1, 2 und 3) — in Abschnitt 3
-        # sah sie aus, als beträfe sie nur den Absender.
-        self.required_legend = required_legend(self)
-        self.required_legend.pack(
-            side="bottom", anchor="w", padx=theme.PAD_SECTION, pady=(0, theme.GAP_ROW)
-        )
 
-        # Gesamte Oberfläche in einen scrollbaren Container -> bei kleinem
-        # Fenster ist alles per Scrollbar/Mausrad erreichbar (Export zuletzt).
+        # Die Seiten liegen in einem scrollbaren Container; der Assistent packt
+        # immer nur die aktuelle hinein.
         self.body = _ScrollableFrame(self)
+        self.wizard = Wizard(self, WIZARD_STEPS, self.body.inner)
+        self.wizard.nav.pack(side="bottom", fill="x")
+        ttk.Separator(self, orient="horizontal").pack(side="bottom", fill="x")
+        self.wizard.head.pack(side="top", fill="x")
+        ttk.Separator(self, orient="horizontal").pack(side="top", fill="x")
         self.body.outer.pack(fill="both", expand=True)
-        root = self.body.inner
-
-        # Oben links: ADIF (fix) + Frontbild (dehnt sich bündig zur Absender-Config).
-        self._left = ttk.Frame(root)
-        self.file_section = FileSection(self._left)
-        self.image_section = ImageSection(self._left)
-        self.file_section.frame.pack(side="top", fill="x")
-        self.image_section.frame.pack(side="top", fill="both", expand=True, pady=(8, 0))
-
-        # Mitte links: Filter(4) über Modus(5); Modus dehnt sich bündig zu Lookups(6).
-        self._midleft = ttk.Frame(root)
-        self.filter_section = FilterSection(self._midleft)
-        self.mode_section = ModeSection(self._midleft)
-        self.filter_section.frame.pack(side="top", fill="x")
-        self.mode_section.frame.pack(side="top", fill="both", expand=True, pady=(8, 0))
-
-        self.sender_section = SenderSection(root)
-        self.lookup_section = LookupSection(root)
-        self.mostwanted_section = MostWantedSection(root)
-        self.remarks_section = RemarksSection(root)
-        self.preview = PreviewTable(root, palette=self.palette)
-        self.printmode_section = PrintModeSection(root)
-        self.output_section = OutputSection(root)
+        # Fußnote zum Stern: gilt für alle Seiten -> in der Navigationsleiste.
+        self.required_legend = required_legend(self.wizard.nav)
+        self.required_legend.configure(style="WizardNav.TFrame")
+        for child in self.required_legend.winfo_children():
+            if child.cget("style") == "Muted.TLabel":
+                child.configure(style="NavHint.TLabel")
+            else:
+                child.configure(style="NavRequired.TLabel")
+        self.required_legend.pack(side="left", padx=(theme.PAD_SECTION * 2, 0))
 
         pad = theme.PAD_SECTION
-        self._left.grid(row=0, column=0, padx=(pad, pad // 2), pady=(pad, 0), sticky="nsew")
-        self.sender_section.frame.grid(
-            row=0, column=1, padx=(pad // 2, pad), pady=(pad, 0), sticky="nsew"
-        )
-        self._midleft.grid(row=1, column=0, padx=(pad, pad // 2), pady=(pad, 0), sticky="nsew")
-        self.lookup_section.frame.grid(
-            row=1, column=1, padx=(pad // 2, pad), pady=(pad, 0), sticky="nsew"
-        )
-        # Ab Abschnitt 7 über volle Breite: Most Wanted (7), Remarks (8), Vorschau
-        # (9), Druckmodus (10) und Ausgabe (11).
-        for section, row, fill in (
-            (self.mostwanted_section.frame, 2, "we"),
-            (self.remarks_section.frame, 3, "we"),
-            (self.preview.frame, 4, "nsew"),
-            (self.printmode_section.frame, 5, "we"),
-            (self.output_section.frame, 6, "we"),
-        ):
-            section.grid(row=row, column=0, columnspan=2, padx=pad, pady=(pad, 0), sticky=fill)
-        self.output_section.frame.grid_configure(pady=(pad, pad))
+        wiz = self.wizard
 
-        root.columnconfigure(0, weight=1)
-        root.columnconfigure(1, weight=1)
+        # --- Schritt 1: Quelle
+        page = wiz.page(STEP_SOURCE)
+        self.source_section = SourceSection(page)
+        self.source_section.frame.pack(side="top", fill="x", pady=(0, pad))
+        self.file_section = FileSection(page)
+        self.wavelog_section = WavelogSection(page)
 
-        # Sprungziele für „Ansicht > Gehe zu Abschnitt" (Nummer -> Rahmen).
+        # --- Schritt 2: Absender
+        page = wiz.page(STEP_SENDER)
+        self.sender_section = SenderSection(page)
+        self.sender_section.frame.pack(side="top", anchor="w")
+
+        # --- Schritt 3: Abfrage & Zustellwege
+        page = wiz.page(STEP_LOOKUP)
+        self.lookup_section = LookupSection(page)
+        right = ttk.Frame(page)
+        self.filter_section = FilterSection(right)
+        self.mode_section = ModeSection(right)
+        self.filter_section.frame.pack(side="top", fill="x")
+        self.mode_section.frame.pack(side="top", fill="x", pady=(pad, 0))
+        self.lookup_section.frame.grid(row=0, column=0, padx=(0, pad // 2), sticky="nsew")
+        right.grid(row=0, column=1, padx=(pad // 2, 0), sticky="nsew")
+        page.columnconfigure(0, weight=1)
+        page.columnconfigure(1, weight=1)
+
+        # --- Schritt 4: Karten
+        page = wiz.page(STEP_CARDS)
+        top = ttk.Frame(page)
+        top.pack(side="top", fill="x")
+        self.image_section = ImageSection(top)
+        side = ttk.Frame(top)
+        self.remarks_section = RemarksSection(side)
+        self.mostwanted_section = MostWantedSection(side)
+        self.remarks_section.frame.pack(side="top", fill="x")
+        self.mostwanted_section.frame.pack(side="top", fill="x", pady=(pad, 0))
+        self.image_section.frame.grid(row=0, column=0, padx=(0, pad // 2), sticky="nsew")
+        side.grid(row=0, column=1, padx=(pad // 2, 0), sticky="nsew")
+        top.columnconfigure(0, weight=0)  # Thumbnail hat eine feste Höchstgröße
+        top.columnconfigure(1, weight=1)
+        self.preview = PreviewTable(page, palette=self.palette)
+        self.preview.frame.pack(side="top", fill="both", expand=True, pady=(pad, 0))
+
+        # --- Schritt 5: Druck & Export
+        page = wiz.page(STEP_PRINT)
+        self.printmode_section = PrintModeSection(page)
+        self.output_section = OutputSection(page)
+        self.wavelog_mark_section = WavelogMarkSection(page)
+        self.printmode_section.frame.pack(side="top", fill="x")
+        self.output_section.frame.pack(side="top", fill="x", pady=(pad, 0))
+
+        # Sprungziele für „Ansicht > Gehe zu Abschnitt" (Nummer -> Rahmen); die
+        # Nummern bleiben die des Handbuchs (Anker `abschnitt-N`).
         self._sections: dict[int, ttk.LabelFrame] = {
             1: self.file_section.frame,
             2: self.image_section.frame,
@@ -378,6 +456,13 @@ class App(tk.Tk):
         # beim zugehörigen Kapitel öffnet (Anker `abschnitt-N` in handbuch.md).
         for number, frame in self._sections.items():
             add_section_help(frame, lambda n=number: self._show_help(f"abschnitt-{n}"))
+        add_section_help(self.wavelog_section.frame, lambda: self._show_help("wavelog"))
+
+        wiz.can_leave = self._step_problem
+        wiz.on_blocked = self._mark_step_problem
+        wiz.on_leave = self._on_step_leave
+        wiz.on_enter = self._on_step_enter
+        self._show_source(self.source_section.kind.get())
 
     def _set_window_icon(self) -> None:
         """Setzt das Fenster-/Programmsymbol auf allen Plattformen.
@@ -432,6 +517,21 @@ class App(tk.Tk):
         self.image_section.choose_btn.config(command=self._choose_image)
         self.output_section.browse_btn.config(command=self._browse_output)
         self.output_section.generate_btn.config(command=self._on_generate)
+        self.source_section.kind.trace_add(
+            "write", lambda *_a: self._show_source(self.source_section.kind.get())
+        )
+        self.wavelog_section.load_stations_btn.config(command=self._wavelog_load_stations)
+        self.wavelog_section.load_qsos_btn.config(command=self._wavelog_load_qsos)
+        self.wavelog_section.station_combo.bind(
+            "<<ComboboxSelected>>", lambda _e: self._on_wavelog_station_selected()
+        )
+        self.wavelog_section.remember_key.trace_add("write", self._on_remember_key_toggle)
+        self.wavelog_mark_section.mark_now_btn.config(command=self._wavelog_mark_pending)
+        if not wavelog_secret.available():
+            self.wavelog_section.remember_key.set(False)
+            self.wavelog_section.remember_check.configure(
+                state="disabled", text="Im Schlüsselbund merken (nicht verfügbar)"
+            )
 
         # Enter in einem Eingabefeld gibt den Fokus frei -> kein Highlight/Auswahl.
         self.bind_class("TEntry", "<Return>", self._defocus_entry)
@@ -534,6 +634,17 @@ class App(tk.Tk):
             self.mostwanted_section.top.set(str(mostwanted.clamp_top(config.mostwanted.top)))
             self.mostwanted_section.set_category(config.mostwanted.category)
 
+            self.source_section.kind.set(
+                config.source.kind if config.source.kind in ("file", "wavelog") else "file"
+            )
+            wl = config.wavelog
+            self.wavelog_section.url.set(wl.url)
+            self.wavelog_section.remember_key.set(bool(wl.remember_key))
+            self.wavelog_section.only_unsent.set(bool(wl.only_unsent))
+            self.wavelog_section.since.set(wl.qso_since)
+            self.wavelog_section.until.set(wl.qso_until)
+            self.wavelog_mark_section.mark_sent.set(bool(wl.mark_sent))
+
             # Menü-Zustand (Farbthema-Markierung, „Zuletzt verwendet") nachziehen.
             self.menubar.set_theme_mode(config.appearance.theme)
             self.menubar.set_recent(config.recent.logs, config.recent.images)
@@ -585,6 +696,17 @@ class App(tk.Tk):
                 logs=list(self.base_config.recent.logs),
                 images=list(self.base_config.recent.images),
             ),
+            source=SourceConfig(kind=self.source_section.kind.get()),
+            wavelog=WavelogConfig(
+                url=self.wavelog_section.url.get().strip(),
+                station_id=self.wavelog_section.selected_station_id()
+                or self.base_config.wavelog.station_id,
+                remember_key=self.wavelog_section.remember_key.get(),
+                only_unsent=self.wavelog_section.only_unsent.get(),
+                qso_since=self.wavelog_section.since.get().strip(),
+                qso_until=self.wavelog_section.until.get().strip(),
+                mark_sent=self.wavelog_mark_section.mark_sent.get(),
+            ),
         )
 
     def _defocus_entry(self, event: tk.Event) -> str:
@@ -635,6 +757,16 @@ class App(tk.Tk):
             self.mostwanted_section.enabled,
             self.mostwanted_section.top,
             self.mostwanted_section.category,
+            # Wavelog: alles außer dem API-Key (der geht höchstens in den
+            # Schlüsselbund, siehe `_on_remember_key_toggle`).
+            self.source_section.kind,
+            self.wavelog_section.url,
+            self.wavelog_section.station,
+            self.wavelog_section.remember_key,
+            self.wavelog_section.only_unsent,
+            self.wavelog_section.since,
+            self.wavelog_section.until,
+            self.wavelog_mark_section.mark_sent,
         ]
         for var in watched:
             var.trace_add("write", self._on_var_change)
@@ -740,6 +872,8 @@ class App(tk.Tk):
             self.status.set(f"Logbuch nicht verwertbar: {exc}", "error")
             return
         self.qsos = qsos
+        self.qsos_source = "file"
+        self._pending_marks = []
         self.file_section.set_missing(False)  # Markierung eines Druckversuchs weg
         self.file_section.count_var.set(f"{len(self.qsos)} QSOs geladen")
         self.status.set_info(f"{len(self.qsos)} QSOs · {Path(path).name}")
@@ -996,12 +1130,14 @@ class App(tk.Tk):
             return
         credentials = self._lookup_credentials()
         if not has_lookup_credentials(credentials):
+            self._lookup_signature = None
             self._rebuild_cards()
             self.preview.set_status("Keine Lookup-Zugangsdaten – Via = Standard.")
             self._update_generate_state()
             return
 
         self._lookup_running = True
+        self._lookup_signature = self._credential_signature()
         self._rebuild_cards()  # zeigt „…" für Via/Route
         self.preview.set_status("Schlage Stationen nach…")
         self.status.set("Schlage Stationen nach…", "busy")
@@ -1134,16 +1270,17 @@ class App(tk.Tk):
         self.status.set(f"Farbthema: {theme.THEME_LABELS.get(mode, mode)}", "ok")
 
     def _goto_section(self, number: int) -> None:
-        """Menü „Ansicht > Gehe zu Abschnitt": den Abschnitt nach oben scrollen."""
+        """Menü „Ansicht > Gehe zu Abschnitt": zum Schritt des Abschnitts
+        wechseln (ohne Prüfung) und den Abschnitt nach oben scrollen."""
         target = self._sections.get(number)
         if target is None:
             return
+        self.wizard.go(SECTION_STEP.get(number, 0), check=False)
         canvas = self.body.canvas
         canvas.update_idletasks()
         total = self.body.inner.winfo_height()
         if total <= 0:
             return
-        # y des Abschnitts relativ zum inneren Frame -> Bruchteil für yview_moveto.
         offset = target.winfo_rooty() - self.body.inner.winfo_rooty()
         canvas.yview_moveto(max(0.0, min(1.0, offset / total)))
 
@@ -1207,6 +1344,298 @@ class App(tk.Tk):
         path = Path(output).resolve()
         self._reveal_path(path if path.exists() else path.parent)
 
+    # ------------------------------------------------------- Assistent
+    def _show_source(self, kind: str) -> None:
+        """Schritt 1: nur den Abschnitt der gewählten Quelle zeigen."""
+        pad = theme.PAD_SECTION
+        if kind == "wavelog":
+            self.file_section.frame.pack_forget()
+            self.wavelog_section.frame.pack(side="top", fill="x", pady=(pad, 0))
+            self.wavelog_mark_section.frame.pack(side="top", fill="x", pady=(pad, 0))
+        else:
+            self.wavelog_section.frame.pack_forget()
+            self.wavelog_mark_section.frame.pack_forget()
+            self.file_section.frame.pack(side="top", fill="x", pady=(pad, 0))
+        self.wizard.show_hint("")
+        self.wizard.refresh()
+
+    def _step_problem(self, index: int) -> str | None:
+        """Was fehlt, um Schritt `index` zu verlassen? None = alles da.
+
+        Rein lesend (wird auch zum Einfärben der Schrittleiste gefragt); das
+        Markieren der Felder übernimmt `_mark_step_problem`.
+        """
+        if index == STEP_SOURCE:
+            kind = self.source_section.kind.get()
+            if not self.qsos or self.qsos_source != kind:
+                if kind == "wavelog":
+                    return "Bitte zuerst Station wählen und „QSOs laden“."
+                return "Bitte zuerst ein Logbuch laden."
+        elif index == STEP_SENDER:
+            missing = self.sender_section.missing_required()
+            if missing:
+                names = ", ".join(SENDER_LABELS[f] for f in missing)
+                return f"Pflichtfelder fehlen: {names}"
+        elif index == STEP_CARDS:
+            front = self.image_section.path_var.get().strip()
+            if not front or not Path(front).exists():
+                return "Bitte ein Frontbild wählen."
+        return None
+
+    def _mark_step_problem(self, index: int) -> None:
+        if index == STEP_SOURCE:
+            if self.source_section.kind.get() == "wavelog":
+                self.wavelog_section.set_missing(not self.wavelog_section.selected_station_id())
+            else:
+                self.file_section.set_missing(True)
+        elif index == STEP_SENDER:
+            self.sender_section.mark_missing(self.sender_section.missing_required())
+        elif index == STEP_CARDS:
+            self.image_section.set_missing(True)
+
+    def _on_step_leave(self, index: int) -> None:
+        # Fokus abgeben: FocusOut-Bindungen (Großschreibung, Bemerkungen)
+        # sollen greifen, bevor die Seite verschwindet.
+        self.focus_set()
+        if index == STEP_LOOKUP:
+            self._maybe_restart_lookups()
+
+    def _on_step_enter(self, index: int) -> None:
+        self.body.canvas.yview_moveto(0.0)
+        if index == STEP_PRINT:
+            self._update_mark_state()
+
+    def _credential_signature(self) -> tuple:
+        c = self._lookup_credentials()
+        return (c.qrz_user, c.qrz_pass, c.hamqth_user, c.hamqth_pass)
+
+    def _maybe_restart_lookups(self) -> None:
+        """Nach Schritt 3: wurden (andere) Zugangsdaten eingegeben, als beim
+        Laden des Logs da waren, jetzt neu nachschlagen."""
+        if not self.qsos or self._lookup_running:
+            return
+        if not has_lookup_credentials(self._lookup_credentials()):
+            return
+        if self._lookup_signature == self._credential_signature():
+            return
+        self.lookups = {}
+        self._start_lookups([q.call for q in self.qsos])
+
+    # --------------------------------------------------------- Wavelog
+    def _wavelog_client(self) -> wavelog.WavelogClient:
+        return wavelog.WavelogClient(self.wavelog_section.url.get(), self.wavelog_section.key.get())
+
+    def _restore_wavelog_key(self) -> None:
+        """Beim Start: einen gemerkten API-Key aus dem Schlüsselbund holen."""
+        if not self.wavelog_section.remember_key.get():
+            return
+        key = wavelog_secret.load_key(self.wavelog_section.url.get())
+        if key:
+            self.wavelog_section.key.set(key)
+
+    def _on_remember_key_toggle(self, *_args) -> None:
+        if self._suppress_save:
+            return
+        url = self.wavelog_section.url.get()
+        if self.wavelog_section.remember_key.get():
+            wavelog_secret.save_key(url, self.wavelog_section.key.get())
+        else:
+            wavelog_secret.delete_key(url)
+
+    def _set_wavelog_busy(self, busy: bool) -> None:
+        self._wavelog_busy = busy
+        state = "disabled" if busy else "normal"
+        self.wavelog_section.load_stations_btn.configure(state=state)
+        self.wavelog_section.load_qsos_btn.configure(
+            state="disabled" if busy or not self._wavelog_stations else "normal"
+        )
+        self._update_mark_state()
+
+    def _run_wavelog(self, work, done) -> None:
+        """`work(client)` im Hintergrund, `done(result, error)` im UI-Thread."""
+        try:
+            client = self._wavelog_client()
+        except wavelog.WavelogError as exc:
+            self.status.set(str(exc), "error")
+            self.wizard.show_problem(str(exc))
+            return
+        self._set_wavelog_busy(True)
+
+        def worker() -> None:
+            try:
+                result = work(client)
+            except wavelog.WavelogError as exc:
+                self.after(0, done, None, exc)
+                return
+            except Exception as exc:  # bewusst breit: nie den Thread sterben lassen
+                self.after(0, done, None, wavelog.WavelogError(str(exc)))
+                return
+            self.after(0, done, result, None)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _wavelog_load_stations(self) -> None:
+        self.status.set("Lade Stationen aus Wavelog…", "busy")
+        if self.wavelog_section.remember_key.get():
+            wavelog_secret.save_key(self.wavelog_section.url.get(), self.wavelog_section.key.get())
+        self._run_wavelog(lambda client: client.stations(), self._wavelog_stations_done)
+
+    def _wavelog_stations_done(self, stations, error) -> None:
+        self._set_wavelog_busy(False)
+        if error is not None:
+            self.status.set(str(error), "error")
+            self.wizard.show_problem(str(error))
+            return
+        self._wavelog_stations = list(stations)
+        self.wavelog_section.set_stations(stations, self.base_config.wavelog.station_id)
+        self._set_wavelog_busy(False)
+        if not stations:
+            self.status.set("Wavelog: keine Stationsstandorte gefunden.", "error")
+            return
+        self.wavelog_section.set_missing(False)
+        self.status.set(f"Wavelog: {len(stations)} Station(en) geladen.", "ok")
+        self.wizard.show_hint("Station wählen, dann „QSOs laden“.")
+
+    def _selected_wavelog_station(self) -> wavelog.WavelogStation | None:
+        sid = self.wavelog_section.selected_station_id()
+        return next((s for s in self._wavelog_stations if s.id == sid), None)
+
+    def _on_wavelog_station_selected(self) -> None:
+        self.wavelog_section.set_missing(False)
+        self._on_var_change()
+
+    def _wavelog_load_qsos(self) -> None:
+        station = self._selected_wavelog_station()
+        if station is None:
+            self.wavelog_section.set_missing(True)
+            self.wizard.show_problem("Bitte eine Station wählen.")
+            return
+        since = self.wavelog_section.since.get().strip()
+        until = self.wavelog_section.until.get().strip()
+        self.status.set(f"Lade QSOs von {station.callsign} aus Wavelog…", "busy")
+
+        def progress(done: int, total: int) -> None:
+            self.after(0, self.status.set, f"Lade QSOs aus Wavelog… {done}/{total}", "busy")
+
+        self._run_wavelog(
+            lambda client: client.qsos(station.id, since=since, until=until, progress_cb=progress),
+            lambda qsos, error: self._wavelog_qsos_done(station, qsos, error),
+        )
+
+    def _wavelog_qsos_done(self, station, qsos, error) -> None:
+        self._set_wavelog_busy(False)
+        if error is not None:
+            self.status.set(str(error), "error")
+            self.wizard.show_problem(str(error))
+            return
+        total = len(qsos)
+        skipped = 0
+        if self.wavelog_section.only_unsent.get():
+            kept = [q for q in qsos if not paper_qsl_already_sent(q)]
+            skipped = total - len(kept)
+            qsos = kept
+        self.qsos = qsos
+        self.qsos_source = "wavelog"
+        self._pending_marks = []
+        self._prefill_sender_from_station(station)
+        note = f" ({skipped} schon gesendet, ausgelassen)" if skipped else ""
+        self.wavelog_section.count_var.set(f"{len(qsos)} QSOs geladen{note}")
+        self.status.set_info(f"{len(qsos)} QSOs · Wavelog {station.callsign}")
+        self.status.set(f"Wavelog: {len(qsos)} QSOs geladen{note}.", "ok")
+        self.wizard.show_hint("")
+        self.wizard.refresh()
+        self.lookups = {}
+        self._start_lookups([q.call for q in self.qsos])
+
+    def _prefill_sender_from_station(self, station: wavelog.WavelogStation) -> None:
+        """Leere Absenderfelder mit den Daten des Wavelog-Standorts füllen
+        (nie überschreiben, was schon dasteht)."""
+        for field, value in (
+            ("callsign", station.callsign),
+            ("locator", station.gridsquare),
+            ("waz", station.cq),
+            ("itu", station.itu),
+        ):
+            var = self.sender_section.vars[field]
+            if value and not var.get().strip():
+                var.set(value)
+
+    def _marks_for(self, cards) -> list[wavelog.PaperQslMark]:
+        """Die Wavelog-QSOs der gedruckten Karten, mit dem Zustellweg."""
+        priority = self._active_via_priority()
+        marks: dict[str, wavelog.PaperQslMark] = {}
+        for card in cards:
+            route = effective_via(card, priority)
+            if card.via_text and route == "B":
+                via = "M"  # über QSL-Manager
+            else:
+                via = {"B": "B", "D": "D"}.get(route or "")
+            for row in card.rows:
+                if row.qso_id:
+                    marks[row.qso_id] = wavelog.PaperQslMark(row.qso_id, via)
+        return list(marks.values())
+
+    def _update_mark_state(self) -> None:
+        section = self.wavelog_mark_section
+        enabled = bool(self._pending_marks) and not self._wavelog_busy
+        section.mark_now_btn.configure(state="normal" if enabled else "disabled")
+        if self._pending_marks:
+            section.status_var.set(f"{len(self._pending_marks)} QSO(s) warten auf Markierung")
+
+    def _after_generate_wavelog(self) -> None:
+        """Nach dem PDF: die QSOs der Karten in Wavelog als gesendet markieren
+        (nach Rückfrage — die PDF könnte ja nur ein Probedruck sein)."""
+        if self.qsos_source != "wavelog":
+            return
+        self._pending_marks = self._marks_for(getattr(self, "_generated_cards", []))
+        self._update_mark_state()
+        if not self._pending_marks or not self.wavelog_mark_section.mark_sent.get():
+            return
+        if confirm(
+            self,
+            "In Wavelog markieren",
+            f"{len(self._pending_marks)} QSO(s) in Wavelog als „Papier-QSL gesendet“ "
+            "markieren?\n\nNur bestätigen, wenn die Karten wirklich verschickt werden.",
+            ok_label="Markieren",
+        ):
+            self._wavelog_mark_pending()
+
+    def _wavelog_mark_pending(self) -> None:
+        marks = list(self._pending_marks)
+        if not marks:
+            return
+        today = datetime.now().strftime("%Y-%m-%d")
+        self.status.set(f"Markiere {len(marks)} QSO(s) in Wavelog…", "busy")
+
+        def progress(done: int, total: int) -> None:
+            self.after(0, self.status.set, f"Markiere in Wavelog… {done}/{total}", "busy")
+
+        self._run_wavelog(
+            lambda client: client.mark_many(marks, date=today, progress_cb=progress),
+            self._wavelog_mark_done,
+        )
+
+    def _wavelog_mark_done(self, result, error) -> None:
+        self._set_wavelog_busy(False)
+        if error is not None:
+            self.status.set(str(error), "error")
+            return
+        done, errors = result
+        if errors:
+            # Erneutes Markieren ist harmlos (setzt nur wieder „Y"), deshalb
+            # bleiben alle zur Wiederholung stehen.
+            self.status.set(f"Wavelog: {done} markiert, {len(errors)} Fehler.", "error")
+            messagebox.showwarning(
+                "Wavelog", "Nicht alle QSOs konnten markiert werden:\n\n" + "\n".join(errors[:8])
+            )
+        else:
+            self._pending_marks = []
+            self.status.set(f"Wavelog: {done} QSO(s) als Papier-QSL gesendet markiert.", "ok")
+        self.wavelog_mark_section.status_var.set(
+            f"{done} QSO(s) markiert" + (f", {len(errors)} Fehler" if errors else "")
+        )
+        self._update_mark_state()
+
     # ---------------------------------------------------- PDF-Erzeugung
     def _check_required(self) -> tuple[list[str], int]:
         """Prüft alle Pflichtangaben und markiert die fehlenden in der Oberfläche.
@@ -1217,8 +1646,11 @@ class App(tk.Tk):
         Nummer des ersten betroffenen Abschnitts).
         """
         log = self.file_section.path_var.get().strip()
-        log_missing = not self.qsos or not log or not Path(log).exists()
-        self.file_section.set_missing(log_missing)
+        if self.qsos_source == "wavelog":
+            log_missing = not self.qsos
+        else:
+            log_missing = not self.qsos or not log or not Path(log).exists()
+            self.file_section.set_missing(log_missing)
 
         front = self.image_section.path_var.get().strip()
         front_missing = not front or not Path(front).exists()
@@ -1267,6 +1699,7 @@ class App(tk.Tk):
             messagebox.showerror("Kein Ziel", "Bitte einen Ausgabepfad angeben.")
             return
 
+        self._generated_cards = list(cards)
         config = self._gather_config()
         self._generating = True
         self._update_generate_state()
@@ -1319,6 +1752,7 @@ class App(tk.Tk):
                 "Fertig",
                 f"PDF erzeugt:\n{joined}\n\n(Automatisches Öffnen nicht möglich: {exc})",
             )
+        self._after_generate_wavelog()
 
     def _browse_output(self) -> None:
         path = filedialog.asksaveasfilename(

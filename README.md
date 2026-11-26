@@ -81,17 +81,27 @@ nur, wie sie aussieht. Die **Lookup-Zugangsdaten sind die Ausnahme**: sie werden
 nirgends gespeichert und gelten nur für die laufende Sitzung.
 
 ## Ablauf in der GUI
-1. QRZ-/HamQTH-Konto in Abschnitt 6 eintragen — sonst kann die App die
-   Versandart nicht nachschlagen (alle Karten fallen auf `default_via`). Das ist
-   bei **jedem Start** nötig, die Zugangsdaten werden bewusst nicht gespeichert.
-2. Logbuch wählen und laden — der Lookup startet automatisch im Hintergrund
-   und füllt Via/Manager/Adresse; „PDF erzeugen" ist gesperrt, bis er fertig ist.
-3. Frontbild wählen, Absenderdaten prüfen (läuft parallel zum Lookup).
-4. Zustellwege priorisieren (Liste + Trennlinie) und Kartenmodus wählen.
-   Optional in Abschnitt 7 den Most-Wanted-Filter einschalten (Top N, Kategorie).
-5. Vorschau prüfen (alle QSOs mit Via/Route), ggf. einzelne Karten ab-/anwählen
-   (auch reine eQSL-/LOTW-Stationen manuell aktivierbar); bei Bedarf „Neu abrufen".
-6. Druckmodus wählen und „PDF erzeugen".
+Die Oberfläche ist ein **Schritt-Assistent** (`qslcards/gui/wizard.py`): es ist
+immer nur ein Schritt zu sehen, oben die Schrittleiste, unten Zurück/Weiter.
+„Weiter" prüft die Pflichtangaben des Schritts und sagt, was fehlt.
+
+1. **Quelle** — Logbuch (ADIF/Cabrillo) laden *oder* „Direkt aus Wavelog":
+   URL + API-v2-Key, „Stationen laden", Station wählen, „QSOs laden"
+   (`qslcards/wavelog/`, braucht Wavelog ≥ 3.2.5).
+2. **Absender** — eigene Stationsdaten (leere Felder füllt der Wavelog-Standort).
+3. **Abfrage** — QRZ-/HamQTH-Zugangsdaten (jede Sitzung neu, nie gespeichert),
+   Zustellwege priorisieren, Kartenmodus. Neue Zugangsdaten starten beim
+   Verlassen des Schritts den Lookup neu.
+4. **Karten** — Frontbild, Bemerkungen, Most-Wanted-Filter, Vorschau (einzelne
+   Karten ab-/anwählen, Via/Route korrigieren, „Neu abrufen").
+5. **Druck** — Druckmodus (Duplex/getrennt, A4-Bogen, QR-Code, Seitenrand) und
+   „PDF erzeugen". Bei Wavelog-QSOs danach (mit Rückfrage) `qsl_sent = Y` samt
+   Datum und Weg per `PATCH /api/v2/qso/{id}` setzen.
+
+Das Farbschema (`gui/theme.py`) wird aus einer Grundfarbe abgeleitet
+(`BASE_HUE`, Funk-Cyan 190°): Erfolg analog −60°, Gefahr/Warnung
+split-komplementär +150°/+210°, Neutraltöne im Grundton mit fester
+Helligkeitsleiter.
 
 Mit einem roten `*` markierte Angaben sind **Pflicht**: Logbuch, Frontbild und im
 Absender Rufzeichen, Name, Locator, DOK, CQ-Zone und ITU. Fehlt davon etwas,

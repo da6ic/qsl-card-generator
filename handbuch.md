@@ -25,29 +25,38 @@ noch fehlt, und markiert die betroffenen Felder rot.
 
 ## Der Weg zur fertigen PDF {#ueberblick}
 
-Die Oberfläche ist von oben nach unten in elf Abschnitte geteilt — in dieser
-Reihenfolge arbeitest du sie ab:
+Das Programm führt dich als **Assistent** in fünf Schritten zur PDF. Es zeigt
+immer nur den aktuellen Schritt; oben siehst du, wo du stehst (blau = aktuell,
+grün = erledigt), unten geht es mit **Weiter** und **Zurück** voran. Fehlt noch
+etwas Wichtiges, bleibt **Weiter** stehen und sagt rot daneben, was fehlt. Auf
+einen Schritt oben kannst du auch direkt klicken.
 
-1. [Logbuch laden](#abschnitt-1) — ADIF- oder Cabrillo-Datei wählen und einlesen.
-2. [Frontbild wählen](#abschnitt-2) — ein Bild für alle Karten.
-3. [Absender ausfüllen](#abschnitt-3) — deine Stationsdaten.
-4. [Zustellwege ordnen](#abschnitt-4) — welche QSLs überhaupt gedruckt werden.
-5. [Kartenmodus wählen](#abschnitt-5) — eine Karte pro QSO oder pro Station.
-6. [Lookups einrichten](#abschnitt-6) — Zugangsdaten für QRZ/HamQTH (optional).
-7. [Most Wanted wählen](#abschnitt-7) — nur Karten an gesuchte DXCC-Gebiete
-   (optional).
-8. [Bemerkung eintragen](#abschnitt-8) — ein kurzer Text auf der Karte
-   (optional).
-9. [Vorschau prüfen](#abschnitt-9) — Liste aller Karten, hier korrigierst du
-   Einzelfälle.
-10. [Druckmodus einstellen](#abschnitt-10) — Duplex, Bogen, QR-Code, Seitenrand.
-11. [PDF erzeugen](#abschnitt-11) — Ziel wählen und drucken lassen.
+1. **Quelle** — [Logdatei laden](#abschnitt-1) *oder* die QSOs direkt
+   [aus Wavelog holen](#wavelog).
+2. **Absender** — [deine Stationsdaten](#abschnitt-3).
+3. **Abfrage** — [Lookups einrichten](#abschnitt-6) (optional),
+   [Zustellwege ordnen](#abschnitt-4) und den [Kartenmodus](#abschnitt-5) wählen.
+4. **Karten** — [Frontbild wählen](#abschnitt-2),
+   [Bemerkung eintragen](#abschnitt-8) (optional),
+   [Most Wanted](#abschnitt-7) (optional) und in der [Vorschau](#abschnitt-9)
+   Einzelfälle korrigieren.
+5. **Druck** — [Druckmodus einstellen](#abschnitt-10) (Duplex, Bogen,
+   QR-Code, Seitenrand) und die [PDF erzeugen](#abschnitt-11). Kamen die QSOs
+   aus Wavelog, markiert das Programm sie danach auf Wunsch als
+   „Papier-QSL gesendet".
+
+Hast du die Zugangsdaten für QRZ/HamQTH erst in Schritt 3 eingetragen, schlägt
+das Programm die Stationen beim Verlassen von Schritt 3 automatisch nach.
+
+Die Farben der Oberfläche sind nicht einzeln ausgesucht, sondern aus einer
+Grundfarbe (Funk-Cyan) über den Farbkreis abgeleitet: Grün liegt 60° daneben,
+Rot und Bernstein auf den beiden „geteilten Komplementärfarben" gegenüber.
 
 Die unterstrichenen Verweise kannst du anklicken — auch überall sonst im
 Handbuch, wo auf ein anderes Kapitel hingewiesen wird. Über die Kapitelliste am
 linken Rand kommst du ebenfalls direkt zu jedem Kapitel.
 
-Bei jedem Abschnitt steht oben rechts im Titel ein kleines **?**. Das öffnet
+Bei jedem Abschnitt steht im Titel ein kleines **?**. Das öffnet
 genau das Kapitel dieses Handbuchs.
 
 ## 1. Logbuch (ADIF/Cabrillo) {#abschnitt-1}
@@ -111,6 +120,39 @@ braucht. Daran ändert sich für dich Folgendes:
 Ein erneutes **Log laden** baut die Kartenliste komplett neu auf. Deine
 Korrekturen in der Vorschau ([Kapitel 9](#abschnitt-9)) gehen dabei verloren,
 und die Stationsabfrage startet von vorn.
+
+## Wavelog als Quelle {#wavelog}
+
+Statt einer Logdatei kannst du die QSOs direkt aus deinem
+[Wavelog](https://www.wavelog.org) holen. Wähle in Schritt 1 **Direkt aus
+Wavelog**:
+
+1. **Adresse** deiner Wavelog-Instanz eintragen, z.B. `https://log.example.org`.
+2. **API-Key** eintragen. Gebraucht wird ein Token der API v2 (beginnt mit
+   `wl2_`, in Wavelog unter den API-Einstellungen deines Kontos) mit den Rechten
+   `station:read` und `qso:read`, zum Markieren zusätzlich `qso:write`. Wavelog
+   muss mindestens Version 3.2.5 haben.
+3. **Stationen laden** drücken und im Dropdown den Stationsstandort wählen, für
+   den du Karten drucken willst. Die aktive Station steht oben und trägt einen ★.
+4. Optional einen **Zeitraum** (JJJJ-MM-TT) eingeben. **Nur QSOs, für die noch
+   keine Papier-QSL gesendet wurde** lässt QSOs weg, die Wavelog schon als
+   gesendet führt.
+5. **QSOs laden** drücken.
+
+Leere Absenderfelder (Rufzeichen, Locator, CQ-Zone, ITU) füllt das Programm aus
+dem Stationsstandort; was du schon eingetragen hast, bleibt stehen.
+
+**Nach dem Druck:** Ist in Schritt 5 „als Papier-QSL gesendet markieren" an,
+fragt das Programm nach dem Erzeugen der PDF, ob es die QSOs der gedruckten
+Karten in Wavelog markieren soll. Es setzt dann *QSL gesendet = Ja*, das heutige
+Datum und den Weg (Büro, Direkt oder Manager). Sagst du „Abbrechen", kannst du
+das später mit **Jetzt markieren** nachholen.
+
+Der API-Key wird **nicht** in die `config.yaml` geschrieben. Mit **Im
+Schlüsselbund merken** legt das Programm ihn im Schlüsselbund deines Systems ab
+(Windows: Anmeldeinformationsverwaltung, macOS: Schlüsselbund). Ist dort nichts
+verfügbar, ist das Kästchen ausgegraut und du trägst den Key bei jedem Start neu
+ein.
 
 ## 2. Frontbild {#abschnitt-2}
 

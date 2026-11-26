@@ -15,6 +15,7 @@ dependencies = [
     "pillow>=10.0",     # Bild laden/skalieren (Frontbild)
     "requests>=2.31",   # HamQTH-/QRZ-XML-API
     "pyyaml>=6.0",      # config.yaml lesen/schreiben
+    "keyring>=24.0",    # Wavelog-API-Key im Schlüsselbund des Systems (optional nutzbar)
 ]
 
 [project.optional-dependencies]

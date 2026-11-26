@@ -127,6 +127,30 @@ class AppearanceConfig:
     theme: str = "system"  # "system" | "light" | "dark"
 
 
+@dataclass
+class WavelogConfig:
+    """Wavelog als Datenquelle (Assistent, Schritt 1).
+
+    Der API-Key steht bewusst NICHT hier (Klartext in der config.yaml). Ist
+    `remember_key` an, liegt er im Schlüsselbund des Systems (wavelog/secret.py).
+    """
+
+    url: str = ""
+    station_id: int = 0  # zuletzt gewählter Stationsstandort (0 = keiner)
+    remember_key: bool = False
+    only_unsent: bool = True  # QSOs mit bereits gesendeter Papier-QSL auslassen
+    qso_since: str = ""  # optionaler Zeitraum, „JJJJ-MM-TT"
+    qso_until: str = ""
+    mark_sent: bool = True  # nach dem PDF „Papier-QSL gesendet" setzen (mit Rückfrage)
+
+
+@dataclass
+class SourceConfig:
+    """Woher die QSOs kommen: "file" (ADIF/Cabrillo) oder "wavelog"."""
+
+    kind: str = "file"
+
+
 # Wie viele Einträge die Menüs „Zuletzt verwendet" höchstens führen.
 MAX_RECENT = 8
 
@@ -147,6 +171,8 @@ class AppConfig:
     mostwanted: MostWantedConfig = field(default_factory=MostWantedConfig)
     appearance: AppearanceConfig = field(default_factory=AppearanceConfig)
     recent: RecentConfig = field(default_factory=RecentConfig)
+    source: SourceConfig = field(default_factory=SourceConfig)
+    wavelog: WavelogConfig = field(default_factory=WavelogConfig)
 
 
 def push_recent(entries: list[str], path: str, limit: int = MAX_RECENT) -> list[str]:
@@ -220,6 +246,8 @@ def load(path: str | Path) -> AppConfig:
         mostwanted=_from_dict(MostWantedConfig, data.get("mostwanted")),
         appearance=_from_dict(AppearanceConfig, data.get("appearance")),
         recent=_recent_from_dict(data.get("recent")),
+        source=_from_dict(SourceConfig, data.get("source")),
+        wavelog=_from_dict(WavelogConfig, data.get("wavelog")),
     )
 
 

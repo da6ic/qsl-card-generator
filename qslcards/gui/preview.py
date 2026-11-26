@@ -97,7 +97,7 @@ class PreviewTable:
     """Treeview der Karten; Zeilen per Klick auf die Spalte 'Drucken' abwählbar."""
 
     def __init__(self, parent: tk.Misc, palette: Palette | None = None) -> None:
-        self.frame = ttk.LabelFrame(parent, text="9. Vorschau")
+        self.frame = ttk.LabelFrame(parent, text="Vorschau")
         # Farben für Zeilen-Tags und Icons (ohne Angabe: aktuelles Systemthema).
         self._palette = palette or palette_for("system")
 

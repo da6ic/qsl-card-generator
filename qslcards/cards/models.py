@@ -20,6 +20,9 @@ class CardRow:
     freq_mhz: str
     mode: str
     rst_sent: str
+    # Primärschlüssel des QSOs in Wavelog (leer bei Datei-Logs). Steht NICHT auf
+    # der Karte; damit wird nach dem Druck „Papier-QSL gesendet" gesetzt.
+    qso_id: str = ""
 
 
 @dataclass

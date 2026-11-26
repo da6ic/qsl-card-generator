@@ -1,4 +1,4 @@
-"""Farbthema der Oberfläche („Funk-Blau", hell + dunkel).
+"""Farbthema der Oberfläche („Funk-Cyan", hell + dunkel, aus einer Grundfarbe abgeleitet).
 
 Eine zentrale Stelle für **alle** Farben und Schriftgrößen der GUI — analog zu
 `pdf/geometry.py` für die Karte. Kein Widget setzt Farben selbst; die Abschnitte
@@ -49,41 +49,79 @@ class Palette:
     danger: str  # Statuspunkt „Fehler"
 
 
-LIGHT = Palette(
-    name="light",
-    bg="#F4F6F9",
-    surface="#FFFFFF",
-    surface_alt="#EDF1F6",
-    text="#1B1F27",
-    text_muted="#5A6270",
-    text_disabled="#9AA2AE",
-    border="#D4D9E0",
-    accent="#1F6FEB",
-    accent_hover="#1A5FCC",
-    accent_text="#FFFFFF",
-    select_bg="#DCE8FD",
-    success="#1B8A5A",
-    warning="#C8791A",
-    danger="#C0392B",
-)
+# --- Farbharmonie --------------------------------------------------------
+# Alle Farben werden aus EINER Grundfarbe im HSL-Farbkreis abgeleitet, statt
+# einzeln ausgesucht zu sein — so passen sie rechnerisch zueinander. Vorbild ist
+# der ruhige, dunkle Look typischer RTTY-/Digimode-Software (Wasserfall in
+# Cyan/Türkis auf fast schwarzem Grund, Signale in Grün/Bernstein).
+#
+#   Grundton  H0            -> Akzent (Fokus, Auswahl, Primärbutton)
+#   analog    H0 - 60°      -> Erfolg („fertig", erledigte Schritte)
+#   split-komplementär H0 + 150° / H0 + 210°
+#                           -> Gefahr (Fehler, Pflichtfeld) / Warnung (läuft)
+#   Neutraltöne             -> derselbe Grundton H0, kaum gesättigt; die
+#                              Helligkeiten bilden eine feste Stufenleiter.
+#
+# Wer das Farbschema ändern will, dreht nur an BASE_HUE — alles andere folgt.
+BASE_HUE = 190.0  # Funk-Cyan
+HUE_SUCCESS = (BASE_HUE - 60.0) % 360  # analog
+HUE_DANGER = (BASE_HUE + 150.0) % 360  # split-komplementär 1
+HUE_WARNING = (BASE_HUE + 210.0) % 360  # split-komplementär 2
 
-DARK = Palette(
-    name="dark",
-    bg="#16181D",
-    surface="#1E2128",
-    surface_alt="#22262E",
-    text="#E6E8EC",
-    text_muted="#9AA2AE",
-    text_disabled="#6B717C",
-    border="#2E323B",
-    accent="#4C93FF",
-    accent_hover="#6BA6FF",
-    accent_text="#0B0D11",
-    select_bg="#24344F",
-    success="#3FBF87",
-    warning="#E0A048",
-    danger="#E5695B",
-)
+
+def hsl(hue: float, saturation: float, lightness: float) -> str:
+    """HSL (Grad, Prozent, Prozent) -> „#RRGGBB"."""
+    import colorsys
+
+    r, g, b = colorsys.hls_to_rgb((hue % 360) / 360.0, lightness / 100.0, saturation / 100.0)
+    return f"#{round(r * 255):02X}{round(g * 255):02X}{round(b * 255):02X}"
+
+
+def build_palette(name: str, base_hue: float = BASE_HUE) -> Palette:
+    """Erzeugt die Palette eines Modus aus dem Grundton (siehe oben)."""
+    h0 = base_hue
+    success, danger, warning = (h0 - 60.0, h0 + 150.0, h0 + 210.0)
+    if name == "dark":
+        # Stufenleiter der Neutraltöne: 8 · 12 · 16 · 24 … 42 · 64 · 90 % Helligkeit.
+        return Palette(
+            name="dark",
+            bg=hsl(h0, 30, 8),
+            surface=hsl(h0, 28, 12),
+            surface_alt=hsl(h0, 24, 16),
+            text=hsl(h0, 15, 90),
+            text_muted=hsl(h0, 12, 64),
+            text_disabled=hsl(h0, 10, 42),
+            border=hsl(h0, 20, 24),
+            accent=hsl(h0, 85, 55),
+            accent_hover=hsl(h0, 85, 63),
+            accent_text=hsl(h0, 30, 8),
+            select_bg=hsl(h0, 45, 22),
+            success=hsl(success, 55, 55),
+            warning=hsl(warning, 90, 58),
+            danger=hsl(danger, 80, 64),
+        )
+    # Hell: dieselbe Leiter gespiegelt (96 · 100 · 92 · 82 … 62 · 38 · 12 %).
+    return Palette(
+        name="light",
+        bg=hsl(h0, 25, 96),
+        surface=hsl(h0, 0, 100),
+        surface_alt=hsl(h0, 25, 92),
+        text=hsl(h0, 30, 12),
+        text_muted=hsl(h0, 12, 38),
+        text_disabled=hsl(h0, 8, 62),
+        border=hsl(h0, 18, 82),
+        accent=hsl(h0, 90, 32),
+        accent_hover=hsl(h0, 90, 26),
+        accent_text=hsl(h0, 0, 100),
+        select_bg=hsl(h0, 60, 88),
+        success=hsl(success, 60, 30),
+        warning=hsl(warning, 85, 38),
+        danger=hsl(danger, 70, 42),
+    )
+
+
+LIGHT = build_palette("light")
+DARK = build_palette("dark")
 
 PALETTES = {"light": LIGHT, "dark": DARK}
 
@@ -95,7 +133,8 @@ GAP_COL = 6  # horizontaler Abstand Label -> Eingabefeld
 ROW_HEIGHT = 24  # Zeilenhöhe der Vorschau-Tabelle
 FONT_SIZE_SMALL = -11  # negative Größe = Pixel (plattformunabhängig)
 FONT_SIZE_BASE = -12
-FONT_SIZE_HEADING = -12
+FONT_SIZE_HEADING = -13
+FONT_SIZE_TITLE = -16  # Seitentitel des Assistenten
 
 
 def detect_system_theme() -> str:
@@ -172,6 +211,24 @@ def _configure_fonts() -> None:
             tkfont.nametofont(name).configure(size=size)
         except tk.TclError:  # Schrift auf dieser Plattform unbekannt
             continue
+    # Eigene benannte Schriften des Assistenten. Festbreite für Rufzeichen,
+    # Schrittleiste und Tabelle — der typische Look von Digimode-Software.
+    fixed = tkfont.nametofont("TkFixedFont").actual("family")
+    preferred = {"win32": "Consolas", "darwin": "Menlo"}.get(sys.platform)
+    if preferred and preferred in tkfont.families():
+        fixed = preferred  # klarer als Courier New
+    base = tkfont.nametofont("TkDefaultFont").actual("family")
+    for name, family, size, weight in (
+        ("QslMono", fixed, FONT_SIZE_BASE, "normal"),
+        ("QslMonoBold", fixed, FONT_SIZE_BASE, "bold"),
+        ("QslMonoTitle", fixed, FONT_SIZE_TITLE, "bold"),
+        ("QslTitle", base, FONT_SIZE_TITLE, "bold"),
+        ("QslHeadingBold", base, FONT_SIZE_HEADING, "bold"),
+    ):
+        try:
+            tkfont.nametofont(name).configure(family=family, size=size, weight=weight)
+        except tk.TclError:
+            tkfont.Font(name=name, family=family, size=size, weight=weight, exists=False)
 
 
 def apply(root: tk.Misc, mode: str | None) -> Palette:
@@ -497,6 +554,47 @@ def _configure_styles(style: ttk.Style, pal: Palette) -> None:
         lightcolor=pal.danger,
         darkcolor=pal.danger,
     )
+
+    _configure_wizard_styles(style, pal)
+
+
+def _configure_wizard_styles(style: ttk.Style, pal: Palette) -> None:
+    """Styles des Schritt-Assistenten (gui/wizard.py): Kopfleiste mit den
+    Schritten, Seitentitel, Navigationsleiste unten."""
+    style.configure("WizardHead.TFrame", background=pal.surface)
+    style.configure("WizardNav.TFrame", background=pal.surface)
+    style.configure(
+        "WizardBrand.TLabel", background=pal.surface, foreground=pal.accent, font="QslMonoTitle"
+    )
+    style.configure(
+        "WizardCount.TLabel", background=pal.surface, foreground=pal.text_muted, font="QslMono"
+    )
+    # Ein Schritt der Kopfleiste: Nummer + Name, darunter ein 3-px-Balken.
+    for state, fg in (("Todo", pal.text_disabled), ("Current", pal.accent), ("Done", pal.success)):
+        style.configure(f"Step{state}.TFrame", background=pal.surface)
+        style.configure(
+            f"Step{state}.TLabel",
+            background=pal.surface,
+            foreground=fg,
+            font="QslMonoBold" if state == "Current" else "QslMono",
+        )
+    style.configure("StepBarTodo.TFrame", background=pal.border)
+    style.configure("StepBarCurrent.TFrame", background=pal.accent)
+    style.configure("StepBarDone.TFrame", background=pal.success)
+    style.configure("PageTitle.TLabel", foreground=pal.text, font="QslTitle")
+    style.configure("PageHint.TLabel", foreground=pal.text_muted)
+    style.configure("NavHint.TLabel", background=pal.surface, foreground=pal.text_muted)
+    style.configure("NavDanger.TLabel", background=pal.surface, foreground=pal.danger)
+    style.configure("NavRequired.TLabel", background=pal.surface, foreground=pal.danger)
+    # Nicht gewählte Wavelog-Station (Schritt 1): Rahmen wie Invalid.TEntry.
+    style.configure(
+        "Invalid.TCombobox", bordercolor=pal.danger, lightcolor=pal.danger, darkcolor=pal.danger
+    )
+    style.map("Invalid.TCombobox", bordercolor=[("focus", pal.danger), ("hover", pal.danger)])
+    # Auswahl der Datenquelle (Schritt 1): zwei große Umschalter.
+    style.configure("Source.TRadiobutton", font="QslHeadingBold", padding=(4, 4))
+    # Datenzeilen im Funk-Stil: Vorschau-Tabelle in Festbreitenschrift.
+    style.configure("Treeview", font="QslMono")
 
 
 # Klassische (nicht-ttk) Widgets: ttk-Styles greifen hier nicht, deshalb werden

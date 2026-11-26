@@ -47,3 +47,13 @@ appearance:
 recent:
   logs: []
   images: []
+source:
+  kind: file
+wavelog:
+  url: ''
+  station_id: 0
+  remember_key: false
+  only_unsent: true
+  qso_since: ''
+  qso_until: ''
+  mark_sent: true

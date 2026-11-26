@@ -101,6 +101,7 @@ def _make_row(qso: QSO) -> CardRow:
         freq_mhz=_freq_mhz(qso),
         mode=(qso.mode or "").strip(),
         rst_sent=(qso.rst_sent or "").strip(),
+        qso_id=(qso.raw.get("wavelog_id") or "").strip(),
     )
 
 

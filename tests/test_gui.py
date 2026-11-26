@@ -684,6 +684,7 @@ def test_print_margin_block_follows_the_toggle(app):
     """Abschnitt 10: die Randfelder erscheinen erst über „Erweiterte
     Einstellungen" und verschwinden wieder."""
     section = app.printmode_section
+    app.wizard.go(appmod.STEP_PRINT, check=False)  # Abschnitt 10 steht auf Schritt 5
     app.update_idletasks()
     assert not section.margin_frame.winfo_ismapped()
 
@@ -831,6 +832,7 @@ def test_print_margins_survive_autosave(app, tmp_path):
 
     # … und beim Laden stehen sie wieder in den Feldern, inklusive Sichtbarkeit.
     app._apply_config_to_widgets(saved)
+    app.wizard.go(appmod.STEP_PRINT, check=False)
     app.update_idletasks()
     assert app.printmode_section.margin_vars["margin_bottom"].get() == "8"
     assert app.printmode_section.margin_frame.winfo_ismapped()
@@ -910,6 +912,7 @@ def test_wheel_over_table_scrolls_the_page_at_the_end(app, tmp_path):
     scrollen kann — sonst hinge die Seite fest, sobald der Zeiger über der
     Tabelle steht (sie ist das größte Element der Oberfläche)."""
     _load(app, tmp_path)  # 3 Zeilen -> Tabelle ist nicht scrollbar
+    app.wizard.go(appmod.STEP_CARDS, check=False)  # die Vorschau steht auf Schritt 4
     app.update()
     tree = app.preview.tree
 
@@ -951,12 +954,15 @@ def test_page_wheel_handles_platform_deltas(app):
     assert scrolled == [-1, 1]
 
 
-def test_goto_section_scrolls(app, tmp_path):
+def test_goto_section_switches_to_its_step(app, tmp_path):
+    """„Gehe zu Abschnitt" springt im Assistenten auf den Schritt, auf dem der
+    Abschnitt steht — ohne Pflichtprüfung, damit man überall hinkommt."""
     _load(app, tmp_path)
-    app.update()
-    app._goto_section(10)  # Ausgabe ganz unten
-    app.update()
-    assert app.body.canvas.yview()[0] > 0.0
+    for number, step in appmod.SECTION_STEP.items():
+        app._goto_section(number)
+        app.update()
+        assert app.wizard.index == step
+        assert app._sections[number].winfo_ismapped()
 
 
 def _help_marks(app) -> dict[int, tk.Misc]:
@@ -974,7 +980,7 @@ def test_every_section_has_a_help_mark(app):
     assert {mark.cget("text") for mark in marks.values()} == {"?"}
     # Der Titel selbst bleibt sichtbar (der Text ist ins Label gewandert).
     title = app.output_section.frame.nametowidget(str(app.output_section.frame.cget("labelwidget")))
-    assert title.winfo_children()[0].cget("text") == "11. Ausgabe"
+    assert title.winfo_children()[0].cget("text") == "Ausgabe"
 
 
 def test_help_mark_opens_its_chapter(app):
@@ -1095,9 +1101,10 @@ def test_required_legend_sits_below_the_sections(app, tmp_path):
     _load(app, tmp_path)
     app.update_idletasks()
     star, text = app.required_legend.winfo_children()
-    assert str(star.cget("style")) == "Required.TLabel"  # gleiche Farbe wie an den Feldern
+    # Gleiche Signalfarbe wie an den Feldern (eigener Style nur wegen der Fläche).
+    assert str(star.cget("style")) == "NavRequired.TLabel"
     assert "Pflichtfeld" in text.cget("text")
-    assert app.required_legend.master is app  # nicht im Scrollbereich
+    assert app.required_legend.master is app.wizard.nav  # nicht im Scrollbereich
     assert app.required_legend.winfo_rooty() > app.body.outer.winfo_rooty()
     assert app.required_legend.winfo_rooty() < app.status.frame.winfo_rooty()
 
@@ -1215,16 +1222,15 @@ def _enable_mostwanted(app, result):
     return refresh
 
 
-def test_mostwanted_spans_the_full_width_like_the_remarks(app):
-    """Abschnitt 7 liegt über die ganze Breite zwischen Lookups und Bemerkungen
-    (vom Nutzer so gewünscht, „lang gezogen wie Abschnitt 8")."""
+def test_mostwanted_is_as_wide_as_the_remarks(app):
+    """Abschnitt 7 steht auf Schritt 4 unter den Bemerkungen und ist genauso
+    breit („lang gezogen wie Abschnitt 8", vom Nutzer so gewünscht)."""
+    app.wizard.go(appmod.STEP_CARDS, check=False)
     app.update_idletasks()
     most_wanted, remarks = app.mostwanted_section.frame, app.remarks_section.frame
-    lookups = app.lookup_section.frame
     assert most_wanted.winfo_rootx() == remarks.winfo_rootx()
     assert most_wanted.winfo_width() == remarks.winfo_width()
-    assert lookups.winfo_rooty() + lookups.winfo_height() <= most_wanted.winfo_rooty()
-    assert most_wanted.winfo_rooty() + most_wanted.winfo_height() <= remarks.winfo_rooty()
+    assert remarks.winfo_rooty() + remarks.winfo_height() <= most_wanted.winfo_rooty()
     assert app._sections[7] is most_wanted
 
 
