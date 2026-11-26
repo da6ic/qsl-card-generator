@@ -13,6 +13,7 @@ import sys
 from logging.handlers import RotatingFileHandler
 
 from qslcards import paths
+from qslcards.redact import RedactingFilter
 
 # Größe der Protokolldatei, bevor sie umgeschichtet wird, und Anzahl der
 # aufbewahrten Sicherungen.
@@ -49,6 +50,8 @@ def _prepare_frozen_runtime() -> None:
     except OSError:  # Nur-Lese-Medium o. Ä. — kein Grund, nicht zu starten.
         return
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    # Sicherheitsnetz: keine Zugangsdaten in der Protokolldatei (qslcards.redact).
+    handler.addFilter(RedactingFilter())
     logging.basicConfig(level=logging.INFO, handlers=[handler])
 
 

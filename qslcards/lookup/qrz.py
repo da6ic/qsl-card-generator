@@ -27,6 +27,7 @@ from xml.etree import ElementTree as ET
 import requests
 
 from qslcards.lookup.base import LookupResult, normalize_dxcc
+from qslcards.redact import describe_error
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,12 @@ class QRZClient:
         try:
             return self._lookup(call, allow_reauth=True)
         except Exception as exc:  # nie fatal
-            logger.warning("QRZ-Lookup für %s fehlgeschlagen: %s", call, exc)
+            # Die URL in der Meldung trägt `password=…` (siehe qslcards.redact).
+            logger.warning(
+                "QRZ-Lookup für %s fehlgeschlagen: %s",
+                call,
+                describe_error(exc, self._password, self._session_key),
+            )
             return None
 
     # -- interne Helfer ----------------------------------------------------

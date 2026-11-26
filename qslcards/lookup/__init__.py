@@ -30,6 +30,7 @@ from qslcards.lookup.base import (
 from qslcards.lookup.cache import LookupCache
 from qslcards.lookup.hamqth import HamQTHClient
 from qslcards.lookup.qrz import QRZClient
+from qslcards.redact import describe_error
 
 logger = logging.getLogger(__name__)
 
@@ -285,7 +286,10 @@ def lookup_calls(
     try:
         lookup = build_lookup(credentials, cache_path, auth_error_cb=auth_error_cb)
     except Exception as exc:  # nie fatal
-        logger.warning("Lookup konnte nicht initialisiert werden: %s", exc)
+        logger.warning(
+            "Lookup konnte nicht initialisiert werden: %s",
+            describe_error(exc, credentials.hamqth_pass, credentials.qrz_pass),
+        )
         return {call: None for call in unique}
 
     total = len(unique)
@@ -293,7 +297,11 @@ def lookup_calls(
         try:
             results[call] = lookup.lookup(call, force=force)
         except Exception as exc:  # defensiv; lookup() fängt eigentlich alles ab
-            logger.warning("Lookup für %s fehlgeschlagen: %s", call, exc)
+            logger.warning(
+                "Lookup für %s fehlgeschlagen: %s",
+                call,
+                describe_error(exc, credentials.hamqth_pass, credentials.qrz_pass),
+            )
             results[call] = None
         if progress_cb is not None:
             progress_cb(done, total)
