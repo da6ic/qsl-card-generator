@@ -347,6 +347,11 @@ class App(tk.Tk):
         self._wire_autosave()
         self._init_mostwanted()
         self.after(POLL_MS, self._poll_config)
+        if self._config_problem:
+            # Gerettete Fassung gleich wieder als gültige Datei ablegen, damit
+            # ein Absturz direkt danach nicht wieder bei der kaputten landet.
+            self._write_config()
+            self.after_idle(self._report_config_problem)
 
     # ---------------------------------------------------------------- UI
     def _build_ui(self) -> None:
@@ -585,15 +590,21 @@ class App(tk.Tk):
         """Liest `config.yaml` (ersatzweise die Beispieldatei); Defaults sonst.
 
         Wird vor dem UI-Aufbau gebraucht (Farbthema, Icon, „Zuletzt verwendet"),
-        deshalb getrennt vom Setzen der Widget-Werte.
+        deshalb getrennt vom Setzen der Widget-Werte. Eine beschädigte Datei
+        bringt den Start nicht mehr zum Absturz: `cfg.load_safely` greift auf
+        die Sicherung zurück, die Meldung zeigt `_report_config_problem`.
         """
-        for path in (CONFIG_PATH, EXAMPLE_CONFIG_PATH):
-            if Path(path).exists():
-                try:
-                    return cfg.load(path)
-                except (OSError, ValueError):  # kaputte Datei -> Defaults
-                    break
-        return AppConfig()
+        result = cfg.load_safely(CONFIG_PATH, EXAMPLE_CONFIG_PATH)
+        self._config_problem = result.problem
+        return result.config
+
+    def _report_config_problem(self) -> None:
+        problem = getattr(self, "_config_problem", None)
+        if not problem:
+            return
+        self._config_problem = None
+        self.status.set("Einstellungen waren beschädigt (siehe Hinweis)", "error")
+        messagebox.showwarning("Einstellungen beschädigt", problem, parent=self)
 
     def _apply_config_to_widgets(self, config: AppConfig) -> None:
         # Programmatisches Setzen darf keinen Auto-Save auslösen.
@@ -809,7 +820,14 @@ class App(tk.Tk):
     def _reload_from_file(self) -> None:
         try:
             config = cfg.load(CONFIG_PATH)
-        except OSError:
+        except (OSError, cfg.ConfigError) as exc:
+            # Extern halb geschrieben oder von Hand verdorben: die Einstellungen
+            # im Fenster bleiben gültig. mtime merken, sonst meldet der nächste
+            # Poll alle 1,5 s dasselbe; der nächste Auto-Save repariert die Datei.
+            self._last_mtime = self._config_mtime()
+            self.status.set(
+                f"Config-Datei nicht lesbar, behalte die aktuellen Werte ({exc})", "error"
+            )
             return
         previous_theme = self.base_config.appearance.theme
         self.base_config = config

@@ -1360,3 +1360,56 @@ def test_mostwanted_settings_are_saved(app):
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+# -- Beschädigte config.yaml (Bewertung 1.2) --------------------------------
+
+
+def _make_app(tmp_path, monkeypatch):
+    monkeypatch.setattr(appmod, "CONFIG_PATH", str(tmp_path / "config.yaml"))
+    monkeypatch.setattr(appmod, "EXAMPLE_CONFIG_PATH", str(tmp_path / "missing.yaml"))
+    monkeypatch.setattr(appmod, "MOSTWANTED_PATH", str(tmp_path / "mostwanted.json"))
+    monkeypatch.setattr(appmod, "CTY_PATH", str(tmp_path / "cty.dat"))
+    monkeypatch.setattr(appmod, "WAVELOG_SENT_PATH", str(tmp_path / "wavelog_sent.json"))
+    monkeypatch.setattr(
+        appmod.dxcc,
+        "refresh",
+        lambda stored, bundled, numbers, **_kw: appmod.dxcc.CtyRefreshResult(
+            appmod.dxcc.load(stored, bundled, numbers)
+        ),
+    )
+    try:
+        return appmod.App()
+    except tk.TclError as exc:
+        pytest.skip(f"kein Tk-Display: {exc}")
+
+
+def test_start_with_half_written_config_uses_backup(tmp_path, monkeypatch):
+    path = tmp_path / "config.yaml"
+    good = cfg.AppConfig()
+    good.sender.callsign = "DL1ABC"
+    cfg.save(good, path)
+    cfg.save(good, path)  # legt config.yaml.bak an
+    path.write_text("sender:\n  callsign: DL1A", encoding="utf-8")
+    path.write_text("sender: [kaputt\n", encoding="utf-8")
+    shown: list[str] = []
+    monkeypatch.setattr(appmod.messagebox, "showwarning", lambda t, m, **k: shown.append(m))
+    application = _make_app(tmp_path, monkeypatch)
+    try:
+        application.update()
+        assert application.sender_section.vars["callsign"].get() == "DL1ABC"
+        assert shown and "Sicherung" in shown[0]
+        # Die Datei ist sofort wieder gültig und trägt die geretteten Werte.
+        assert cfg.load(path).sender.callsign == "DL1ABC"
+        assert (tmp_path / "config.yaml.defekt").exists()
+    finally:
+        application.destroy()
+
+
+def test_external_broken_write_keeps_current_values(app):
+    app.sender_section.vars["callsign"].set("DL1ABC")
+    app._write_config()
+    Path(appmod.CONFIG_PATH).write_text("", encoding="utf-8")
+    app._reload_from_file()  # darf nicht werfen
+    assert app.sender_section.vars["callsign"].get() == "DL1ABC"
+    assert app._last_mtime == app._config_mtime()

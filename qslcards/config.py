@@ -6,11 +6,26 @@ genannten Defaults aufgefüllt, unbekannte Felder ignoriert.
 
 from __future__ import annotations
 
+import logging
+import os
+import shutil
+import tempfile
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any, TypeVar
 
 import yaml
+
+logger = logging.getLogger(__name__)
+
+
+class ConfigError(ValueError):
+    """Die Config-Datei ist da, aber unbrauchbar (leer, halb geschrieben, kein YAML).
+
+    Unterklasse von `ValueError`, damit ältere `except ValueError` weiter greifen.
+    `yaml.YAMLError` selbst ist **keine** `ValueError` — ohne diese Übersetzung
+    brachte eine halb geschriebene Datei den Programmstart zum Absturz.
+    """
 
 
 @dataclass
@@ -234,9 +249,26 @@ CONFIG_HEADER = "# Diese Datei verwaltet das Programm selbst — bitte nicht von
 
 
 def load(path: str | Path) -> AppConfig:
-    """Lädt die YAML-Config und füllt fehlende Felder mit Defaults auf."""
+    """Lädt die YAML-Config und füllt fehlende Felder mit Defaults auf.
+
+    Wirft `OSError` (nicht lesbar) oder `ConfigError` (leer/kein YAML/keine
+    Zuordnung). Eine **leere** Datei ist ein Fehler, kein „alles Standard":
+    `save` schreibt nie eine leere Datei, eine leere ist also abgebrochen
+    geschrieben — und still als Standard gelesen, hätte der nächste Auto-Save
+    Rufzeichen und Adresse endgültig gelöscht.
+    """
     with open(path, encoding="utf-8") as fh:
-        data = yaml.safe_load(fh) or {}
+        text = fh.read()
+    if not text.strip():
+        raise ConfigError(f"{path} ist leer")
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise ConfigError(f"{path} ist kein gültiges YAML: {exc}") from exc
+    if data is None:  # nur Kommentare, z. B. bloß die Kopfzeile
+        raise ConfigError(f"{path} enthält keine Einstellungen")
+    if not isinstance(data, dict):
+        raise ConfigError(f"{path} hat ein unerwartetes Format")
 
     return AppConfig(
         sender=_from_dict(SenderConfig, data.get("sender")),
@@ -250,13 +282,124 @@ def load(path: str | Path) -> AppConfig:
     )
 
 
+def backup_path(path: str | Path) -> Path:
+    """`config.yaml` -> `config.yaml.bak` (die letzte gute Fassung)."""
+    path = Path(path)
+    return path.with_name(path.name + ".bak")
+
+
+def damaged_path(path: str | Path) -> Path:
+    """`config.yaml` -> `config.yaml.defekt` (Kopie einer unlesbaren Datei)."""
+    path = Path(path)
+    return path.with_name(path.name + ".defekt")
+
+
+@dataclass
+class LoadResult:
+    """Ergebnis von `load_safely`: was geladen wurde und was dabei schiefging."""
+
+    config: AppConfig
+    # Für den Anwender formuliert; None = alles in Ordnung.
+    problem: str | None = None
+    from_backup: bool = False
+
+
+def load_safely(path: str | Path, fallback: str | Path | None = None) -> LoadResult:
+    """Lädt `path`, bei Defekt die Sicherung `.bak`, sonst `fallback`/Defaults.
+
+    Nie eine Ausnahme: der Programmstart darf an einer Datei nicht scheitern.
+    Eine defekte Datei wird vorher nach `.defekt` kopiert — der nächste
+    Auto-Save überschreibt sie, und so bleibt nachvollziehbar, was drin stand.
+    """
+    path = Path(path)
+    if not path.exists():
+        if fallback is not None and Path(fallback).exists():
+            try:
+                return LoadResult(load(fallback))
+            except (OSError, ConfigError) as exc:
+                logger.warning("Beispiel-Config nicht lesbar: %s", exc)
+        return LoadResult(AppConfig())
+
+    try:
+        return LoadResult(load(path))
+    except (OSError, ConfigError) as exc:
+        reason = str(exc)
+    logger.warning("Config nicht lesbar: %s", reason)
+    try:
+        shutil.copy2(path, damaged_path(path))
+    except OSError:
+        pass
+
+    bak = backup_path(path)
+    if bak.exists():
+        try:
+            config = load(bak)
+        except (OSError, ConfigError) as exc:
+            logger.warning("Auch die Sicherung ist nicht lesbar: %s", exc)
+        else:
+            return LoadResult(
+                config,
+                problem=(
+                    f"Die Einstellungen ({path.name}) waren beschädigt. Die letzte "
+                    f"Sicherung ({bak.name}) wurde geladen. Die beschädigte Datei "
+                    f"liegt als {damaged_path(path).name} daneben."
+                ),
+                from_backup=True,
+            )
+    return LoadResult(
+        AppConfig(),
+        problem=(
+            f"Die Einstellungen ({path.name}) waren beschädigt und es gibt keine "
+            f"lesbare Sicherung. Das Programm startet mit leeren Angaben. Die "
+            f"beschädigte Datei liegt als {damaged_path(path).name} daneben."
+        ),
+    )
+
+
+def atomic_write_text(path: str | Path, text: str) -> None:
+    """Schreibt `text` so, dass `path` nie halb geschrieben zurückbleibt.
+
+    Erst in eine temporäre Datei im **selben** Ordner (sonst ist `os.replace`
+    kein atomarer Umbenenner), `fsync`, dann ersetzen. Fällt mittendrin der
+    Strom aus, liegt am Ziel entweder die alte oder die neue Fassung.
+    """
+    path = Path(path)
+    fd, tmp = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
+    try:
+        try:  # Rechte der bisherigen Datei übernehmen (mkstemp legt 0600 an)
+            os.chmod(tmp, path.stat().st_mode & 0o777)
+        except OSError:
+            pass
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def save(config: AppConfig, path: str | Path) -> None:
-    """Schreibt die Config als YAML, mit der Warnung als erster Zeile."""
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write(CONFIG_HEADER)
-        yaml.safe_dump(
-            asdict(config),
-            fh,
-            allow_unicode=True,
-            sort_keys=False,
-        )
+    """Schreibt die Config als YAML, mit der Warnung als erster Zeile.
+
+    Atomar (`atomic_write_text`). Vorher wird die bisherige Datei als `.bak`
+    gesichert — aber nur, wenn sie selbst lesbar ist: eine kaputte Datei darf
+    die letzte gute Sicherung nicht überschreiben.
+    """
+    text = CONFIG_HEADER + yaml.safe_dump(asdict(config), allow_unicode=True, sort_keys=False)
+    path = Path(path)
+    if path.exists():
+        try:
+            load(path)
+        except (OSError, ConfigError):
+            pass
+        else:
+            try:
+                shutil.copy2(path, backup_path(path))
+            except OSError as exc:  # Sicherung ist Kür, Speichern Pflicht
+                logger.warning("Config-Sicherung nicht angelegt: %s", exc)
+    atomic_write_text(path, text)

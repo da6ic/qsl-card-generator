@@ -125,11 +125,101 @@ def test_unknown_fields_ignored(tmp_path: Path):
     assert not hasattr(c.sender, "bogus_field")
 
 
-def test_empty_file_uses_all_defaults(tmp_path: Path):
+def test_empty_file_is_an_error_not_defaults(tmp_path: Path):
+    """Eine leere Datei ist abgebrochen geschrieben (Bewertung 1.2).
+
+    Früher wurde sie still als „alles Standard" gelesen — und der nächste
+    Auto-Save hätte die Absenderdaten endgültig gelöscht.
+    """
     empty = tmp_path / "empty.yaml"
     empty.write_text("", encoding="utf-8")
-    c = cfg.load(empty)
-    assert c == cfg.AppConfig()
+    with pytest.raises(cfg.ConfigError):
+        cfg.load(empty)
+    header_only = tmp_path / "header.yaml"
+    header_only.write_text(cfg.CONFIG_HEADER, encoding="utf-8")
+    with pytest.raises(cfg.ConfigError):
+        cfg.load(header_only)
+
+
+def _saved_config(tmp_path: Path, callsign: str) -> Path:
+    c = cfg.AppConfig()
+    c.sender.callsign = callsign
+    path = tmp_path / "config.yaml"
+    cfg.save(c, path)
+    return path
+
+
+def test_half_written_yaml_raises_config_error(tmp_path: Path):
+    path = _saved_config(tmp_path, "DL1ABC")
+    text = path.read_text(encoding="utf-8")
+    path.write_text(text[: len(text) // 3] + '\n  name: "unterbro', encoding="utf-8")
+    with pytest.raises(cfg.ConfigError):
+        cfg.load(path)
+    # Bestehender Code fängt `ValueError` — das muss weiter greifen.
+    assert issubclass(cfg.ConfigError, ValueError)
+
+
+def test_save_keeps_previous_version_as_backup(tmp_path: Path):
+    path = _saved_config(tmp_path, "DL1ABC")
+    assert not cfg.backup_path(path).exists()  # erste Fassung: nichts zu sichern
+    c = cfg.load(path)
+    c.sender.callsign = "DL2XYZ"
+    cfg.save(c, path)
+    assert cfg.load(cfg.backup_path(path)).sender.callsign == "DL1ABC"
+    assert cfg.load(path).sender.callsign == "DL2XYZ"
+
+
+def test_broken_file_never_overwrites_good_backup(tmp_path: Path):
+    path = _saved_config(tmp_path, "DL1ABC")
+    cfg.save(cfg.load(path), path)  # .bak = DL1ABC
+    path.write_text("", encoding="utf-8")  # Absturz beim Schreiben
+    cfg.save(cfg.AppConfig(), path)
+    assert cfg.load(cfg.backup_path(path)).sender.callsign == "DL1ABC"
+
+
+@pytest.mark.parametrize("damage", ["", "sender: [kaputt\n", "nur ein text"])
+def test_load_safely_falls_back_to_backup(tmp_path: Path, damage: str):
+    path = _saved_config(tmp_path, "DL1ABC")
+    cfg.save(cfg.load(path), path)
+    path.write_text(damage, encoding="utf-8")
+    result = cfg.load_safely(path)
+    assert result.from_backup
+    assert result.config.sender.callsign == "DL1ABC"
+    assert result.problem and "Sicherung" in result.problem
+    assert cfg.damaged_path(path).read_text(encoding="utf-8") == damage
+
+
+def test_load_safely_without_backup_starts_with_defaults(tmp_path: Path):
+    path = tmp_path / "config.yaml"
+    path.write_text("sender: [kaputt\n", encoding="utf-8")
+    result = cfg.load_safely(path)
+    assert result.config == cfg.AppConfig()
+    assert not result.from_backup
+    assert result.problem and "keine" in result.problem
+
+
+def test_load_safely_missing_file_uses_fallback_silently(tmp_path: Path):
+    example = tmp_path / "example.yaml"
+    c = cfg.AppConfig()
+    c.sender.callsign = "EX4MPL"
+    cfg.save(c, example)
+    result = cfg.load_safely(tmp_path / "config.yaml", example)
+    assert result.problem is None
+    assert result.config.sender.callsign == "EX4MPL"
+
+
+def test_atomic_write_keeps_old_file_on_failure(tmp_path: Path, monkeypatch):
+    path = _saved_config(tmp_path, "DL1ABC")
+    before = path.read_text(encoding="utf-8")
+
+    def boom(*_a, **_k):
+        raise OSError("Platte voll")
+
+    monkeypatch.setattr(cfg.os, "replace", boom)
+    with pytest.raises(OSError):
+        cfg.save(cfg.AppConfig(), path)
+    assert path.read_text(encoding="utf-8") == before
+    assert not list(tmp_path.glob("*.tmp"))
 
 
 # -- Aussehen + „Zuletzt verwendet" ----------------------------------------
