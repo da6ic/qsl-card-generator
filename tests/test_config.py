@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from qslcards import config as cfg
+from qslcards import fileio
 
 EXAMPLE = Path(__file__).resolve().parent.parent / "config.example.yaml"
 
@@ -215,7 +216,7 @@ def test_atomic_write_keeps_old_file_on_failure(tmp_path: Path, monkeypatch):
     def boom(*_a, **_k):
         raise OSError("Platte voll")
 
-    monkeypatch.setattr(cfg.os, "replace", boom)
+    monkeypatch.setattr(fileio.os, "replace", boom)
     with pytest.raises(OSError):
         cfg.save(cfg.AppConfig(), path)
     assert path.read_text(encoding="utf-8") == before

@@ -151,9 +151,13 @@ def is_printable(
     Beide Bedingungen müssen gelten: ein aktiver Zustellweg über der
     Trennlinie (`effective_via`) **und** — wenn der Most-Wanted-Filter an ist
     (`mostwanted` nicht None) — ein DXCC-Gebiet unter den ersten N. Ein
-    unbekanntes Gebiet besteht den Filter nicht. Einzige Quelle der Wahrheit
+    unbekanntes Gebiet besteht den Filter nicht. Karten schon gesendeter QSOs
+    (`card.already_sent`) sind nie vorausgewählt. Einzige Quelle der Wahrheit
     für die Vorschau; der Export druckt genau, was dort „Ja" ist.
     """
+    if card.already_sent:
+        # Nachdruck nur auf ausdrücklichen Wunsch (Zeile in der Vorschau anhaken).
+        return False
     if effective_via(card, active_priority) is None:
         return False
     if mostwanted is None:
@@ -283,6 +287,11 @@ def normalize_station_cards(cards: list[Card]) -> list[Card]:
             flush()  # laufenden No-Remarks-Block abschließen
             result.extend(regroup_card_by_remarks(card))
         else:
+            # Nachdruck-Karten (schon gesendet) nie mit neuen zusammenlegen.
+            if buffer and template.already_sent != card.already_sent:
+                flush()
+            if not buffer:
+                template = card
             buffer.extend(card.rows)
     flush()
     return result

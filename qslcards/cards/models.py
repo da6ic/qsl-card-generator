@@ -50,3 +50,6 @@ class Card:
     # ADIF-DXCC-Nummer der Gegenstation (Log vor Lookup) für den Most-Wanted-
     # Filter; None = unbekannt. Steht NICHT auf der Karte.
     dxcc: int | None = None
+    # Karte für schon gesendete QSOs (bewusster Nachdruck, Vorschau „Schon
+    # gesendete anzeigen"): standardmäßig NICHT drucken, nie erneut markieren.
+    already_sent: bool = False

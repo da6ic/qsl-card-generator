@@ -33,6 +33,12 @@ from qslcards.config import (
     WavelogConfig,
     push_recent,
 )
+from qslcards.controllers.lookup_runner import (
+    LookupOutcome,
+    LookupProgress,
+    LookupRunner,
+    format_eta,
+)
 from qslcards.logbook import LogFormatError, parse_file, qsl_already_sent
 from qslcards.lookup import (
     DEFAULT_CACHE_PATH,
@@ -282,6 +288,10 @@ class App(tk.Tk):
 
         # Zustand
         self.qsos: list = []
+        # Schon gesendete QSOs (QSL_SENT = Y bzw. selbst in Wavelog markiert):
+        # bekommen keine Karte, außer der Nutzer blendet sie für einen
+        # bewussten Nachdruck ein (Vorschau „Schon gesendete anzeigen").
+        self.sent_qsos: list = []
         self._thumb: ImageTk.PhotoImage | None = None
         # Basis-Config für Felder, die nicht in der GUI editierbar sind
         # (default_via, static_footer, program_id, page_orientation) sowie für
@@ -299,7 +309,14 @@ class App(tk.Tk):
 
         # Lookup-Zustand: Map CALL -> LookupResult|None (Via/Manager/Adresse).
         self.lookups: dict = {}
-        self._lookup_running = False
+        # Hintergrund-Lookups mit Generation/Abbruch (Bewertung 1.4). Thread und
+        # lookup_calls werden erst beim Aufruf aufgelöst, damit Tests beides
+        # über das Modul ersetzen können.
+        self._lookups = LookupRunner(
+            lambda fn, *args: self.after(0, fn, *args),
+            lookup=lambda *a, **kw: lookup_calls(*a, **kw),
+            thread_factory=lambda **kw: threading.Thread(**kw),
+        )
         self._generating = False
 
         # Most-Wanted-Rangliste (Abschnitt 7): die gespeicherte bzw. zuletzt
@@ -572,6 +589,8 @@ class App(tk.Tk):
         self.remarks_section.remarks_entry.bind("<FocusOut>", self._on_remarks_commit)
         # „Neu abrufen": fehlende/abgebrochene Stationen erneut nachschlagen.
         self.preview.refresh_btn.config(command=self._refresh_lookups)
+        self.preview.cancel_btn.config(command=self._cancel_lookups)
+        self.preview.show_sent.trace_add("write", self._on_show_sent_toggle)
         # Nach einer Via-Bearbeitung die Drucken-Markierung der Zeile nachziehen.
         self.preview.on_cell_edited = self._on_cell_edited
 
@@ -890,7 +909,8 @@ class App(tk.Tk):
             self.status.set(f"Logbuch nicht verwertbar: {exc}", "error")
             return
         # Schon gesendete Karten (QSL_SENT = Y) bekommen keine neue.
-        sent = sum(1 for q in qsos if qsl_already_sent(q))
+        self.sent_qsos = [q for q in qsos if qsl_already_sent(q)]
+        sent = len(self.sent_qsos)
         self.qsos = [q for q in qsos if not qsl_already_sent(q)]
         self.qsos_source = "file"
         self._pending_marks = []
@@ -901,7 +921,8 @@ class App(tk.Tk):
         self._remember_recent("logs", path)
         # Frische Lookups: alte Ergebnisse verwerfen und automatisch neu abrufen.
         self.lookups = {}
-        self._start_lookups([q.call for q in self.qsos])
+        self._update_show_sent()
+        self._start_lookups(self._lookup_calls_needed())
 
     # ------------------------------------------------------------ Bild
     def _choose_image(self) -> None:
@@ -959,16 +980,56 @@ class App(tk.Tk):
         rule = self._mostwanted_filter()
         return lambda card: mostwanted_rank(card, rule)
 
+    def _visible_qsos(self) -> list:
+        """Die QSOs, für die Karten gebaut werden: offene plus — falls
+        eingeblendet — die schon gesendeten."""
+        if self.preview.show_sent.get():
+            return [*self.qsos, *self.sent_qsos]
+        return list(self.qsos)
+
+    def _update_show_sent(self) -> None:
+        """Beschriftung/Zustand von „Schon gesendete anzeigen" nachziehen."""
+        count = len(self.sent_qsos)
+        check = self.preview.show_sent_check
+        check.configure(
+            text=f"Schon gesendete anzeigen ({count})" if count else "Schon gesendete anzeigen",
+            state="normal" if count else "disabled",
+        )
+        if not count and self.preview.show_sent.get():
+            self.preview.show_sent.set(False)
+
+    def _on_show_sent_toggle(self, *_args) -> None:
+        """Gesendete ein-/ausgeblendet: Karten neu bauen; fehlende Lookups holen."""
+        if self.preview.show_sent.get():
+            missing = [
+                q.call for q in self.sent_qsos if (q.call or "").strip().upper() not in self.lookups
+            ]
+            if missing:
+                # Alle offenen mitgeben: ein laufender Lookup wird durch diesen
+                # ersetzt, der Cache macht die schon geholten sofort wieder gültig.
+                self._start_lookups(self._lookup_calls_needed())
+                return
+        self._rebuild_cards()
+
+    def _build_all_cards(self) -> list:
+        """Karten der offenen QSOs plus (eingeblendet) eigene Karten der schon
+        gesendeten — nie gemischt, damit eine Nachdruck-Karte nicht neue QSOs
+        mitnimmt und umgekehrt."""
+        config = self._gather_config()
+        resolve = self.cty.dxcc if self.cty is not None else None
+        cards = build_cards(self.qsos, config, self.lookups, resolve_dxcc=resolve)
+        if self.preview.show_sent.get() and self.sent_qsos:
+            again = build_cards(self.sent_qsos, config, self.lookups, resolve_dxcc=resolve)
+            for card in again:
+                card.already_sent = True
+            cards += again
+        return cards
+
     def _rebuild_cards(self) -> None:
-        if not self.qsos:
+        if not self.qsos and not (self.sent_qsos and self.preview.show_sent.get()):
             self.preview.set_cards([])
             return
-        cards = build_cards(
-            self.qsos,
-            self._gather_config(),
-            self.lookups,
-            resolve_dxcc=self.cty.dxcc if self.cty is not None else None,
-        )
+        cards = self._build_all_cards()
         self.preview.set_cards(
             cards,
             included=self._included_default,
@@ -1140,83 +1201,98 @@ class App(tk.Tk):
             program_id=self.base_config.lookup.program_id,
         )
 
+    @property
+    def _lookup_running(self) -> bool:
+        return self._lookups.running
+
     def _start_lookups(self, calls: list[str], *, force: bool = False) -> None:
         """Schlägt `calls` im Hintergrund nach (Via/Manager/Adresse).
 
         Ohne Zugangsdaten passiert kein Netzcall: alle Via fallen auf den
-        Standard. Während des Laufs ist „PDF erzeugen" gesperrt.
+        Standard. Während des Laufs ist „PDF erzeugen" gesperrt. Läuft schon
+        ein Lookup (z. B. für das vorige Log), wird er abgebrochen und dieser
+        startet direkt danach; dessen Ergebnisse werden verworfen (1.4).
         """
-        if self._lookup_running or not calls:
+        if not calls:
+            if self._lookup_running:
+                self._lookups.cancel()
             self._rebuild_cards()
             return
         credentials = self._lookup_credentials()
         if not has_lookup_credentials(credentials):
+            if self._lookups.busy:
+                self._lookups.cancel()
             self._lookup_signature = None
             self._rebuild_cards()
             self.preview.set_status("Keine Lookup-Zugangsdaten – Via = Standard.")
             self._update_generate_state()
             return
 
-        self._lookup_running = True
         self._lookup_signature = self._credential_signature()
+        self._lookups.start(
+            calls,
+            credentials,
+            force=force,
+            on_done=self._lookups_done,
+            on_progress=self._lookups_progress,
+        )
         self._rebuild_cards()  # zeigt „…" für Via/Route
         self.preview.set_status("Schlage Stationen nach…")
         self.status.set("Schlage Stationen nach…", "busy")
-        self.preview.refresh_btn.config(state="disabled")
+        self._update_lookup_buttons()
         self._update_generate_state()
 
-        thread = threading.Thread(
-            target=self._lookups_worker,
-            args=(list(calls), credentials, force),
-            daemon=True,
-        )
-        thread.start()
+    def _update_lookup_buttons(self) -> None:
+        running = self._lookup_running
+        self.preview.refresh_btn.config(state="disabled" if running else "normal")
+        self.preview.cancel_btn.config(state="normal" if running else "disabled")
+
+    def _cancel_lookups(self) -> None:
+        """„Abbrechen": laufenden Lookup stoppen; Gefundenes bleibt erhalten."""
+        if self._lookups.cancel():
+            self.preview.set_status("Breche Lookup ab…")
+
+    def _lookup_calls_needed(self) -> list[str]:
+        """Alle Rufzeichen der angezeigten QSOs (inkl. eingeblendeter gesendeter)."""
+        return [q.call for q in self._visible_qsos()]
 
     def _refresh_lookups(self) -> None:
         """„Neu abrufen": offene (nicht aufgelöste) Stationen erneut versuchen;
         sind alle aufgelöst, wird ein vollständiger Force-Refresh gemacht."""
         if self._lookup_running or not self.qsos:
             return
-        unresolved = [
-            q.call for q in self.qsos if self.lookups.get((q.call or "").strip().upper()) is None
-        ]
-        self._start_lookups(unresolved or [q.call for q in self.qsos], force=True)
+        calls = self._lookup_calls_needed()
+        unresolved = [c for c in calls if self.lookups.get((c or "").strip().upper()) is None]
+        self._start_lookups(unresolved or calls, force=True)
 
-    def _lookups_worker(self, calls, credentials, force) -> None:
-        def progress(done: int, total: int) -> None:
-            self.after(0, self.preview.set_status, f"Schlage Stationen nach… {done}/{total}")
+    def _lookups_progress(self, progress: LookupProgress) -> None:
+        eta = format_eta(progress.eta_seconds)
+        text = f"Schlage Stationen nach… {progress.done}/{progress.total}"
+        self.preview.set_status(f"{text} · {eta}" if eta else text)
 
-        # Je Anbieter nur die erste Meldung — sonst stünde sie einmal pro Station da.
-        auth_errors: dict[str, str] = {}
-
-        def auth_error(provider: str, message: str) -> None:
-            auth_errors.setdefault(provider, message)
-
-        # lookup_calls fängt Netz-/Auth-Fehler ab (nie fatal).
-        results = lookup_calls(
-            calls,
-            credentials,
-            force=force,
-            progress_cb=progress,
-            auth_error_cb=auth_error,
-        )
-        self.after(0, self._lookups_done, results, auth_errors)
-
-    def _lookups_done(self, results: dict, auth_errors: dict | None = None) -> None:
-        self._lookup_running = False
-        self.lookups.update(results)
+    def _lookups_done(self, outcome: LookupOutcome) -> None:
+        self.lookups.update(outcome.results)
         self._rebuild_cards()
-        self.preview.refresh_btn.config(state="normal")
+        self._update_lookup_buttons()
         self._update_generate_state()
 
-        auth_errors = auth_errors or {}
+        auth_errors = outcome.auth_errors
         self.lookup_section.mark_auth_failed(auth_errors)
         if auth_errors:
             self._report_auth_errors(auth_errors)
             return
 
-        total = len({(q.call or "").strip().upper() for q in self.qsos if q.call})
-        found = sum(1 for r in self.lookups.values() if r is not None)
+        calls = {(q.call or "").strip().upper() for q in self._visible_qsos() if q.call}
+        total = len(calls)
+        found = sum(1 for c in calls if self.lookups.get(c) is not None)
+        if outcome.cancelled:
+            text = (
+                f"Lookup abgebrochen – {found}/{total} Stationen gefunden. "
+                "„Neu abrufen“ holt den Rest."
+            )
+            self.preview.set_status(text)
+            self.status.set(text, "error")
+            return
         self.preview.set_status(f"Lookup fertig – {found}/{total} Stationen gefunden.")
         self.status.set(f"Lookup fertig – {found}/{total} Stationen gefunden.", "ok")
 
@@ -1388,7 +1464,8 @@ class App(tk.Tk):
         """
         if index == STEP_SOURCE:
             kind = self.source_section.kind.get()
-            if not self.qsos or self.qsos_source != kind:
+            loaded = self.qsos or self.sent_qsos
+            if not loaded or self.qsos_source != kind:
                 if kind == "wavelog":
                     return "Bitte zuerst Station wählen und „QSOs laden“."
                 return "Bitte zuerst ein Logbuch laden."
@@ -1433,14 +1510,14 @@ class App(tk.Tk):
     def _maybe_restart_lookups(self) -> None:
         """Nach Schritt 3: wurden (andere) Zugangsdaten eingegeben, als beim
         Laden des Logs da waren, jetzt neu nachschlagen."""
-        if not self.qsos or self._lookup_running:
+        if not self.qsos and not self.sent_qsos:
             return
         if not has_lookup_credentials(self._lookup_credentials()):
             return
         if self._lookup_signature == self._credential_signature():
             return
         self.lookups = {}
-        self._start_lookups([q.call for q in self.qsos])
+        self._start_lookups(self._lookup_calls_needed())
 
     # --------------------------------------------------------- Wavelog
     def _wavelog_client(self) -> wavelog.WavelogClient:
@@ -1559,33 +1636,54 @@ class App(tk.Tk):
         # meldet, und was dieses Programm selbst dort markiert hat (falls die
         # Instanz den Status beim Abruf nicht mitliefert).
         total = len(qsos)
-        marked = sent_store.load(WAVELOG_SENT_PATH, self._wavelog_api())
+        api = self._wavelog_api()
+        warnings: list[str] = []
+        store_broken = False
+        try:
+            marked = sent_store.load(WAVELOG_SENT_PATH, api)
+            pending = sent_store.load_pending(WAVELOG_SENT_PATH, api)
+        except sent_store.SentStoreError as exc:
+            # Nie still weitermachen: ohne die Liste fehlt das Sicherheitsnetz.
+            marked, pending, store_broken = set(), [], True
+            warnings.append(
+                f"Die Liste der hier markierten QSOs ist beschädigt ({exc}). Sie wird "
+                "nicht überschrieben; bis zur Reparatur fehlt das Sicherheitsnetz."
+            )
         status_known = reports_qsl_sent(qsos)
-        qsos = [
-            q
-            for q in qsos
-            if not paper_qsl_already_sent(q) and q.raw.get("wavelog_id") not in marked
-        ]
-        skipped = total - len(qsos)
-        self.qsos = qsos
+
+        def sent(q) -> bool:
+            return paper_qsl_already_sent(q) or q.raw.get("wavelog_id") in marked
+
+        self.sent_qsos = [q for q in qsos if sent(q)]
+        self.qsos = [q for q in qsos if not sent(q)]
+        skipped = len(self.sent_qsos)
         self.qsos_source = "wavelog"
-        self._pending_marks = []
+        self._sent_store_broken = store_broken
+        # Offene Markierungen aus einem früheren Druck (auch nach Neustart).
+        self._pending_marks = [wavelog.PaperQslMark(m.qso_id, m.via) for m in pending]
         self._prefill_sender_from_station(station)
         note = f" ({skipped} schon gesendet, ausgelassen)" if skipped else ""
-        self.wavelog_section.count_var.set(f"{len(qsos)} QSOs geladen{note}")
-        self.status.set_info(f"{len(qsos)} QSOs · Wavelog {station.callsign}")
-        if status_known or not total:
-            self.status.set(f"Wavelog: {len(qsos)} QSOs geladen{note}.", "ok")
-        else:
-            self.status.set(
-                "Wavelog meldet den Versandstatus nicht mit – ausgelassen werden nur "
-                "die hier markierten QSOs.",
-                "busy",
+        self.wavelog_section.count_var.set(f"{len(self.qsos)} QSOs geladen{note}")
+        self.status.set_info(f"{len(self.qsos)} QSOs · Wavelog {station.callsign}")
+        if total and not status_known:
+            warnings.append(
+                f"Achtung: Diese Wavelog-Instanz meldet den Versandstatus nicht mit. "
+                f"Ausgelassen werden nur die {len(marked)} QSO(s), die dieses Programm "
+                f"selbst markiert hat. Wurden QSOs in Wavelog von Hand oder von einem "
+                f"anderen Rechner als gesendet gesetzt, stehen sie unter den "
+                f"{len(self.qsos)} geladenen und würden noch einmal gedruckt."
             )
+        self.wavelog_section.set_warning("\n\n".join(warnings), error=store_broken)
+        if warnings:
+            self.status.set("Wavelog: QSOs geladen – bitte Hinweis in Schritt 1 beachten.", "error")
+        else:
+            self.status.set(f"Wavelog: {len(self.qsos)} QSOs geladen{note}.", "ok")
         self.wizard.show_hint("")
         self.wizard.refresh()
         self.lookups = {}
-        self._start_lookups([q.call for q in self.qsos])
+        self._update_show_sent()
+        self._update_mark_state()
+        self._start_lookups(self._lookup_calls_needed())
 
     def _prefill_sender_from_station(self, station: wavelog.WavelogStation) -> None:
         """Leere Absenderfelder mit den Daten des Wavelog-Standorts füllen
@@ -1605,7 +1703,13 @@ class App(tk.Tk):
         priority = self._active_via_priority()
         marks: dict[str, wavelog.PaperQslMark] = {}
         for card in cards:
+            if card.already_sent:
+                continue  # Nachdruck: in Wavelog schon gesendet
             route = effective_via(card, priority)
+            if route not in ("B", "D"):
+                # eQSL/LoTW sind keine Papierkarten: nie als „Papier-QSL
+                # gesendet" markieren (Bewertung 2.2).
+                continue
             if card.via_text and route == "B":
                 via = "M"  # über QSL-Manager
             else:
@@ -1614,6 +1718,19 @@ class App(tk.Tk):
                 if row.qso_id:
                     marks[row.qso_id] = wavelog.PaperQslMark(row.qso_id, via)
         return list(marks.values())
+
+    def _save_pending_marks(self) -> None:
+        """Offene Markierungen in `wavelog_sent.json` sichern (überlebt Neustart)."""
+        if self.qsos_source != "wavelog" or getattr(self, "_sent_store_broken", False):
+            return
+        try:
+            sent_store.set_pending(
+                WAVELOG_SENT_PATH,
+                self._wavelog_api(),
+                [sent_store.PendingMark(m.qso_id, m.via) for m in self._pending_marks],
+            )
+        except (OSError, sent_store.SentStoreError) as exc:
+            self.status.set(f"Offene Markierungen nicht gesichert: {exc}", "error")
 
     def _update_mark_state(self) -> None:
         section = self.wavelog_mark_section
@@ -1627,7 +1744,13 @@ class App(tk.Tk):
         (nach Rückfrage — die PDF könnte ja nur ein Probedruck sein)."""
         if self.qsos_source != "wavelog":
             return
-        self._pending_marks = self._marks_for(getattr(self, "_generated_cards", []))
+        # Zu den noch offenen aus früheren Drucken dazu, und sofort sichern:
+        # „erst Probedruck" + Programm schließen verliert sie sonst (2.2).
+        merged = {m.qso_id: m for m in self._pending_marks}
+        for mark in self._marks_for(getattr(self, "_generated_cards", [])):
+            merged[mark.qso_id] = mark
+        self._pending_marks = list(merged.values())
+        self._save_pending_marks()
         self._update_mark_state()
         if not self._pending_marks or not self.wavelog_mark_section.mark_sent.get():
             return
@@ -1667,11 +1790,21 @@ class App(tk.Tk):
             # aktuellen Sitzung nehmen: gesendete Karten werden nie neu gedruckt.
             try:
                 sent_store.add(WAVELOG_SENT_PATH, self._wavelog_api(), done_ids)
-            except OSError as exc:
+            except (OSError, sent_store.SentStoreError) as exc:
                 self.status.set(f"Liste der gesendeten QSOs nicht speicherbar: {exc}", "error")
+                messagebox.showwarning(
+                    "Liste nicht gespeichert",
+                    "Die QSOs sind in Wavelog markiert, aber die lokale Liste "
+                    f"({Path(WAVELOG_SENT_PATH).name}) konnte nicht gespeichert "
+                    f"werden:\n\n{exc}",
+                    parent=self,
+                )
             gone = set(done_ids)
+            newly_sent = [q for q in self.qsos if q.raw.get("wavelog_id") in gone]
             self.qsos = [q for q in self.qsos if q.raw.get("wavelog_id") not in gone]
+            self.sent_qsos += newly_sent
             self._pending_marks = [m for m in self._pending_marks if m.qso_id not in gone]
+            self._update_show_sent()
             self._rebuild_cards()
             self.wavelog_section.count_var.set(f"{len(self.qsos)} offene QSOs")
         if errors:
@@ -1697,9 +1830,9 @@ class App(tk.Tk):
         """
         log = self.file_section.path_var.get().strip()
         if self.qsos_source == "wavelog":
-            log_missing = not self.qsos
+            log_missing = not self._visible_qsos()
         else:
-            log_missing = not self.qsos or not log or not Path(log).exists()
+            log_missing = not self._visible_qsos() or not log or not Path(log).exists()
             self.file_section.set_missing(log_missing)
 
         front = self.image_section.path_var.get().strip()

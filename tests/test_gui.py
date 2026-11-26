@@ -841,10 +841,10 @@ def test_print_margins_survive_autosave(app, tmp_path):
 
 
 def test_menu_generate_entry_follows_button_state(app, tmp_path):
-    app._lookup_running = True
-    app._update_generate_state()
-    assert str(app.output_section.generate_btn["state"]) == "disabled"
-    app._lookup_running = False
+    running = mock.PropertyMock(return_value=True)
+    with mock.patch.object(appmod.LookupRunner, "running", running):
+        app._update_generate_state()
+        assert str(app.output_section.generate_btn["state"]) == "disabled"
     app._update_generate_state()
     assert str(app.output_section.generate_btn["state"]) == "normal"
 

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 
@@ -259,6 +260,7 @@ def lookup_calls(
     force: bool = False,
     progress_cb: Callable[[int, int], None] | None = None,
     auth_error_cb: Callable[[str, str], None] | None = None,
+    cancel: threading.Event | None = None,
 ) -> dict[str, LookupResult | None]:
     """Schlägt alle (eindeutigen) Rufzeichen nach → Map `CALL -> LookupResult|None`.
 
@@ -294,6 +296,11 @@ def lookup_calls(
 
     total = len(unique)
     for done, call in enumerate(unique, start=1):
+        if cancel is not None and cancel.is_set():
+            # Abgebrochen (Nutzer oder neues Log): was bis hier geholt ist, steht
+            # im Cache; der Rest fehlt im Ergebnis (nicht `None` = „nicht gefunden").
+            logger.info("Lookup nach %d/%d Rufzeichen abgebrochen.", done - 1, total)
+            break
         try:
             results[call] = lookup.lookup(call, force=force)
         except Exception as exc:  # defensiv; lookup() fängt eigentlich alles ab

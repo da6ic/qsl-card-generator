@@ -1183,7 +1183,18 @@ class WavelogSection:
         ttk.Label(f, textvariable=self.count_var, style="Muted.TLabel").grid(
             row=7, column=2, columnspan=2, padx=GAP_COL, sticky="w"
         )
+        # Gut sichtbare Warnung (Bewertung 1.3): z. B. wenn die Instanz den
+        # Versandstatus nicht mitliefert. Leer = unsichtbar (kein Platzhalter).
+        self.warning_var = tk.StringVar(value="")
+        self.warning_label = ttk.Label(
+            f, textvariable=self.warning_var, style="Warning.TLabel", wraplength=640
+        )
+        self.warning_label.grid(row=8, column=0, columnspan=4, pady=(GAP_ROW, 0), sticky="w")
         f.columnconfigure(2, weight=1)
+
+    def set_warning(self, text: str, *, error: bool = False) -> None:
+        self.warning_var.set(text)
+        self.warning_label.configure(style="Danger.TLabel" if error else "Warning.TLabel")
 
     def set_stations(self, stations, selected_id: int = 0) -> None:
         """Füllt das Dropdown; wählt `selected_id` bzw. die aktive Station vor."""

@@ -25,6 +25,7 @@ import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
+from qslcards.fileio import atomic_write_text
 from qslcards.lookup.base import LookupResult
 
 logger = logging.getLogger(__name__)
@@ -57,10 +58,9 @@ class LookupCache:
     def save(self) -> None:
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            self._path.write_text(
-                json.dumps(self._entries, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
+            # Atomar: ein Absturz mitten im Schreiben ließ sonst eine halbe
+            # Datei zurück, und der nächste Start verwarf den ganzen Cache.
+            atomic_write_text(self._path, json.dumps(self._entries, ensure_ascii=False, indent=2))
         except OSError as exc:
             logger.warning("Cache konnte nicht gespeichert werden (%s): %s", self._path, exc)
 

@@ -108,6 +108,16 @@ class PreviewTable:
         ttk.Label(header, textvariable=self.status_var, style="Muted.TLabel").pack(side="left")
         self.refresh_btn = ttk.Button(header, text="Neu abrufen")
         self.refresh_btn.pack(side="right")
+        # Lookup abbrechen (Bewertung 2.4); nur während eines Laufs aktiv.
+        self.cancel_btn = ttk.Button(header, text="Abbrechen", state="disabled")
+        self.cancel_btn.pack(side="right", padx=(0, GAP_COL))
+        # Bewusster Nachdruck (Bewertung 1.3): schon gesendete QSOs einblenden,
+        # ihre Zeilen stehen auf „Drucken: Nein" und werden einzeln angehakt.
+        self.show_sent = tk.BooleanVar(value=False)
+        self.show_sent_check = ttk.Checkbutton(
+            header, text="Schon gesendete anzeigen", variable=self.show_sent
+        )
+        self.show_sent_check.pack(side="right", padx=(0, GAP_COL * 2))
 
         # Icons laden (als Attribut halten gegen Garbage Collection). Schlägt das
         # Laden fehl (alte Tk-Version, fehlende Datei), bleibt es None und die
@@ -511,6 +521,10 @@ class PreviewTable:
         values[0] = "Ja" if included else "Nein"
         self.tree.item(iid, values=values)
         self._restripe()
+
+    def all_cards(self) -> list[Card]:
+        """Alle Karten der Tabelle in Baum-Reihenfolge (gedruckt oder nicht)."""
+        return [self._rows[iid][0] for iid in self.tree.get_children() if iid in self._rows]
 
     def included_cards(self) -> list[Card]:
         # Baum-Reihenfolge (nicht Insertionsreihenfolge): die erzeugte PDF folgt so
