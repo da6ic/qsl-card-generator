@@ -36,7 +36,8 @@ from qslcards.logbook import QSO  # noqa: E402
 from qslcards.pdf.generator import generate  # noqa: E402
 from qslcards.pdf.geometry import SHEET_MODE_A4_4UP, SHEET_MODE_SINGLE  # noqa: E402
 
-DEFAULT_IMAGE = ROOT / "Bild.jpg"
+# Kleines Beispielbild (früher das 3,2-MB-Original `Bild.jpg` im Projektwurzel).
+DEFAULT_IMAGE = ROOT / "docs" / "beispielbild.jpg"
 
 
 def _qso(call: str, time: str, freq: str, mode: str, rst: str) -> QSO:

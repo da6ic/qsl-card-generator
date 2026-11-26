@@ -59,3 +59,10 @@ __pycache__/
 # Liegt hier nur zum Nachschlagen; übernommen sind Regeln und Nummerntabelle
 # (siehe qslcards/dxcc/).
 /dxcc-filter/
+
+# Sicherungen, die das Programm selbst anlegt (siehe config.save, seit 0.4.0)
+config.yaml.bak
+config.yaml.defekt
+*.tmp
+# Bericht von scripts/wavelog_check.py (Instanzdaten)
+wavelog_check_bericht.json

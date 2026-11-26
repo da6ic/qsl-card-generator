@@ -1,0 +1,17 @@
+# Gleiche Prüfung wie .gitlab-ci.yml, falls das Projekt auf GitHub liegt.
+name: tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb
+      - run: uv python install 3.12
+      - run: uv venv -p 3.12 --python-preference only-managed .venv
+      - run: uv pip install -p .venv -e ".[dev]"
+      - run: .venv/bin/python -c "import tkinter; assert tkinter.TkVersion >= 9.0"
+      - run: .venv/bin/python -m ruff check qslcards tests scripts
+      - run: .venv/bin/python -m black --check qslcards tests scripts
+      - run: xvfb-run -a .venv/bin/python -m pytest -q -p no:cacheprovider

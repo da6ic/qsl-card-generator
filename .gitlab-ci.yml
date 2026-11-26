@@ -1,0 +1,26 @@
+# Tests + Ruff bei jedem Push (Bewertung 3.3).
+#
+# Wichtig ist Tk 9: unter Tk 8.6 scheitern Menü-Tests, und die SVG-Symbole der
+# Vorschau fehlen. Das Debian-Python im Image bringt nur Tk 8.6 mit, deshalb
+# holt `uv` ein eigenständiges CPython (python-build-standalone, Tk 9).
+stages: [test]
+
+test:
+  stage: test
+  image: ghcr.io/astral-sh/uv:python3.12-bookworm
+  variables:
+    UV_PYTHON_PREFERENCE: only-managed
+    UV_CACHE_DIR: .uv-cache
+  cache:
+    key: uv-$CI_COMMIT_REF_SLUG
+    paths: [.uv-cache]
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq xvfb xauth libx11-6 >/dev/null
+    - uv python install 3.12
+    - uv venv -p 3.12 .venv
+    - uv pip install -p .venv -e ".[dev]" pytest-cov
+    - .venv/bin/python -c "import tkinter; assert tkinter.TkVersion >= 9.0, tkinter.TkVersion"
+  script:
+    - .venv/bin/python -m ruff check qslcards tests scripts
+    - .venv/bin/python -m black --check qslcards tests scripts
+    - xvfb-run -a .venv/bin/python -m pytest -q -p no:cacheprovider
