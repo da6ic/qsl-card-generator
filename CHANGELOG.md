@@ -49,8 +49,12 @@ Freigabe erst nach dem Test gegen eine echte Wavelog-Instanz
 - Fehlende Pflichtangaben: kein Popup mehr, die Leiste unten nennt sie.
 - `Bild.jpg` (3,2 MB) aus dem Repository entfernt, kleines Beispielbild unter
   `docs/`.
-- Intern: Zustand und Lookup-Ablauf ohne Tk (`qslcards/controllers/`),
-  `gui/desktop.py`, `gui/scrollframe.py` aus `app.py` herausgelöst.
+- Intern: `gui/app.py` aufgeteilt (1.943 -> ~950 Zeilen). Zustand, Lookup,
+  Most Wanted, Wavelog, Druck und config.yaml laufen ohne Tk
+  (`qslcards/controllers/`, eigene Tests ohne Xvfb); Feld<->Config-Abbildung in
+  `gui/config_form.py`; die Fensterteile in `gui/app_cards.py`,
+  `app_lookup.py`, `app_wavelog.py`, `app_print.py`; dazu `gui/desktop.py`,
+  `gui/scrollframe.py`, `gui/steps.py`.
 
 ## [0.3.1]
 Stand vor QR-Code, Assistent und Wavelog (Commit `2f9936f`).

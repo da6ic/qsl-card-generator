@@ -70,6 +70,11 @@ qslcards/
   controllers/            # Abläufe OHNE Tk (testbar ohne Xvfb)
     session.py            # SessionState (QSOs/gesendete/Lookups/Markierungen)
     lookup_runner.py      # Hintergrund-Lookup: Generation, Warteschlange, Abbruch
+    background.py         # run_in_background(schedule, work, done)
+    config_file.py        # config.yaml lesen/speichern/mtime-Überwachung
+    mostwanted_flow.py    # GDXF-Liste + cty.dat: laden, abrufen, Statuszeile
+    wavelog_flow.py       # Client, Abruf, Sicherheitsnetz (wavelog_sent.json)
+    print_job.py          # PDF-Erzeugung im Hintergrund
   wavelog/
     client.py             # API v2: Stationen, QSOs, PATCH qsl_sent (429/Retry)
     sent_store.py         # wavelog_sent.json: selbst markierte + offene IDs
@@ -108,7 +113,13 @@ qslcards/
     generator.py          # orchestriert die Gesamt-PDF (alle Karten)
   gui/
     __init__.py
-    app.py                # Hauptfenster + Assistent, verdrahtet alles
+    app.py                # Hauptfenster: Aufbau, Verdrahtung, Config, Logbuch/Bild
+    app_cards.py          #   Mixin: Karten bauen, Drucken-Markierung, Most Wanted
+    app_lookup.py         #   Mixin: Lookups anstoßen/anzeigen, Schlüsselbund
+    app_wavelog.py        #   Mixin: Wavelog-Knöpfe, Hinweise, Markieren
+    app_print.py          #   Mixin: Pflichtangaben, PDF erzeugen/öffnen
+    config_form.py        # Eingabefelder <-> AppConfig (apply/gather/watched_vars)
+    steps.py              # Schritte des Assistenten + SECTION_STEP
     wizard.py             # Schritt-Assistent (Kopfleiste, Seiten, Navigation)
     desktop.py            # Datei öffnen/zeigen, Programm-Icons
     scrollframe.py        # scrollbare Seite; set_fill() für die Vorschau
@@ -1293,6 +1304,16 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
   endet — nie zwei Threads gleichzeitig am Cache. `App._lookup_running` ist
   eine Eigenschaft darauf. Tests ersetzen weiter `appmod.threading.Thread` und
   `appmod.lookup_calls` (der Runner löst beide erst beim Aufruf auf).
+- **`app.py` ist aufgeteilt (Bewertung 3.1)**: Abläufe ohne Tk in
+  `controllers/` (eigene Tests in `tests/test_controllers.py`, ohne Xvfb),
+  Feld<->Config-Abbildung in `gui/config_form.py`, die Fensterteile als Mixins
+  `gui/app_*.py`. Was die Tests über `appmod` ersetzen (Pfade, `lookup_calls`,
+  `generate`, `open_file`, `messagebox`, `confirm`,
+  `ask_overwrite_manual_remarks`), bleibt in `app.py` und wird erst beim Aufruf
+  aufgelöst; die Mixins erreichen Dialoge nur über `self._messagebox`,
+  `self._confirm`, `self._ask_overwrite_remarks`, `self._open_file`. Ein
+  Mixin, das `messagebox` selbst importiert, entkommt den Test-Attrappen und
+  öffnet im Test echte Dialoge.
 - **Wavelog-Client**: `WavelogError.status/code` statt Textsuche; 429 ->
   `retry_after` abwarten (max. 5×), 0,5 s Abstand beim Markieren; Seitenlimit
   (`total_pages`, `MAX_PAGES`); `index.php` wird bei 404 einmal weggelassen,
