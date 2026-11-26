@@ -2,119 +2,265 @@
 
 Erzeugt aus einem Logbuch eine PDF mit QSL-Karten. Jede Karte besteht aus
 zwei A6-Seiten: einer Bild-Vorderseite (ein Bild für alle Karten) und einer
-Rückseite im DARC-QSL-Layout.
+Rückseite im DARC-QSL-Layout. Die QSOs kommen aus einer **ADIF- oder
+Cabrillo-Datei** oder **direkt aus Wavelog**; nach dem Druck markiert das
+Programm die Karten dort auf Wunsch als „Papier-QSL gesendet".
+
+Python + Tkinter, läuft unter Linux, Windows und macOS. Lizenz: **GPLv3**
+(siehe [`LICENSE`](LICENSE)).
+
+![Schritt 5 „Prüfen": Vorschau aller Karten](docs/screenshots/5-pruefen.png)
+
+## Inhalt
+
+- [Features](#features)
+- [Installation](#installation)
+- [Bedienung: der Assistent in sechs Schritten](#bedienung-der-assistent-in-sechs-schritten)
+- [Wavelog-Anbindung](#wavelog-anbindung)
+- [Lookups: QRZ und HamQTH](#lookups-qrz-und-hamqth)
+- [Entwickeln](#entwickeln)
+- [Bauen (auslieferbare Anwendung)](#bauen-auslieferbare-anwendung)
+- [Dokumentation](#dokumentation)
+- [Hinweise](#hinweise)
+- [Lizenz](#lizenz)
 
 ## Features
-- **Zwei Logformate**: ADIF (`.adi`, `.adif`) aus dem Log-Programm und
-  **Cabrillo** (`.cbr`, `.log`) aus dem Contest. Das Format wird am Inhalt
-  erkannt, nicht an der Endung. Eigene Parser, kein Fremd-Package.
-- Ein Frontbild (png/jpg/…) für alle Karten.
-- Rückseite exakt nach Referenz-Layout (`docs/CARD_LAYOUT.md`). Zu lange Werte
-  (Name, Antennenbezeichnung, Rufzeichen mit Präfix) werden **kleiner gesetzt,
-  nie abgeschnitten** — nichts läuft über seinen Nachbarn.
-- Absenderdaten aus der Config (im Programm eingetragen, nie aus dem Log).
-- QSO-Daten (Datum, UTC, Frequenz, Mode, Rapport) aus dem Log.
-- **Versandart (Via) je Station automatisch per Lookup bestimmt** (steht nicht im
-  Log): Der Lookup liefert die **Menge** akzeptierter Zustellwege — **B** Büro
-  (inkl. Manager), **D** Direkt, **Q** eQSL, **L** LOTW. In der GUI priorisiert
-  man diese Wege und zieht eine **Trennlinie**: Wege darüber werden gedruckt,
-  Wege darunter nicht. Gedruckt wird je Karte der höchstpriorisierte Weg, den die
-  Station akzeptiert; einzelne Karten lassen sich in der Vorschau von Hand
-  ab-/anwählen.
-- Modus wählbar: eine Karte **pro QSO** oder **pro Station**.
-- Druckmodus wählbar: **Duplex** (eine PDF) oder **getrennt** (zwei PDFs).
-- **Bogendruck**: wahlweise eine Karte je A6-Seite oder **vier Karten auf einem
-  A4-Bogen** (quer, 2×2) mit gestrichelten Schnitt-Hilfslinien; der einstellbare
-  Druckrand gilt dabei je Karte, jede geschnittene Karte hat ihn ringsum.
+
+- **Geführter Assistent** mit sechs Schritten — Quelle, Absender, Abfrage,
+  Gestalten, Prüfen, Druck. Es ist immer nur ein Schritt zu sehen; „Weiter"
+  sagt, was noch fehlt.
+- **Drei Quellen, ein Datenmodell**: ADIF (`.adi`, `.adif`), **Cabrillo**
+  (`.cbr`, `.log`) aus dem Contest — das Format wird am Inhalt erkannt, nicht an
+  der Endung, eigene Parser ohne Fremd-Package — oder **Wavelog über die API v2**.
+- **Schon gesendete QSLs bekommen keine Karte** (`QSL_SENT = Y`, auch bei
+  ADIF-Dateien; bei Wavelog zusätzlich die selbst markierten QSOs). Ein bewusster
+  Nachdruck geht über „Schon gesendete anzeigen" in der Vorschau.
+- **Rückseite exakt nach Referenz-Layout** (`docs/CARD_LAYOUT.md`). Zu lange
+  Werte (Name, Antennenbezeichnung, Rufzeichen mit Präfix) werden **kleiner
+  gesetzt, nie abgeschnitten**.
+- **Absenderdaten aus der Config** (im Programm eingetragen, nie aus dem Log);
+  QSO-Daten (Datum, UTC, Frequenz, Mode, Rapport) aus dem Log.
+- **Versandart (Via) je Station automatisch per Lookup** (QRZ/HamQTH): **B**
+  Büro (inkl. Manager), **D** Direkt, **Q** eQSL, **L** LoTW. Die Wege werden
+  priorisiert, eine **Trennlinie** legt fest, welche gedruckt werden.
+- Eine Karte **pro QSO** oder **pro Station**.
+- Druck als **Duplex** (eine PDF) oder **getrennt** (zwei PDFs), wahlweise
+  **vier Karten auf einem A4-Bogen** mit Schnitt-Hilfslinien; einstellbarer
+  Druckrand je Kante.
 - **DARC-QR-Code** (optional): rechts unten auf der Rückseite, 20 × 20 mm, mit
   Absender, Manager, Empfänger und den QSOs im Format von
   [DM2PF/QSL_QR_Label](https://github.com/DM2PF/QSL_QR_Label). Dann höchstens
   drei QSOs je Karte.
-- **Most-Wanted-Filter**: auf Wunsch nur Karten an die gesuchtesten DXCC-Gebiete
-  der **GDXF-Liste** ([gdxf.de/mostwanted](https://gdxf.de/mostwanted/)) — Top N,
-  wahlweise je Mode (CW/Phone/Digital) oder Mixed. Das Gebiet kommt aus dem
-  ADIF-Feld `DXCC`, sonst aus der mitgelieferten `cty.dat` von AD1C — damit auch
-  für Cabrillo-Logs und **ohne** Lookup-Zugangsdaten. Liste und `cty.dat` hält das
-  Programm selbst aktuell; die Vorschau zeigt den Rang in der Spalte „MW".
-- Lookup über QRZ (erste Wahl) / HamQTH (kostenlos) — **automatisch beim Log-Laden**
-  im Hintergrund, gecacht. Liefert Via, QSL-Manager (aufs Feld „Via:") und Adresse
-  (nur für optionalen Kuvert-/Label-Export, nicht auf der Karte).
-- **Menüleiste** (Datei / Bearbeiten / Aktionen / Ansicht / Hilfe) mit den
-  gewohnten Tastenkürzeln — ⌘ auf macOS, Strg unter Windows und Linux.
-- **Handbuch im Programm** (`Hilfe ▸ Handbuch`, F1 bzw. ⌘?): Kapitel zu jedem
-  Arbeitsschritt, links eine Kapitelliste, Verweise sind anklickbar. Jeder
-  Abschnitt der Oberfläche hat ein „?", das direkt sein Kapitel öffnet.
-- **Farbthema** in Hell und Dunkel; folgt standardmäßig dem Betriebssystem,
-  umschaltbar über „Ansicht → Farbthema".
+- **Most-Wanted-Filter**: auf Wunsch nur Karten an die gesuchtesten
+  DXCC-Gebiete der **GDXF-Liste** ([gdxf.de/mostwanted](https://gdxf.de/mostwanted/))
+  — Top N, je Mode oder Mixed. Das Gebiet kommt aus dem ADIF-Feld `DXCC`, sonst
+  aus der mitgelieferten `cty.dat` von AD1C — damit auch für Cabrillo und ohne
+  Lookup.
+- **Adress-/Label-Export** (CSV) für genau die gedruckten Karten.
+- **Zugangsdaten nie im Klartext auf der Platte**: Wavelog-Key und QRZ/HamQTH
+  gelten nur für die Sitzung oder liegen auf Wunsch im **Schlüsselbund** des
+  Systems. Passwörter und Tokens werden aus Protokoll und Fehlermeldungen
+  herausmaskiert.
+- **Harmonisches Farbschema** in Hell und Dunkel, aus einer Grundfarbe
+  abgeleitet; folgt standardmäßig dem Betriebssystem, umschaltbar über
+  „Ansicht ▸ Farbthema".
+- **Menüleiste** mit den gewohnten Tastenkürzeln (⌘ auf macOS, Strg sonst) und
+  ein **Handbuch im Programm** (`Hilfe ▸ Handbuch`, F1 bzw. ⌘?); jeder Bereich
+  hat ein „?", das direkt sein Kapitel öffnet.
 
-## Voraussetzungen
-- Python **3.11+** mit **Tkinter** und am besten **Tk 9** — mit Tk 8.6 läuft das
-  Programm auch, nur die Stift-/Schaltersymbole der Vorschautabelle fehlen dann
-  (ohne Fehlermeldung). Tkinter ist je nach System ein eigenes Paket:
+## Installation
 
-  | System | Python mit Tk 9 |
-  |---|---|
-  | macOS | Installer von [python.org](https://www.python.org/downloads/macos/) ab **3.14.7** (Tk 9 ist dabei) — oder Homebrew: `brew install python@3.14 python-tk@3.14` |
-  | Windows | Installer von python.org ab **3.14.7**, x64 (Tk 9 ist dabei) |
-  | Fedora 42+ | `sudo dnf install python3.14 python3.14-tkinter` (das Standard-`python3` bringt nur Tk 8.6) |
-
-  Prüfen: `python -c "import tkinter; print(tkinter.TkVersion)"` muss `9.0` ausgeben.
-- Ein Frontbild.
-
-## Schnellstart
-
-Im Projektordner (wichtig: `requirements.txt` installiert das Projekt selbst
-editierbar mit `-e .[dev]`):
+Gebraucht wird Python **3.11+** mit **Tkinter**, am besten mit **Tk 9**. Mit
+Tk 8.6 läuft das Programm auch, nur die Stift-/Schaltersymbole der
+Vorschautabelle fehlen dann (ohne Fehlermeldung). Prüfen:
 
 ```bash
-python3.14 -m venv .venv                     # bzw. python3.15, python -m venv … unter Windows
+python3 -c "import tkinter; print(tkinter.TkVersion)"
+```
+
+### Debian / Ubuntu (aus der Quelle, mit Menüeintrag)
+
+```bash
+sudo apt install python3-tk python3-venv python3-pip rsync git
+git clone https://github.com/da6ic/qsl-card-generator.git
+cd qsl-card-generator
+packaging/linux/install-from-source.sh
+```
+
+Das Skript kopiert den Quellstand nach `~/.local/opt/qsl-karten-generator`,
+legt dort eine eigene venv an und richtet den Starter
+`~/.local/bin/qsl-karten-generator`, einen **Menüeintrag** und die Symbole ein.
+Entwicklungsordner und installierte Fassung bleiben damit getrennt.
+
+- **Aktualisieren**: `git pull`, dann das Skript erneut aufrufen.
+  `config.yaml`, Lookup-Cache und `wavelog_sent.json` bleiben dabei stehen.
+- **Entfernen**: `packaging/linux/install-from-source.sh --uninstall` (fragt,
+  ob auch Einstellungen und Cache gelöscht werden sollen).
+- Anderer Zielordner: `INSTALL_DIR=/anderer/ordner packaging/linux/install-from-source.sh`,
+  anderer Interpreter: `PYTHON=python3.14 …`.
+
+Debian 12/13 liefert Tk 8.6 — das Skript weist am Ende darauf hin. Alles
+funktioniert, nur die Symbole der Vorschautabelle fehlen.
+
+### Windows
+
+1. Python **ab 3.14.7, x64** von [python.org](https://www.python.org/downloads/windows/)
+   installieren (erst ab dieser Punktversion ist Tk 9 dabei).
+2. Im Projektordner (Klon oder ZIP von GitHub) in PowerShell:
+
+   ```powershell
+   py -3.14 -m venv .venv
+   .venv\Scripts\python.exe -m pip install -r requirements.txt
+   .venv\Scripts\python.exe -m qslcards
+   ```
+
+Ein fertiges Programm ohne Python-Installation (ZIP mit
+`QSL-Karten-Generator.exe`) entsteht mit `packaging/windows/build.ps1`, siehe
+[Bauen](#bauen-auslieferbare-anwendung). Zum Entpacken einen beschreibbaren Ort
+wählen (Dokumente, Desktop, USB-Stick), nicht `C:\Programme`. Beim ersten Start
+meldet SmartScreen ein unbekanntes Programm: *Weitere Informationen ▸ Trotzdem
+ausführen*.
+
+### Andere Systeme (macOS, Fedora) und Entwicklung
+
+Im Projektordner (`requirements.txt` installiert das Projekt selbst editierbar
+mit `-e .[dev]`):
+
+```bash
+python3.14 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python -m qslcards                 # startet die GUI
 ```
 
-Unter Windows heißt der Interpreter im venv `.venv\Scripts\python.exe`.
+| System | Python mit Tk 9 |
+|---|---|
+| macOS | Installer von [python.org](https://www.python.org/downloads/macos/) ab **3.14.7** — oder Homebrew: `brew install python@3.14 python-tk@3.14` |
+| Fedora 42+ | `sudo dnf install python3.14 python3.14-tkinter` (das Standard-`python3` bringt nur Tk 8.6) |
 
-Absenderdaten, Zugangsdaten und alles Weitere trägt man **im Programmfenster**
-ein; die `config.yaml` entsteht dabei von selbst und wird bei jeder Änderung
-gespeichert. Von Hand bearbeitet wird sie nicht — `config.example.yaml` zeigt
-nur, wie sie aussieht. Die **Lookup-Zugangsdaten sind die Ausnahme**: sie werden
-nirgends gespeichert und gelten nur für die laufende Sitzung.
+### Wo die Daten liegen
 
-## Ablauf in der GUI
-Die Oberfläche ist ein **Schritt-Assistent** (`qslcards/gui/wizard.py`): es ist
-immer nur ein Schritt zu sehen, oben die Schrittleiste, unten Zurück/Weiter.
-„Weiter" prüft die Pflichtangaben des Schritts und sagt, was fehlt.
+Absenderdaten und alle Einstellungen trägt man **im Programmfenster** ein; die
+`config.yaml` entsteht dabei von selbst und wird bei jeder Änderung (atomar, mit
+Sicherung `config.yaml.bak`) gespeichert. Von Hand bearbeitet wird sie nicht —
+`config.example.yaml` zeigt nur, wie sie aussieht. Aus der Quelle gestartet
+liegen `config.yaml`, Lookup-Cache und `wavelog_sent.json` im Programmordner;
+beim gebündelten Programm im Benutzerordner des Systems, oder daneben, wenn dort
+eine `config.yaml` liegt (Portable-Modus). Einzelheiten: Handbuch, Kapitel
+„Wo liegen meine Dateien?".
 
-1. **Quelle** — Logbuch (ADIF/Cabrillo) laden *oder* „Direkt aus Wavelog":
-   URL + API-v2-Key, „Stationen laden", Station wählen, „QSOs laden"
-   (`qslcards/wavelog/`, braucht Wavelog ≥ 3.2.5). Schon gesendete QSLs
-   (`QSL_SENT = Y`, bzw. selbst markierte laut `wavelog_sent.json`) werden immer
-   ausgelassen.
-2. **Absender** — eigene Stationsdaten (leere Felder füllt der Wavelog-Standort).
-3. **Abfrage** — QRZ-/HamQTH-Zugangsdaten (jede Sitzung neu, nie gespeichert),
-   Zustellwege priorisieren, Kartenmodus. Neue Zugangsdaten starten beim
-   Verlassen des Schritts den Lookup neu.
-4. **Karten** — Frontbild, Bemerkungen, Most-Wanted-Filter, Vorschau (einzelne
-   Karten ab-/anwählen, Via/Route korrigieren, „Neu abrufen").
-5. **Druck** — Druckmodus (Duplex/getrennt, A4-Bogen, QR-Code, Seitenrand) und
-   „PDF erzeugen". Bei Wavelog-QSOs danach (mit Rückfrage) `qsl_sent = Y` samt
-   Datum und Weg per `PATCH /api/v2/qso/{id}` setzen.
+## Bedienung: der Assistent in sechs Schritten
 
-Das Farbschema (`gui/theme.py`) wird aus einer Grundfarbe abgeleitet
+Oben steht die Schrittleiste, unten „Zurück"/„Weiter". „Weiter" prüft die
+Pflichtangaben des Schritts und nennt alles Fehlende auf einmal; die Felder
+werden rot markiert. Pflicht (roter `*`) sind Logbuch bzw. Wavelog-QSOs,
+Frontbild und im Absender Rufzeichen, Name, Locator, DOK, CQ-Zone und ITU.
+
+1. **Quelle** — Logbuch (ADIF/Cabrillo) öffnen *oder* „Direkt aus Wavelog"
+   (siehe [Wavelog-Anbindung](#wavelog-anbindung)).
+2. **Absender** — eigene Stationsdaten, Funk-Ausrüstung, Bestätigungs-Markierung.
+   Rufzeichen, Locator und DOK werden großgeschrieben; eine Portabelkennung
+   gehört direkt ins Rufzeichen (`F/DL0MT/P`).
+3. **Abfrage** — QRZ-/HamQTH-Zugangsdaten, Zustellwege priorisieren
+   (Trennlinie), Kartenmodus pro QSO / pro Station. Der Lookup läuft im
+   Hintergrund, mit Fortschritt, Restzeit und „Abbrechen".
+4. **Gestalten** — Frontbild, Bemerkungen (max. 80 Zeichen, für alle Karten),
+   Most-Wanted-Filter.
+5. **Prüfen** — Vorschau aller Karten über die volle Fensterhöhe: Drucken
+   ja/nein, Via, Route/Manager und Remarks je Karte änderbar, Spalte „MW" für
+   den Most-Wanted-Rang, „Neu abrufen" und „Schon gesendete anzeigen".
+6. **Druck** — Duplex oder getrennt, A4-Bogen, DARC-QR-Code, Druckrand
+   (Erweiterte Einstellungen), Adress-/Label-Export, Ziel und **PDF erzeugen**.
+   Bei Wavelog-QSOs danach das Markieren als „Papier-QSL gesendet".
+
+Logbuch und Frontbild lassen sich auch über die Menüleiste öffnen
+(`Datei ▸ Logbuch öffnen…` / `Frontbild wählen…`, samt „Zuletzt
+verwendet"-Listen).
+
+| | |
+|---|---|
+| ![Schritt 3: Abfrage](docs/screenshots/3-abfrage.png) | ![Schritt 4: Gestalten](docs/screenshots/4-gestalten.png) |
+| Schritt 3: Zugangsdaten, Zustellwege, Kartenmodus | Schritt 4: Frontbild, Bemerkungen, Most Wanted |
+| ![Schritt 1: Wavelog](docs/screenshots/1-quelle-wavelog.png) | ![Schritt 6: Druck, dunkles Thema](docs/screenshots/6-druck-dunkel.png) |
+| Schritt 1: QSOs direkt aus Wavelog | Schritt 6: Druck und Wavelog-Markierung (dunkles Thema) |
+
+Die Farben (`qslcards/gui/theme.py`) werden aus einer Grundfarbe abgeleitet
 (`BASE_HUE`, Funk-Cyan 190°): Erfolg analog −60°, Gefahr/Warnung
 split-komplementär +150°/+210°, Neutraltöne im Grundton mit fester
 Helligkeitsleiter.
 
-Mit einem roten `*` markierte Angaben sind **Pflicht**: Logbuch, Frontbild und im
-Absender Rufzeichen, Name, Locator, DOK, CQ-Zone und ITU. Fehlt davon etwas,
-nennt ein Hinweis beim Erzeugen alles Fehlende auf einmal und markiert die
-betroffenen Felder.
+## Wavelog-Anbindung
 
-Logbuch und Frontbild lassen sich auch über die **Menüleiste** öffnen
-(`Datei ▸ Logbuch öffnen…` / `Frontbild wählen…`, samt „Zuletzt
-verwendet"-Listen).
+[Wavelog](https://www.wavelog.org) ist ein webbasiertes Logbuch. Der
+QSL-Karten-Generator spricht dessen **API v2** an (`qslcards/wavelog/`).
 
-> Der Bereich unten rechts auf der Rückseite (in der Vorlage das Logo) bleibt frei.
+**Voraussetzungen**
+
+- Wavelog **ab 3.2.5** (die API v2 gibt es ab 3.1, das Markieren als gesendet
+  erst ab 3.2.5).
+- Ein **API-v2-Token** (beginnt mit `wl2_`, in Wavelog unter den API-Keys des
+  Kontos) mit den Rechten `station:read`, `qso:read` und zum Markieren
+  `qso:write`.
+
+**Ablauf in Schritt 1 („Direkt aus Wavelog")**
+
+1. **Adresse** der Instanz und **API-Key** eintragen. Zeigt eine
+   `http://`-Adresse nicht ins Heimnetz, warnt das Programm (der Key ginge
+   unverschlüsselt übers Internet).
+2. **Stationen laden** und im Dropdown den Stationsstandort wählen (die aktive
+   Station steht oben mit ★).
+3. Optional einen **Zeitraum** (JJJJ-MM-TT) setzen, dann **QSOs laden**. Leere
+   Absenderfelder füllt das Programm aus dem Stationsstandort.
+
+QSOs, für die schon eine Papier-QSL gesendet wurde, werden **immer**
+ausgelassen. Zusätzlich merkt sich das Programm jedes selbst markierte QSO in
+`wavelog_sent.json` — so wird auch dann nichts doppelt gedruckt, wenn eine
+Instanz den Versandstatus beim Abruf nicht mitliefert (dann erscheint ein gelber
+Hinweis).
+
+**Nach dem Druck** (Schritt 6): Ist „als Papier-QSL gesendet markieren" an,
+fragt das Programm nach dem Erzeugen der PDF nach und setzt per
+`PATCH /api/v2/qso/{id}` *QSL gesendet = Ja*, das heutige Datum und den Weg
+(Büro, Direkt oder Manager). Abgelehnte Rückfragen lassen sich später mit
+**Jetzt markieren** nachholen, auch nach einem Neustart. Karten über **eQSL oder
+LoTW** werden nie als Papier-QSL markiert. Antwortet Wavelog mit 429 (zu viele
+Anfragen), wartet das Programm die verlangte Zeit ab.
+
+Der API-Key steht nie in der `config.yaml`; mit **Im Schlüsselbund merken**
+landet er im Schlüsselbund des Systems (Windows: Anmeldeinformationsverwaltung,
+macOS: Schlüsselbund, Linux: Secret Service, über das Paket `keyring`). Gibt es
+keinen, ist das Kästchen ausgegraut und der Key wird je Sitzung eingegeben.
+
+**Eine eigene Instanz prüfen** — `scripts/wavelog_check.py` lädt Stationen und
+QSOs, protokolliert, welche Felder die Instanz liefert (vor allem `qsl_sent`),
+und markiert nur mit `--mark-one ID` nach Rückfrage genau **ein** QSO. Der Token
+wird abgefragt (oder aus `WAVELOG_TOKEN` gelesen), nie als Argument übergeben:
+
+```bash
+.venv/bin/python scripts/wavelog_check.py https://log.example.org
+.venv/bin/python scripts/wavelog_check.py https://log.example.org --station 1
+.venv/bin/python scripts/wavelog_check.py https://log.example.org --station 1 --mark-one 4886
+```
+
+Der Bericht `wavelog_check_bericht.json` enthält keinen Token, keine
+Rufzeichenliste und keine Namen — nur Feldnamen, Zähler und ein anonymisiertes
+Beispiel-QSO. Zum Ausprobieren ohne echte Instanz gibt es
+`scripts/mock_wavelog.py`.
+
+## Lookups: QRZ und HamQTH
+
+- **QRZ wird zuerst gefragt, HamQTH danach — und die Ergebnisse werden
+  zusammengeführt.** QRZ liefert ohne bezahltes XML-Abo nur eingeschränkte Daten
+  und in keinem Fall die Zustellweg-Flags; HamQTH (kostenloses Konto) ist die
+  einzige Quelle dafür. Sind beide Zugangsdaten gesetzt, füllt HamQTH die Lücken
+  des QRZ-Treffers. Der Lookup dauert dann etwa doppelt so lange.
+- Der Lookup startet automatisch für alle Stationen, sobald Zugangsdaten da
+  sind, und wird gecacht (`lookup_cache.json`). Ohne Zugangsdaten gehen alle
+  Karten über das Büro (`default_via`).
+- Lookup-Fehler brechen die Erzeugung nie ab; eine abgelehnte Anmeldung wird
+  gemeldet und die Felder rot markiert.
+- Die Zugangsdaten gelten standardmäßig nur für die laufende Sitzung und werden
+  nie in die `config.yaml` geschrieben. Mit **Im Schlüsselbund merken** (Standard
+  aus) liegen sie im Schlüsselbund des Systems.
 
 ## Entwickeln
 
@@ -127,21 +273,25 @@ verwendet"-Listen).
 
 Vor jedem Commit müssen alle drei grün sein. Die GUI-Tests bauen das Fenster
 ohne Bedienung auf (unter Linux ohne Bildschirm überspringen sie sich), und
-**kein Test geht ins Netz** — Lookups, GDXF-Liste und `cty.dat` sind gemockt.
+**kein Test geht ins Netz** — Lookups, Wavelog, GDXF-Liste und `cty.dat` sind
+gemockt.
+
+**CI**: `.github/workflows/tests.yml` (GitHub Actions) und `.gitlab-ci.yml`
+laufen bei jedem Push und Pull Request: ruff, `black --check` und pytest unter
+Xvfb. Beide holen per `uv` ein eigenständiges Python 3.12 mit **Tk 9** und
+brechen ab, falls es nur Tk 8.6 ist — unter Tk 8.6 scheitern einige Menü-Tests.
 
 **Was bewusst nicht im Repository liegt** (gitignored, persönliche oder fremde
-Daten): die eigene `config.yaml` und der `lookup_cache.json` (Anschriften fremder
-Stationen), Logbücher (`*.adi`), die abgerufene `mostwanted.json`/`cty.dat` und
-erzeugte PDFs. Einige Tests vergleichen zusätzlich mit echten Logs (`Log.adi`,
-`beispiel-logs/cqww26.adi`); fehlen die Dateien, **überspringen** sie sich —
-alles andere läuft ohne sie. Wer das Projekt weitergibt, nimmt deshalb das
-Git-Repository (Klon oder `git bundle create qsl.bundle --all`), nicht eine
-Kopie des Arbeitsordners: darin lägen genau diese Dateien. `scripts/release.py`
-braucht außerdem Historie und Tags.
+Daten): die eigene `config.yaml`, `lookup_cache.json` (Anschriften fremder
+Stationen), `wavelog_sent.json`, Logbücher (`*.adi`), die abgerufene
+`mostwanted.json`/`cty.dat` und erzeugte PDFs. Einige Tests vergleichen
+zusätzlich mit echten Logs (`Log.adi`, `beispiel-logs/cqww26.adi`); fehlen die
+Dateien, **überspringen** sie sich. Wer das Projekt weitergibt, nimmt deshalb
+das Git-Repository, nicht eine Kopie des Arbeitsordners.
 
 Wie das Programm gebaut ist und warum, steht in `docs/SPECIFICATION.md`; die
 Arbeitsanleitung für Claude Code mit allen getroffenen Entscheidungen in
-`CLAUDE.md`.
+`CLAUDE.md`, die Änderungen je Version in `CHANGELOG.md`.
 
 ## Bauen (auslieferbare Anwendung)
 
@@ -248,19 +398,11 @@ Für die **Implementierung**:
 - `CLAUDE.md` — Leitfaden für die Umsetzung mit Claude Code.
 - `docs/SPECIFICATION.md` — Funktions-/Technik-Spezifikation.
 - `docs/CARD_LAYOUT.md` — exaktes Rückseiten-Layout.
+- `CHANGELOG.md` — Änderungen je Version.
+- `packaging/*/README.md` — Bauen und Prüfen je Plattform.
 
 ## Hinweise
-- **QRZ wird zuerst gefragt, HamQTH danach.** QRZ liefert ohne bezahltes XML-Abo
-  nur eingeschränkte Daten und in keinem Fall die Zustellweg-Flags; HamQTH
-  (kostenloses Konto) ist die einzige Quelle dafür. Sind beide Zugangsdaten
-  gesetzt, **füllt HamQTH die Lücken** des QRZ-Treffers — QRZ hat bei jedem Feld
-  Vorrang, das es selbst füllt. Der Lookup dauert dann etwa doppelt so lange, weil
-  fast jede Station bei beiden Anbietern angefragt wird. Lookup-Fehler brechen die
-  Erzeugung nie ab — betroffene Stationen fallen dann auf `default_via`.
-- Die Zugangsdaten beider Anbieter leben nur zur Laufzeit
-  (`lookup.LookupCredentials`) und werden nie in die `config.yaml` geschrieben —
-  ein Passwort im Klartext auf der Platte wäre für jeden lesbar, der an den
-  Rechner kommt.
+
 - Der Signalrapport auf der Karte ist `RST_SENT` (wie wir die Gegenstation gehört
   haben). In einem Contest-Log fehlt er oft ganz — viele Contests tauschen statt
   eines Rapports einen Locator oder eine Sektion aus; die Spalte bleibt dann leer.
@@ -270,6 +412,15 @@ Für die **Implementierung**:
   GDXF. Die `cty.dat` (AD1C, MIT-Lizenz, `qslcards/assets/dxcc/LICENSE-cty.txt`)
   liegt dagegen bei und wird nach 14 Tagen erneuert; die Nummerntabelle dazu
   stammt mit Einverständnis aus dem „DXCC-Filter" eines Vereinskollegen.
+- Der Bereich unten rechts auf der Rückseite (in der Vorlage das Logo) bleibt
+  frei — außer der DARC-QR-Code ist eingeschaltet.
 - Das Programm-Icon wird aus `qslcards/assets/icons/app_icon.svg` erzeugt. Nach
   einer Änderung am SVG die PNG/ICO/ICNS-Dateien neu rendern:
   `python scripts/make_icon.py`.
+
+## Lizenz
+
+GNU General Public License v3.0 — siehe [`LICENSE`](LICENSE). Mitgelieferte
+Fremddaten behalten ihre eigene Lizenz: die Schrift DejaVu Sans
+(`qslcards/assets/fonts/`) und die `cty.dat` von AD1C (MIT,
+`qslcards/assets/dxcc/LICENSE-cty.txt`).
