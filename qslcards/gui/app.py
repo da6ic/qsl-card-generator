@@ -7,7 +7,6 @@ ausschließlich über `self.after(...)` (Tkinter ist nicht thread-safe).
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 import threading
@@ -20,7 +19,7 @@ from PIL import Image, ImageTk
 
 from qslcards import __version__, dxcc, mostwanted, paths, wavelog
 from qslcards import config as cfg
-from qslcards.cards.builder import build_cards, effective_via, is_printable, mostwanted_rank
+from qslcards.cards.builder import build_cards, is_printable, mostwanted_rank
 from qslcards.config import (
     AppConfig,
     AppearanceConfig,
@@ -39,6 +38,7 @@ from qslcards.controllers.lookup_runner import (
     LookupRunner,
     format_eta,
 )
+from qslcards.controllers.session import SessionState, marks_for_cards
 from qslcards.logbook import LogFormatError, parse_file, qsl_already_sent
 from qslcards.lookup import (
     DEFAULT_CACHE_PATH,
@@ -60,10 +60,18 @@ from qslcards.wavelog.client import (
 )
 
 from . import theme
+from .desktop import (  # noqa: F401  (ICON_SIZES/load_icon: Tests, Altnamen)
+    ICON_DIR,
+    ICON_SIZES,
+    load_app_icons,
+    load_icon,
+    open_file,
+    reveal_in_file_manager,
+)
 from .help import HelpWindow, open_help
 from .menu import MenuActions, MenuBar
 from .preview import PreviewTable
-from .scrolling import bind_wheel, wheel_step
+from .scrollframe import ScrollableFrame
 from .sections import (
     SENDER_FIELDS,
     SENDER_LABELS,
@@ -148,51 +156,6 @@ DXCC_NUMBERS_PATH = str(paths.dxcc_numbers_path())
 # Selbst in Wavelog markierte QSOs (Sicherheitsnetz gegen Doppeldruck).
 WAVELOG_SENT_PATH = str(paths.wavelog_sent_path())
 
-# Fenster-/Programm-Icon: die von `scripts/make_icon.py` gerenderten PNGs.
-ICON_DIR = paths.resource_path("qslcards", "assets", "icons")
-# GRÖSSTE ZUERST: `wm iconphoto` auf macOS nimmt das erste Bild und skaliert es
-# auf die jeweils gebrauchte Größe. Steht dort ein kleines, wirkt das Dock-Icon
-# verpixelt. Windows/X11 suchen sich aus der Liste die passende Größe.
-ICON_SIZES = (1024, 512, 256, 128, 64, 48, 32, 16)
-
-
-def open_file(path: str) -> None:
-    """Öffnet `path` mit der Standardanwendung des Betriebssystems.
-
-    Plattformübergreifend (Windows, macOS, Linux/Debian). Fehler werden nach
-    oben gereicht, damit der Aufrufer bei Bedarf einen Hinweis anzeigen kann.
-
-    `env=paths.subprocess_env()`: im gebündelten Betrieb zeigen `LD_LIBRARY_PATH`
-    bzw. `DYLD_LIBRARY_PATH` in die Anwendung, und ein davon geerbtes `xdg-open`
-    lädt die falschen Bibliotheken.
-    """
-    if sys.platform.startswith("win"):
-        os.startfile(path)  # type: ignore[attr-defined]  # nur unter Windows
-    elif sys.platform == "darwin":
-        subprocess.run(["open", path], check=True, env=paths.subprocess_env())
-    else:
-        subprocess.run(["xdg-open", path], check=True, env=paths.subprocess_env())
-
-
-def reveal_in_file_manager(path: str) -> None:
-    """Zeigt `path` im Dateimanager (Finder/Explorer/Dateien) an.
-
-    macOS: `open -R` markiert die Datei; Windows: `explorer /select,`; Linux
-    (Debian/Fedora): es gibt keinen portablen „auswählen"-Aufruf, daher wird der
-    enthaltende Ordner geöffnet.
-    """
-    target = Path(path)
-    env = paths.subprocess_env()
-    if sys.platform == "darwin":
-        subprocess.run(["open", "-R", str(target)], check=True, env=env)
-    elif sys.platform.startswith("win"):
-        # explorer liefert auch im Erfolgsfall != 0 -> Rückgabewert ignorieren.
-        subprocess.run(["explorer", f"/select,{target}"], check=False, env=env)
-    else:
-        folder = target if target.is_dir() else target.parent
-        subprocess.run(["xdg-open", str(folder)], check=True, env=env)
-
-
 IMAGE_TYPES = [("Bilder", "*.png *.jpg *.jpeg *.webp"), ("Alle Dateien", "*.*")]
 LOG_TYPES = [
     ("Logbuch (ADIF/Cabrillo)", "*.adi *.adif *.cbr *.log"),
@@ -228,96 +191,12 @@ SAVE_DEBOUNCE_MS = 600  # Verzögerung nach der letzten Änderung vor dem Speich
 POLL_MS = 1500  # Intervall, in dem config.yaml auf externe Änderungen geprüft wird
 
 
-def load_icon(widget: tk.Misc, size: int) -> tk.PhotoImage | None:
-    """Lädt ein einzelnes Icon-PNG; fehlt es, gibt es `None` (nie fatal)."""
-    try:
-        return tk.PhotoImage(master=widget, file=str(ICON_DIR / f"app_icon_{size}.png"))
-    except (tk.TclError, OSError):
-        return None
-
-
-def load_app_icons(widget: tk.Misc) -> list[tk.PhotoImage]:
-    """Icon-Bilder für `wm iconphoto`, **größtes zuerst**.
-
-    Auf macOS bekommt Tk bewusst nur das größte Bild: die dortige Umsetzung
-    skaliert das erste übergebene Bild auf alle gebrauchten Größen, und aus
-    einem kleinen PNG wird dabei ein sichtbar verpixeltes Dock-Icon.
-    Windows/X11 dagegen profitieren von mehreren Größen, weil der
-    Fenstermanager sich die passende heraussucht.
-    """
-    sizes = ICON_SIZES[:1] if sys.platform == "darwin" else ICON_SIZES
-    icons = [load_icon(widget, size) for size in sizes]
-    return [icon for icon in icons if icon is not None]
-
-
 def _format_date(iso: str | None) -> str:
     """ISO-Zeitstempel (UTC) -> „26.10.2026" in lokaler Zeit; unlesbar -> „?"."""
     try:
         return datetime.fromisoformat(iso or "").astimezone().strftime("%d.%m.%Y")
     except ValueError:
         return "?"
-
-
-class _ScrollableFrame:
-    """Vertikal scrollbarer Container (Canvas + inneres Frame + Scrollbar).
-
-    Bei kleinem Fenster kann so der gesamte Inhalt gescrollt werden, nichts wird
-    abgeschnitten. `inner` ist das Elternelement für die eigentlichen Abschnitte.
-    """
-
-    def __init__(self, parent: tk.Misc) -> None:
-        self.outer = ttk.Frame(parent)
-        self.canvas = tk.Canvas(self.outer, highlightthickness=0)
-        self.vscroll = ttk.Scrollbar(self.outer, orient="vertical", command=self.canvas.yview)
-        self.canvas.configure(yscrollcommand=self.vscroll.set)
-        self.vscroll.pack(side="right", fill="y")
-        self.canvas.pack(side="left", fill="both", expand=True)
-
-        self.inner = ttk.Frame(self.canvas)
-        self._window = self.canvas.create_window((0, 0), window=self.inner, anchor="nw")
-        self.fill = False
-        self._height = 1
-        self.inner.bind("<Configure>", self._on_inner_configure)
-        self.canvas.bind("<Configure>", self._on_canvas_configure)
-        # Mausrad überall im Fenster (bind_all) -> Seite scrollen. Welche
-        # Ereignisse die Plattform dafür liefert, entscheidet `bind_wheel`.
-        bind_wheel(self.canvas, self._on_mousewheel, everywhere=True)
-
-    def _on_inner_configure(self, _event: tk.Event) -> None:
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-
-    def _on_canvas_configure(self, event: tk.Event) -> None:
-        # Inneres Frame auf Canvas-Breite ziehen (horizontal füllen).
-        self.canvas.itemconfigure(self._window, width=event.width)
-        self._height = event.height
-        if self.fill:
-            self.canvas.itemconfigure(self._window, height=event.height)
-
-    def set_fill(self, fill: bool) -> None:
-        """Seite auf genau Fensterhöhe ziehen und den Außen-Scroll abschalten.
-
-        Für Seiten mit eigenem Scrollbereich (Vorschautabelle): zwei
-        verschachtelte Scrollbalken ließen sich mit dem Mausrad schlecht
-        bedienen (Bewertung 2.5).
-        """
-        if fill == self.fill:
-            return
-        self.fill = fill
-        if fill:
-            self.canvas.itemconfigure(self._window, height=max(1, self._height))
-            self.canvas.yview_moveto(0.0)
-            self.vscroll.pack_forget()
-        else:
-            self.canvas.itemconfigure(self._window, height=0)  # 0 = natürliche Höhe
-            self.vscroll.pack(side="right", fill="y", before=self.canvas)
-
-    def _on_mousewheel(self, event: tk.Event) -> None:
-        """Mausrad/Trackpad -> Seite scrollen (Schrittweite siehe `scrolling`)."""
-        if self.fill:
-            return
-        step = wheel_step(event)
-        if step:
-            self.canvas.yview_scroll(step, "units")
 
 
 class App(tk.Tk):
@@ -328,11 +207,10 @@ class App(tk.Tk):
         self.minsize(720, 480)
 
         # Zustand
-        self.qsos: list = []
-        # Schon gesendete QSOs (QSL_SENT = Y bzw. selbst in Wavelog markiert):
-        # bekommen keine Karte, außer der Nutzer blendet sie für einen
-        # bewussten Nachdruck ein (Vorschau „Schon gesendete anzeigen").
-        self.sent_qsos: list = []
+        # Geladene QSOs, Lookups, offene Markierungen: ohne Tk in
+        # `controllers.session` (Bewertung 3.1). `qsos`, `sent_qsos`, `lookups`,
+        # `qsos_source` und `_pending_marks` sind Eigenschaften darauf.
+        self.session = SessionState()
         self._thumb: ImageTk.PhotoImage | None = None
         # Basis-Config für Felder, die nicht in der GUI editierbar sind
         # (default_via, static_footer, program_id, page_orientation) sowie für
@@ -348,8 +226,6 @@ class App(tk.Tk):
         # Handbuch-Fenster (höchstens eines, siehe `_show_help`).
         self._help: HelpWindow | None = None
 
-        # Lookup-Zustand: Map CALL -> LookupResult|None (Via/Manager/Adresse).
-        self.lookups: dict = {}
         # Hintergrund-Lookups mit Generation/Abbruch (Bewertung 1.4). Thread und
         # lookup_calls werden erst beim Aufruf aufgelöst, damit Tests beides
         # über das Modul ersetzen können.
@@ -383,10 +259,8 @@ class App(tk.Tk):
 
         # Woher die geladenen QSOs stammen ("file" | "wavelog" | None) und der
         # Wavelog-Zustand (geladene Stationen, laufender Abruf, zu markierende QSOs).
-        self.qsos_source: str | None = None
         self._wavelog_stations: list[wavelog.WavelogStation] = []
         self._wavelog_busy = False
-        self._pending_marks: list[wavelog.PaperQslMark] = []
         # Zugangsdaten, mit denen zuletzt nachgeschlagen wurde (Schritt 3 startet
         # den Lookup neu, wenn sie sich geändert haben).
         self._lookup_signature: tuple | None = None
@@ -434,7 +308,7 @@ class App(tk.Tk):
 
         # Die Seiten liegen in einem scrollbaren Container; der Assistent packt
         # immer nur die aktuelle hinein.
-        self.body = _ScrollableFrame(self)
+        self.body = ScrollableFrame(self)
         self.wizard = Wizard(self, WIZARD_STEPS, self.body.inner)
         self.wizard.nav.pack(side="bottom", fill="x")
         ttk.Separator(self, orient="horizontal").pack(side="bottom", fill="x")
@@ -964,10 +838,8 @@ class App(tk.Tk):
             self.status.set(f"Logbuch nicht verwertbar: {exc}", "error")
             return
         # Schon gesendete Karten (QSL_SENT = Y) bekommen keine neue.
-        self.sent_qsos = [q for q in qsos if qsl_already_sent(q)]
+        self.session.load(qsos, "file", qsl_already_sent)
         sent = len(self.sent_qsos)
-        self.qsos = [q for q in qsos if not qsl_already_sent(q)]
-        self.qsos_source = "file"
         self._pending_marks = []
         self.file_section.set_missing(False)  # Markierung eines Druckversuchs weg
         note = f" ({sent} schon gesendet, ausgelassen)" if sent else ""
@@ -1038,9 +910,7 @@ class App(tk.Tk):
     def _visible_qsos(self) -> list:
         """Die QSOs, für die Karten gebaut werden: offene plus — falls
         eingeblendet — die schon gesendeten."""
-        if self.preview.show_sent.get():
-            return [*self.qsos, *self.sent_qsos]
-        return list(self.qsos)
+        return self.session.visible_qsos(self.preview.show_sent.get())
 
     def _update_show_sent(self) -> None:
         """Beschriftung/Zustand von „Schon gesendete anzeigen" nachziehen."""
@@ -1056,10 +926,7 @@ class App(tk.Tk):
     def _on_show_sent_toggle(self, *_args) -> None:
         """Gesendete ein-/ausgeblendet: Karten neu bauen; fehlende Lookups holen."""
         if self.preview.show_sent.get():
-            missing = [
-                q.call for q in self.sent_qsos if (q.call or "").strip().upper() not in self.lookups
-            ]
-            if missing:
+            if self.session.missing_lookups(show_sent=True):
                 # Alle offenen mitgeben: ein laufender Lookup wird durch diesen
                 # ersetzt, der Cache macht die schon geholten sofort wieder gültig.
                 self._start_lookups(self._lookup_calls_needed())
@@ -1255,6 +1122,47 @@ class App(tk.Tk):
             qrz_pass=self.lookup_section.qrz_pass.get(),
             program_id=self.base_config.lookup.program_id,
         )
+
+    # ---------------------------------------------- Sitzungszustand (Kurzwege)
+    @property
+    def qsos(self) -> list:
+        return self.session.qsos
+
+    @qsos.setter
+    def qsos(self, value: list) -> None:
+        self.session.qsos = value
+
+    @property
+    def sent_qsos(self) -> list:
+        return self.session.sent_qsos
+
+    @sent_qsos.setter
+    def sent_qsos(self, value: list) -> None:
+        self.session.sent_qsos = value
+
+    @property
+    def lookups(self) -> dict:
+        return self.session.lookups
+
+    @lookups.setter
+    def lookups(self, value: dict) -> None:
+        self.session.lookups = value
+
+    @property
+    def qsos_source(self) -> str | None:
+        return self.session.source
+
+    @qsos_source.setter
+    def qsos_source(self, value: str | None) -> None:
+        self.session.source = value
+
+    @property
+    def _pending_marks(self) -> list:
+        return self.session.pending_marks
+
+    @_pending_marks.setter
+    def _pending_marks(self, value: list) -> None:
+        self.session.pending_marks = value
 
     @property
     def _lookup_running(self) -> bool:
@@ -1772,10 +1680,8 @@ class App(tk.Tk):
         def sent(q) -> bool:
             return paper_qsl_already_sent(q) or q.raw.get("wavelog_id") in marked
 
-        self.sent_qsos = [q for q in qsos if sent(q)]
-        self.qsos = [q for q in qsos if not sent(q)]
+        self.session.load(qsos, "wavelog", sent)
         skipped = len(self.sent_qsos)
-        self.qsos_source = "wavelog"
         self._sent_store_broken = store_broken
         # Offene Markierungen aus einem früheren Druck (auch nach Neustart).
         self._pending_marks = [wavelog.PaperQslMark(m.qso_id, m.via) for m in pending]
@@ -1818,24 +1724,7 @@ class App(tk.Tk):
 
     def _marks_for(self, cards) -> list[wavelog.PaperQslMark]:
         """Die Wavelog-QSOs der gedruckten Karten, mit dem Zustellweg."""
-        priority = self._active_via_priority()
-        marks: dict[str, wavelog.PaperQslMark] = {}
-        for card in cards:
-            if card.already_sent:
-                continue  # Nachdruck: in Wavelog schon gesendet
-            route = effective_via(card, priority)
-            if route not in ("B", "D"):
-                # eQSL/LoTW sind keine Papierkarten: nie als „Papier-QSL
-                # gesendet" markieren (Bewertung 2.2).
-                continue
-            if card.via_text and route == "B":
-                via = "M"  # über QSL-Manager
-            else:
-                via = {"B": "B", "D": "D"}.get(route or "")
-            for row in card.rows:
-                if row.qso_id:
-                    marks[row.qso_id] = wavelog.PaperQslMark(row.qso_id, via)
-        return list(marks.values())
+        return marks_for_cards(cards, self._active_via_priority())
 
     def _save_pending_marks(self) -> None:
         """Offene Markierungen in `wavelog_sent.json` sichern (überlebt Neustart)."""
@@ -1864,10 +1753,7 @@ class App(tk.Tk):
             return
         # Zu den noch offenen aus früheren Drucken dazu, und sofort sichern:
         # „erst Probedruck" + Programm schließen verliert sie sonst (2.2).
-        merged = {m.qso_id: m for m in self._pending_marks}
-        for mark in self._marks_for(getattr(self, "_generated_cards", [])):
-            merged[mark.qso_id] = mark
-        self._pending_marks = list(merged.values())
+        self.session.add_pending(self._marks_for(getattr(self, "_generated_cards", [])))
         self._save_pending_marks()
         self._update_mark_state()
         if not self._pending_marks or not self.wavelog_mark_section.mark_sent.get():
@@ -1917,11 +1803,7 @@ class App(tk.Tk):
                     f"werden:\n\n{exc}",
                     parent=self,
                 )
-            gone = set(done_ids)
-            newly_sent = [q for q in self.qsos if q.raw.get("wavelog_id") in gone]
-            self.qsos = [q for q in self.qsos if q.raw.get("wavelog_id") not in gone]
-            self.sent_qsos += newly_sent
-            self._pending_marks = [m for m in self._pending_marks if m.qso_id not in gone]
+            self.session.mark_sent(done_ids)
             self._update_show_sent()
             self._rebuild_cards()
             self.wavelog_section.count_var.set(f"{len(self.qsos)} offene QSOs")
