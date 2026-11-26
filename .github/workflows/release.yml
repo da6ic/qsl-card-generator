@@ -27,6 +27,11 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      publish_repo:
+        description: "apt/dnf-Paketquelle auf GitHub Pages aus diesem Stand neu veröffentlichen"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -182,7 +187,9 @@ jobs:
 
   repository:
     name: APT-/DNF-Repository (GitHub Pages)
-    if: github.ref_type == 'tag'
+    # Von Hand mit „publish_repo" lässt sich die Paketquelle ohne neuen Tag
+    # nachholen, etwa wenn die Veröffentlichung an einer Störung scheiterte.
+    if: github.ref_type == 'tag' || inputs.publish_repo
     needs: [version, linux]
     runs-on: ubuntu-24.04
     permissions:
@@ -215,5 +222,9 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
+      # Das frisch hochgeladene Artefakt ist nicht sofort abrufbar; beim ersten
+      # Release fand deploy-pages es deshalb nicht („No artifacts named
+      # github-pages"). Ein Neustart des Jobs hilft nicht — dann gibt es zwei.
+      - run: sleep 20
       - id: deploy
         uses: actions/deploy-pages@v4
