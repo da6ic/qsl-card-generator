@@ -287,11 +287,12 @@ def test_address_export_sits_above_the_output_target(app):
     check = app.output_section.address_export_check
     assert str(check.winfo_parent()) == str(app.output_section.frame)
     assert check.grid_info()["row"] < app.output_section.browse_btn.grid_info()["row"]
-    assert not [
+    # Einziger Haken in Abschnitt 6 ist „Im Schlüsselbund merken" (seit 0.4.0).
+    assert [
         child
         for child in app.lookup_section.frame.winfo_children()
         if isinstance(child, ttk.Checkbutton)
-    ]
+    ] == [app.lookup_section.remember_check]
 
 
 def test_address_export_still_auto_saves(app):
@@ -1413,3 +1414,39 @@ def test_external_broken_write_keeps_current_values(app):
     app._reload_from_file()  # darf nicht werfen
     assert app.sender_section.vars["callsign"].get() == "DL1ABC"
     assert app._last_mtime == app._config_mtime()
+
+
+def test_lookup_credentials_only_in_keyring_when_asked(app, monkeypatch):
+    """Bewertung 2.3: Haken setzt Schlüsselbund, config.yaml bleibt frei."""
+    from qslcards.lookup import secret as lookup_secret
+
+    store: dict = {}
+
+    class _Fake:
+        def get_password(self, service, name):
+            return store.get((service, name))
+
+        def set_password(self, service, name, value):
+            store[(service, name)] = value
+
+        def delete_password(self, service, name):
+            store.pop((service, name), None)
+
+    monkeypatch.setattr(lookup_secret, "_keyring", lambda: _Fake())
+    app.lookup_section.qrz_user.set("dl1abc")
+    app.lookup_section.qrz_pass.set("geheim")
+    app._on_step_leave(appmod.STEP_LOOKUP)
+    assert store == {}  # ohne Haken: nirgends gespeichert
+    app.lookup_section.remember.set(True)
+    assert lookup_secret.load("qrz") == ("dl1abc", "geheim")
+    app._write_config()
+    text = Path(appmod.CONFIG_PATH).read_text(encoding="utf-8")
+    assert "geheim" not in text and "dl1abc" not in text
+    assert "remember: true" in text
+    # Neustart: Felder kommen aus dem Schlüsselbund.
+    app.lookup_section.qrz_user.set("")
+    app.lookup_section.qrz_pass.set("")
+    app._restore_lookup_credentials()
+    assert app.lookup_section.qrz_pass.get() == "geheim"
+    app.lookup_section.remember.set(False)
+    assert store == {}

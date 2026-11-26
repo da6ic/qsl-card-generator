@@ -60,6 +60,10 @@ class LookupConfig:
     # Laufzeit in `lookup.LookupCredentials` und werden in jeder Sitzung neu
     # eingegeben. `program_id` bleibt die einzige konfigurierte Angabe; die GUI
     # kopiert sie beim Lookup in die Credentials.
+    #
+    # Seit 0.4.0 optional: `remember` legt Benutzer/Passwort in den Schlüsselbund
+    # des Systems (lookup/secret.py) — hier steht nur der Schalter.
+    remember: bool = False
 
 
 @dataclass

@@ -47,6 +47,7 @@ from qslcards.lookup import (
     has_lookup_credentials,
     lookup_calls,
 )
+from qslcards.lookup import secret as lookup_secret
 from qslcards.pdf.generator import generate
 from qslcards.pdf.geometry import clamp_print_margin, normalize_sheet_mode
 from qslcards.wavelog import secret as wavelog_secret
@@ -365,6 +366,7 @@ class App(tk.Tk):
         self._wire_commands()
         self._apply_config_to_widgets(self.base_config)
         self._restore_wavelog_key()
+        self._restore_lookup_credentials()
         self._last_mtime = self._config_mtime()
         self._wire_autosave()
         self._init_mostwanted()
@@ -556,6 +558,12 @@ class App(tk.Tk):
             "<<ComboboxSelected>>", lambda _e: self._on_wavelog_station_selected()
         )
         self.wavelog_section.remember_key.trace_add("write", self._on_remember_key_toggle)
+        self.lookup_section.remember.trace_add("write", self._on_remember_lookup_toggle)
+        if not lookup_secret.available():
+            self.lookup_section.remember.set(False)
+            self.lookup_section.remember_check.configure(
+                state="disabled", text="Im Schlüsselbund merken (nicht verfügbar)"
+            )
         self.wavelog_mark_section.mark_now_btn.config(command=self._wavelog_mark_pending)
         if not wavelog_secret.available():
             self.wavelog_section.remember_key.set(False)
@@ -676,6 +684,7 @@ class App(tk.Tk):
                 config.source.kind if config.source.kind in ("file", "wavelog") else "file"
             )
             wl = config.wavelog
+            self.lookup_section.remember.set(bool(config.lookup.remember))
             self.wavelog_section.url.set(wl.url)
             self.wavelog_section.remember_key.set(bool(wl.remember_key))
             self.wavelog_section.since.set(wl.qso_since)
@@ -695,6 +704,7 @@ class App(tk.Tk):
         lookup = LookupConfig(
             program_id=self.base_config.lookup.program_id,
             address_export=self.output_section.address_export.get(),
+            remember=self.lookup_section.remember.get(),
         )
         via_priority, via_cut = self.filter_section.get_priority()
         generation = GenerationConfig(
@@ -799,6 +809,7 @@ class App(tk.Tk):
             self.wavelog_section.url,
             self.wavelog_section.station,
             self.wavelog_section.remember_key,
+            self.lookup_section.remember,
             self.wavelog_section.since,
             self.wavelog_section.until,
             self.wavelog_mark_section.mark_sent,
@@ -1501,6 +1512,7 @@ class App(tk.Tk):
         # sollen greifen, bevor die Seite verschwindet.
         self.focus_set()
         if index == STEP_LOOKUP:
+            self._store_lookup_credentials()
             self._maybe_restart_lookups()
 
     def _on_step_enter(self, index: int) -> None:
@@ -1553,6 +1565,37 @@ class App(tk.Tk):
         key = wavelog_secret.load_key(self.wavelog_section.url.get())
         if key:
             self.wavelog_section.key.set(key)
+
+    def _restore_lookup_credentials(self) -> None:
+        """Beim Start: gemerkte QRZ-/HamQTH-Zugänge aus dem Schlüsselbund (2.3)."""
+        if not self.lookup_section.remember.get():
+            return
+        section = self.lookup_section
+        for provider, user_var, pass_var in (
+            ("qrz", section.qrz_user, section.qrz_pass),
+            ("hamqth", section.hamqth_user, section.hamqth_pass),
+        ):
+            user, password = lookup_secret.load(provider)
+            if user and not user_var.get():
+                user_var.set(user)
+                pass_var.set(password)
+
+    def _store_lookup_credentials(self) -> None:
+        """Zugänge in den Schlüsselbund (nur mit Haken), sonst nichts."""
+        if not self.lookup_section.remember.get():
+            return
+        c = self._lookup_credentials()
+        lookup_secret.save("qrz", c.qrz_user, c.qrz_pass)
+        lookup_secret.save("hamqth", c.hamqth_user, c.hamqth_pass)
+
+    def _on_remember_lookup_toggle(self, *_args) -> None:
+        if self._suppress_save:
+            return
+        if self.lookup_section.remember.get():
+            self._store_lookup_credentials()
+        else:
+            for provider in lookup_secret.PROVIDERS:
+                lookup_secret.delete(provider)
 
     def _on_remember_key_toggle(self, *_args) -> None:
         if self._suppress_save:

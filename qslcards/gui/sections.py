@@ -89,6 +89,7 @@ PROVIDER_FIELDS: dict[str, tuple[str, ...]] = {
 # config.yaml — ohne diesen Satz wirkten die leeren Felder beim nächsten Start
 # wie ein Fehler. Bewusste Ausnahme von „keine Erklärtexte in den Abschnitten".
 LOOKUP_SESSION_HINT = "Gilt nur für diese Sitzung — wird nicht gespeichert."
+LOOKUP_REMEMBER_HINT = "Liegt im Schlüsselbund des Systems, nie in der config.yaml."
 
 # Kategorien des Most-Wanted-Filters (Abschnitt 7): Anzeigename -> Config-Code,
 # in der Reihenfolge der Auswahlliste („Automatisch" zuerst).
@@ -670,12 +671,23 @@ class LookupSection:
             self.entries[field] = entry
             var.trace_add("write", lambda *_a, f=field: self._unmark(f))
 
+        self.remember = tk.BooleanVar(value=False)
+        self.remember_check = ttk.Checkbutton(
+            self.frame, text="Im Schlüsselbund merken", variable=self.remember
+        )
+        self.remember_check.grid(row=4, column=1, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="w")
         self.session_hint = ttk.Label(
             self.frame,
             text=LOOKUP_SESSION_HINT,
             style="Muted.TLabel",
         )
-        self.session_hint.grid(row=4, column=0, columnspan=2, pady=(GAP_ROW, 0), sticky="w")
+        self.session_hint.grid(row=5, column=0, columnspan=2, pady=(GAP_ROW, 0), sticky="w")
+        self.remember.trace_add("write", lambda *_a: self._update_hint())
+
+    def _update_hint(self) -> None:
+        self.session_hint.configure(
+            text=LOOKUP_REMEMBER_HINT if self.remember.get() else LOOKUP_SESSION_HINT
+        )
         self.frame.columnconfigure(1, weight=1)
 
     def mark_auth_failed(self, providers: Iterable[str]) -> None:

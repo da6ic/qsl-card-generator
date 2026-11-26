@@ -16,6 +16,7 @@ sender:
 lookup:
   program_id: qslcards
   address_export: false
+  remember: false
 generation:
   card_mode: per_qso
   via_priority:
