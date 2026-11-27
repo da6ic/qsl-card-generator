@@ -153,6 +153,12 @@ jobs:
     # ersten Probelauf ohne Läufer sofort abgebrochen — ausgemusterte Abbilder
     # bekommen keinen mehr.
     runs-on: macos-latest
+    # Mac-Läufer sind knapp: beim Release 0.4.1 wartete der Job 15 Minuten und
+    # wurde dann abgebrochen. Er hängt seine Dateien deshalb selbst ans Release
+    # (siehe unten), damit Windows und Linux nicht auf ihn warten müssen.
+    timeout-minutes: 60
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       # python.org-Build (Deployment-Target 11.0 statt „nur dieses macOS" wie bei
@@ -178,21 +184,30 @@ jobs:
             dist/*.dmg
             dist/*.zip
           if-no-files-found: error
+      - name: Ans Release hängen
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: QSL-Karten-Generator ${{ needs.version.outputs.version }}
+          files: |
+            dist/*.dmg
+            dist/*.zip
 
   release:
     name: GitHub-Release
     if: github.ref_type == 'tag'
-    needs: [version, linux, windows, macos]
+    # Bewusst ohne macOS: der Mac-Job hängt seine Dateien selbst an.
+    needs: [version, linux, windows]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      # Nur die drei Bau-Artefakte: ohne Muster käme auch das Pages-Artefakt
+      # Nur die Bau-Artefakte: ohne Muster käme auch das Pages-Artefakt
       # (`github-pages`, eine artifact.tar) mit ins Release.
       - uses: actions/download-artifact@v4
         with:
           path: files
-          pattern: "{linux,windows,macos}"
+          pattern: "{linux,windows}"
           merge-multiple: true
       - run: cd files && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
