@@ -3,7 +3,7 @@
 Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 Versionsnummern setzt `scripts/release.py`, nie die Hand.
 
-## [Unveröffentlicht]
+## [0.4.1] – 2026-11-27
 
 ### Neu
 - **Windows-Installer** (`…-windows-x64-setup.exe`, Inno Setup,
