@@ -32,6 +32,10 @@ on:
         description: "apt/dnf-Paketquelle auf GitHub Pages aus diesem Stand neu veröffentlichen"
         type: boolean
         default: false
+      release_tag:
+        description: "Dateien an dieses bestehende Release hängen (z. B. v0.4.1), leer = nur bauen"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -185,9 +189,10 @@ jobs:
             dist/*.zip
           if-no-files-found: error
       - name: Ans Release hängen
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' || inputs.release_tag != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
           name: QSL-Karten-Generator ${{ needs.version.outputs.version }}
           files: |
             dist/*.dmg
@@ -195,7 +200,9 @@ jobs:
 
   release:
     name: GitHub-Release
-    if: github.ref_type == 'tag'
+    # Von Hand mit „release_tag" lassen sich die Dateien an ein bestehendes
+    # Release nachreichen, etwa wenn der Tag-Lauf an einem Läufer hing.
+    if: github.ref_type == 'tag' || inputs.release_tag != ''
     # Bewusst ohne macOS: der Mac-Job hängt seine Dateien selbst an.
     needs: [version, linux, windows]
     runs-on: ubuntu-24.04
@@ -212,6 +219,7 @@ jobs:
       - run: cd files && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
           name: QSL-Karten-Generator ${{ needs.version.outputs.version }}
           files: files/*
           generate_release_notes: true
