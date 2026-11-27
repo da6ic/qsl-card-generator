@@ -167,6 +167,29 @@ EOF
 }
 
 # --- AppImage -------------------------------------------------------------------
+# Das Tk mit Xft (tk_xft.sh) braucht libXft und libXrender. Im .deb/.rpm sind
+# sie Abhängigkeiten, ein AppImage hat keine: auf einem frischen Fedora Kinoite
+# (und anderen schlanken Systemen) fehlen beide, und das Programm brach beim
+# Start mit „libXft.so.2: cannot open shared object file" ab — ohne Fenster,
+# ohne Meldung. Deshalb liegen sie im AppImage. libX11, fontconfig und freetype
+# bleiben bewusst draußen: die hat jeder Desktop, und eine fremde fontconfig
+# passt nicht zur Schriftkonfiguration des Systems (AppImage-„excludelist").
+# PyInstaller setzt LD_LIBRARY_PATH auf _internal, dort findet Tk sie.
+XFT_LIBS=(libXft.so.2 libXrender.so.1)
+
+bundle_xft_libs() {
+    local dest="$1" lib path
+    for lib in "${XFT_LIBS[@]}"; do
+        path="$(ldconfig -p | awk -v l="$lib" '$1 == l && /x86-64/ {print $NF; exit}')"
+        if [ -z "$path" ]; then
+            echo "Fehler: $lib nicht gefunden (Paket libxft2 bzw. libxrender1 installieren)" >&2
+            exit 1
+        fi
+        cp -L "$path" "$dest/$lib"
+        chmod 644 "$dest/$lib"
+    done
+}
+
 build_appimage() {
     local tool="${APPIMAGETOOL:-$(command -v appimagetool || true)}"
     if [ -z "$tool" ]; then
@@ -176,6 +199,7 @@ build_appimage() {
     local appdir="$WORK/$APP_NAME.AppDir"
     mkdir -p "$appdir/usr/lib"
     cp -a "$BUNDLE" "$appdir/usr/lib/$APP_ID"
+    bundle_xft_libs "$appdir/usr/lib/$APP_ID/_internal"
     cat > "$appdir/AppRun" <<EOF
 #!/bin/sh
 # Startet das Bündel aus dem eingehängten AppImage.

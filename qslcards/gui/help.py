@@ -101,7 +101,7 @@ def load_handbook(path: Path | None = None) -> str:
 # ------------------------------------------------------------------- Parser
 @dataclass(frozen=True)
 class Span:
-    """Ein Textstück einer Zeile. `style`: `""`, `"bold"`, `"code"` oder `"link"`."""
+    """Ein Textstück einer Zeile. `style`: `""`, `"bold"`, `"italic"`, `"code"` oder `"link"`."""
 
     text: str
     style: str = ""
@@ -131,13 +131,19 @@ _HEADING = re.compile(r"^(?P<hashes>#{1,3})\s+(?P<title>.*?)\s*$")
 _ANCHOR = re.compile(r"\s*\{#(?P<anchor>[A-Za-z0-9_-]+)\}\s*$")
 _BULLET = re.compile(r"^(?P<indent>\s*)(?P<marker>-|\d+\.)\s+(?P<rest>.*)$")
 _INLINE = re.compile(
-    r"\*\*(?P<bold>.+?)\*\*" r"|`(?P<code>[^`]+)`" r"|\[(?P<label>[^\]]+)\]\((?P<href>[^)\s]+)\)"
+    r"\*\*(?P<bold>.+?)\*\*"
+    # *kursiv*: ein einzelnes Sternchen direkt vor bzw. hinter einem Zeichen
+    # (kein Leerzeichen), damit ein freistehendes „*" wie in „mit rotem *"
+    # Text bleibt.
+    r"|(?<![*\w])\*(?P<italic>[^*\s](?:[^*]*?[^*\s])?)\*(?![*\w])"
+    r"|`(?P<code>[^`]+)`"
+    r"|\[(?P<label>[^\]]+)\]\((?P<href>[^)\s]+)\)"
 )
 _FENCE = "```"
 
 
 def parse_inline(text: str) -> tuple[Span, ...]:
-    """Zerlegt eine Zeile in Textstücke (**fett**, `code`, [Link](url))."""
+    """Zerlegt eine Zeile in Textstücke (**fett**, *kursiv*, `code`, [Link](url))."""
     spans: list[Span] = []
     pos = 0
     for match in _INLINE.finditer(text):
@@ -145,6 +151,8 @@ def parse_inline(text: str) -> tuple[Span, ...]:
             spans.append(Span(text[pos : match.start()]))
         if match.group("bold") is not None:
             spans.append(Span(match.group("bold"), "bold"))
+        elif match.group("italic") is not None:
+            spans.append(Span(match.group("italic"), "italic"))
         elif match.group("code") is not None:
             spans.append(Span(match.group("code"), "code"))
         else:
@@ -293,14 +301,20 @@ class HelpWindow(tk.Toplevel):
         family = base.cget("family")
         size = int(base.cget("size"))
 
-        def sized(delta: int, *, bold: bool = False) -> tkfont.Font:
+        def sized(delta: int, *, bold: bool = False, italic: bool = False) -> tkfont.Font:
             # Negative Größen sind Pixel: größer heißt dort „negativer".
             px = size - delta if size < 0 else size + delta
-            return tkfont.Font(family=family, size=px, weight="bold" if bold else "normal")
+            return tkfont.Font(
+                family=family,
+                size=px,
+                weight="bold" if bold else "normal",
+                slant="italic" if italic else "roman",
+            )
 
         self._fonts = {
             "body": sized(0),
             "bold": sized(0, bold=True),
+            "italic": sized(0, italic=True),
             "h1": sized(H1_DELTA, bold=True),
             "h2": sized(H2_DELTA, bold=True),
             "h3": sized(H3_DELTA, bold=True),
@@ -451,6 +465,7 @@ class HelpWindow(tk.Toplevel):
                 spacing3=2,
             )
         self.text.tag_configure("bold", font=self._fonts["bold"])
+        self.text.tag_configure("italic", font=self._fonts["italic"])
         self.text.tag_configure("code", font=self._fonts["code"], foreground=palette.text_muted)
         self.text.tag_configure(
             "codeblock",

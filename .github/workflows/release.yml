@@ -95,6 +95,9 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq libx11-dev libxft-dev libfontconfig-dev
           packaging/linux/tk_xft.sh dist/QSL-Karten-Generator
+          # build_app.py hat das tar.gz schon VOR dem Tausch gepackt — darin
+          # steckte noch das Tk ohne Xft (Pixelschrift). Neu packen.
+          .venv/bin/python -c "import sys; sys.path.insert(0, 'scripts'); import build_app as b; print(b.package_tar(b.DIST_DIR / 'QSL-Karten-Generator'))"
       - name: Werkzeuge für die Pakete
         run: |
           sudo apt-get install -y -qq rpm

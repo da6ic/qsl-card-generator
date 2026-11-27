@@ -131,6 +131,7 @@ PAD_INNER = 8  # Innenabstand eines Abschnitts
 GAP_ROW = 3  # vertikaler Abstand zweier Eingabezeilen
 GAP_COL = 6  # horizontaler Abstand Label -> Eingabefeld
 ROW_HEIGHT = 24  # Zeilenhöhe der Vorschau-Tabelle
+LISTBOX_PAD = 4  # Innenabstand der Zustellwege-Liste (Text <-> Rahmen)
 FONT_SIZE_SMALL = -11  # negative Größe = Pixel (plattformunabhängig)
 FONT_SIZE_BASE = -12
 FONT_SIZE_HEADING = -13
@@ -193,7 +194,7 @@ def palette_for(mode: str | None) -> Palette:
     return PALETTES[resolve_mode(mode)]
 
 
-def _configure_fonts() -> None:
+def _configure_fonts(root: tk.Misc) -> None:
     """Setzt die benannten Tk-Standardschriften auf einheitliche Größen.
 
     Die Familie bleibt die des Systems (auf jeder Plattform die passende);
@@ -225,10 +226,17 @@ def _configure_fonts() -> None:
         ("QslTitle", base, FONT_SIZE_TITLE, "bold"),
         ("QslHeadingBold", base, FONT_SIZE_HEADING, "bold"),
     ):
-        try:
-            tkfont.nametofont(name).configure(family=family, size=size, weight=weight)
-        except tk.TclError:
-            tkfont.Font(name=name, family=family, size=size, weight=weight, exists=False)
+        # Direkt über Tcl, nicht über `tkfont.Font(name=…, exists=False)`: das
+        # Python-Objekt löscht die benannte Schrift in seinem `__del__`, sobald
+        # es nicht mehr referenziert wird — also sofort. Dann gab es „QslMono"
+        # & Co. nie, Tk las den Namen als Familie und nahm eine Ersatzschrift
+        # in Standardgröße (unter Linux eine große Noto Sans in Tabelle und
+        # Schrittleiste statt Festbreite).
+        options = ("-family", family, "-size", size, "-weight", weight)
+        if name in root.tk.splitlist(root.tk.call("font", "names")):
+            root.tk.call("font", "configure", name, *options)
+        else:
+            root.tk.call("font", "create", name, *options)
 
 
 def apply(root: tk.Misc, mode: str | None) -> Palette:
@@ -246,7 +254,7 @@ def apply(root: tk.Misc, mode: str | None) -> Palette:
         style.theme_use("clam")  # einzige Basis, die sich voll einfärben lässt
     except tk.TclError:  # pragma: no cover - clam gehört zum Tk-Lieferumfang
         pass
-    _configure_fonts()
+    _configure_fonts(root)
 
     # Vorgabefarben in der Optionsdatenbank — sie gelten für später erzeugte
     # klassische tk-Widgets (die Toplevel der Dialoge, Listbox, Canvas, Menü).
@@ -609,8 +617,12 @@ def _options_for(widget: tk.Misc, pal: Palette) -> dict[str, str]:
             "selectforeground": pal.text,
             "highlightbackground": pal.border,
             "highlightcolor": pal.accent,
-            "borderwidth": 1,
-            "relief": "solid",
+            # Rahmen = 1 px Fokusring (wie die Eingabefelder). Der Rand in
+            # Flächenfarbe hält den Text von der Linie fern. `relief="solid"`
+            # zeichnete unter X11 einen schwarzen Rand zusätzlich zum Ring.
+            "highlightthickness": 1,
+            "borderwidth": LISTBOX_PAD,
+            "relief": "flat",
         }
     if isinstance(widget, tk.Canvas):
         return {"background": pal.bg, "highlightthickness": 0}

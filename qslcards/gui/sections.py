@@ -372,9 +372,10 @@ class ImageSection:
 
         self.choose_btn = ttk.Button(self.frame, text="Bild wählen…")
         self.choose_btn.grid(row=0, column=0, pady=GAP_ROW, sticky="w")
-        ttk.Entry(self.frame, textvariable=self.path_var, width=32).grid(
-            row=0, column=1, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="we"
-        )
+        # Von Hand getippte Pfade übernimmt app.py beim Verlassen des Feldes
+        # (FocusOut, auch nach Enter) und zeigt dann die Vorschau.
+        self.path_entry = ttk.Entry(self.frame, textvariable=self.path_var, width=32)
+        self.path_entry.grid(row=0, column=1, padx=(GAP_COL, 0), pady=GAP_ROW, sticky="we")
         # Vorschaufeld füllt den restlichen Platz; das Thumbnail (feste Größe,
         # PhotoImage in app.py gesetzt/gehalten) wird darin zentriert.
         self.thumb_label = ttk.Label(

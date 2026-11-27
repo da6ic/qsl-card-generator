@@ -1141,6 +1141,42 @@ def test_missing_front_image_colors_the_preview_frame(app, tmp_path):
     assert str(app.image_section.thumb_label.cget("style")) == "Thumb.TLabel"
 
 
+def test_typed_image_path_shows_thumbnail(app, tmp_path):
+    """Ein von Hand getippter Bildpfad zeigt beim Verlassen des Feldes die
+    Vorschau — vorher blieb das Feld leer, nur „Bild wählen…" füllte es."""
+    from PIL import Image
+
+    image = tmp_path / "front.png"
+    Image.new("RGB", (300, 200), (30, 90, 160)).save(image)
+
+    app.image_section.path_var.set(str(image))
+    app._on_image_entry_commit()
+    assert app._thumb is not None
+    assert str(app.image_section.thumb_label.cget("image"))
+    assert str(image) in app.base_config.recent.images
+
+    app.image_section.path_var.set(str(tmp_path / "fehlt.png"))
+    app._on_image_entry_commit()
+    assert app._thumb is None
+    assert "Bild-Fehler" in str(app.image_section.thumb_label.cget("text"))
+
+    app.image_section.path_var.set("")
+    app._on_image_entry_commit()
+    assert str(app.image_section.thumb_label.cget("text")) == "keine Vorschau"
+
+
+def test_done_message_keeps_file_names_whole():
+    """Ordner und Dateinamen auf eigenen Zeilen, keine technische Fehlermeldung."""
+    from qslcards.gui.app_print import done_message
+
+    text = done_message(["/home/t/qsl_vorderseiten.pdf", "/home/t/qsl_rueckseiten.pdf"])
+    lines = text.splitlines()
+    assert "Ordner: /home/t" in lines
+    assert "qsl_vorderseiten.pdf" in lines
+    assert "qsl_rueckseiten.pdf" in lines
+    assert "Errno" not in text
+
+
 def test_generate_runs_once_everything_is_filled(app, tmp_path):
     """Gegenprobe: mit allen Pflichtangaben kommt kein Popup, die Erzeugung läuft."""
     _load(app, tmp_path)

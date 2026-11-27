@@ -1333,12 +1333,61 @@ Für Auto-Sync-Tests `app.CONFIG_PATH` auf einen Temp-Pfad setzen, um die echte
 - **CI**: `.gitlab-ci.yml` (Remote ist GitLab) und GitHub-Workflow; beide holen
   per `uv` ein Python mit **Tk 9** und brechen ab, wenn es Tk 8.6 ist.
 
+**AppImage auf Fedora Kinoite (0.4.2, gefunden am 2026-11-27)**
+- **Das AppImage 0.4.2 startete auf einem frischen Fedora Kinoite gar nicht** —
+  Doppelklick, nichts passiert. Ursache: das Tk mit Xft (`tk_xft.sh`, PR 5)
+  braucht `libXft.so.2` und `libXrender.so.1`; im .deb/.rpm sind sie
+  Abhängigkeiten, im AppImage fehlten sie, und Kinoite hat sie nicht. Im
+  Terminal: `ImportError: libXft.so.2: cannot open shared object file`.
+  Seitdem legt `build_packages.sh` (`bundle_xft_libs`) beide ins AppImage.
+  libX11, fontconfig und freetype bleiben **bewusst** draußen (AppImage-
+  „excludelist": die hat jeder Desktop, eine fremde fontconfig passt nicht zur
+  Schriftkonfiguration des Systems).
+- **FUSE war nicht schuld.** appimagetool 1.9 schreibt die statische
+  type2-Runtime (bringt libfuse3 mit, ruft nur `fusermount3`); das fuse2, das
+  Fedora 44 aus den Atomic Desktops entfernt hat, braucht sie nicht.
+- **Prüfen ohne Kinoite:** quay.io (Kinoite-Abbild) und die Fedora-Mirrors sind
+  im Cloud-Container gesperrt. Ersatz: `ubuntu:24.04` mit `xvfb xdotool
+  x11-apps`, danach `dpkg --purge --force-depends libxft2 libxrender1` — so
+  fehlen dieselben Bibliotheken wie auf Kinoite. Dort das AppImage mit
+  `--appimage-extract-and-run` starten (kein FUSE im Container), mit `xdotool`
+  durch alle sechs Schritte klicken, `xwd -root` + `convert` für Screenshots.
+  Fehlende Bibliotheken zusätzlich mit `ldd` in nacktem `fedora:latest` prüfen.
+- **`QslMono` & Co. gab es nie — auf keiner Plattform.** `theme._configure_fonts`
+  legte die eigenen Schriften mit `tkfont.Font(name=…, exists=False)` an und
+  behielt das Objekt nicht; dessen `__del__` ruft `font delete`, die Schrift war
+  sofort wieder weg. Tk las „QslMono" danach als **Familienname** und nahm eine
+  Ersatzschrift in Standardgröße — unter Linux standen Vorschautabelle und
+  Schrittleiste in großer Noto Sans neben 12-px-Text. Jetzt direkt über Tcl
+  (`font create`/`font configure`), ein Test prüft nach `gc.collect()`. Faustregel:
+  ein `tkfont.Font`, das einen Namen anlegt, muss **gehalten** werden.
+- Im selben Testlauf gefunden und behoben: schwarzer Doppelrand und Text am
+  Rand der Zustellwege-Liste (`relief="solid"` unter X11 → jetzt flacher Rand
+  in Flächenfarbe + 1-px-Ring), `*kursiv*` stand roh im Handbuch (Renderer
+  kann es jetzt), ein getippter Bildpfad zeigte keine Vorschau
+  (`_on_image_entry_commit` beim Verlassen des Feldes), die Bemerkung war in der
+  Vorschautabelle schon nach 20 Zeichen abgeschnitten (nur „Remarks" wächst
+  jetzt mit dem Fenster, die übrigen Spalten haben feste, ausreichende Breiten),
+  und der Hinweis „PDF erzeugt" brach lange Pfade mitten im Dateinamen um
+  (`app_print.done_message`: Ordner + Dateinamen je eine Zeile).
+- **Das Linux-tar.gz von 0.4.2 hat noch Pixelschrift**: `build_app.py` packt es,
+  bevor `tk_xft.sh` das Tk tauscht. Der Release-Workflow ruft danach
+  `build_app.package_tar` erneut auf. Prüfen: `strings …/libtcl9tk9.0.so | grep -ci xft`
+  (ohne Xft: 1 Treffer, mit: ~30).
+
 **Workflow-Konventionen**
 - Branch **`build/mvp`**. **Nicht selbst committen** — erst nach Review; committen,
   wenn der Nutzer die nächste Aufgabe vorschlägt. Commit-Messages Deutsch, Präfixe
   `feat/fix/docs/chore`, GUI-Zwischenstände als **WIP** markieren.
 - IDE-Dateien (`.idea/`, `.DS_Store`) nie mitcommitten.
 - Doku-Änderungen erst nach Abnahme des Codes.
+- **Vor jedem Push und nach jeder Programmänderung das gebaute Programm testen**
+  (Vorgabe von Meister, 2026-11-27): so, wie es auf GitHub landet — Paket wie in
+  der CI bauen (Linux: `ubuntu:22.04`, `build_app.py`, `tk_xft.sh`,
+  `build_packages.sh`), mit **echtem Fensterstart** durch alle Schritte klicken,
+  PDF erzeugen, Screenshots ansehen. Jede Funktion muss gehen, alle Texte und
+  Grafiken müssen sauber sein. Grüne Unit-Tests allein genügen nicht: das
+  AppImage 0.4.2 war trotz grüner Tests auf Kinoite nicht startfähig.
 - **Weitergeben nur über Git** (Klon oder `git bundle create … --all`), nie den
   Arbeitsordner: darin liegen `config.yaml`, `lookup_cache.json` (Anschriften
   fremder Stationen), die Logs, PDFs und ein venv mit fremden Pfaden.
