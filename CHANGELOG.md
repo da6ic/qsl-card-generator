@@ -3,6 +3,14 @@
 Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 Versionsnummern setzt `scripts/release.py`, nie die Hand.
 
+## [0.4.2] – 2026-11-27
+
+### Behoben
+- **Linux: keine Pixelschrift mehr.** Das mitgelieferte Tk war ohne Xft gebaut,
+  unter X11 gab es nur Kern-Schriften ohne Kantenglättung. Der Release-Workflow
+  baut Tk 9.0.4 jetzt mit Xft (`packaging/linux/tk_xft.sh`); .deb und .rpm
+  hängen dafür von libX11, libXft und fontconfig ab.
+
 ## [0.4.1] – 2026-11-27
 
 ### Neu
