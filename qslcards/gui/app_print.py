@@ -6,11 +6,33 @@ lauf steckt in `controllers.print_job`; hier stehen Prüfung und Rückmeldung.
 
 from __future__ import annotations
 
+import logging
 import subprocess
 from pathlib import Path
 from tkinter import filedialog
 
 from .sections import SENDER_LABELS
+
+logger = logging.getLogger(__name__)
+
+
+def done_message(outputs: list[str]) -> str:
+    """Hinweis, wenn die fertige PDF nicht von selbst aufging.
+
+    Ordner und Dateinamen auf eigenen Zeilen: das Hinweisfenster bricht lange
+    Zeilen hart um, ein voller Pfad zerriss dort mitten im Dateinamen
+    („…rueckseiten.pd" / „f"). Die technische Ursache (z. B. fehlendes
+    xdg-open) steht im Protokoll, nicht im Fenster.
+    """
+    folders = {str(Path(path).parent) for path in outputs}
+    lines = ["PDF erzeugt.", ""]
+    if len(folders) == 1:
+        lines += [f"Ordner: {folders.pop()}", ""]
+        lines += [Path(path).name for path in outputs]
+    else:
+        lines += list(outputs)
+    lines += ["", "Sie ließ sich nicht automatisch öffnen — bitte im Ordner öffnen."]
+    return "\n".join(lines)
 
 
 class PrintMixin:
@@ -124,10 +146,8 @@ class PrintMixin:
             self.status.set(f"Fertig: {joined} (geöffnet)", "ok")
         except (OSError, subprocess.SubprocessError) as exc:
             self.status.set(f"Fertig: {joined}", "ok")
-            self._messagebox.showinfo(
-                "Fertig",
-                f"PDF erzeugt:\n{joined}\n\n(Automatisches Öffnen nicht möglich: {exc})",
-            )
+            logger.info("PDF nicht automatisch geöffnet: %s", exc)
+            self._messagebox.showinfo("Fertig", done_message(outputs))
         self._after_generate_wavelog()
 
     def _browse_output(self) -> None:

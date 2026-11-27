@@ -167,6 +167,7 @@ class App(CardsMixin, LookupMixin, WavelogMixin, PrintMixin, tk.Tk):
         self._print_job = PrintJob(schedule, generate=lambda *a, **kw: generate(*a, **kw))
 
         self._thumb: ImageTk.PhotoImage | None = None
+        self._thumb_path = ""  # Pfad, zu dem die aktuelle Vorschau gehört
         # Basis-Config für Felder, die nicht in der GUI editierbar sind
         # (default_via, static_footer, program_id, page_orientation) sowie für
         # Aussehen und „Zuletzt verwendet". Wird VOR dem UI-Aufbau gelesen, weil
@@ -498,6 +499,7 @@ class App(CardsMixin, LookupMixin, WavelogMixin, PrintMixin, tk.Tk):
         self.file_section.browse_btn.config(command=self._browse_log)
         self.file_section.load_btn.config(command=self._load_log)
         self.image_section.choose_btn.config(command=self._choose_image)
+        self.image_section.path_entry.bind("<FocusOut>", self._on_image_entry_commit)
         self.output_section.browse_btn.config(command=self._browse_output)
         self.output_section.generate_btn.config(command=self._on_generate)
         self.source_section.kind.trace_add(
@@ -776,7 +778,27 @@ class App(CardsMixin, LookupMixin, WavelogMixin, PrintMixin, tk.Tk):
         self.image_section.set_missing(False)  # Markierung eines Druckversuchs weg
         self._remember_recent("images", path)
 
+    def _on_image_entry_commit(self, _event: object = None) -> None:
+        """Von Hand getippter Bildpfad: Vorschau wie nach „Bild wählen…".
+
+        Vorher blieb das Vorschaufeld bei einem getippten Pfad leer, obwohl die
+        PDF das Bild verwendet hat — man sah nicht, ob der Pfad stimmt.
+        """
+        path = self.image_section.path_var.get().strip()
+        if path == self._thumb_path:
+            return  # unverändert (jeder Fokuswechsel löst FocusOut aus)
+        if not path:
+            self._thumb = None
+            self._thumb_path = ""
+            self.image_section.thumb_label.config(text="keine Vorschau", image="")
+            return
+        self._update_thumbnail(path)
+        if self._thumb is not None:
+            self.image_section.set_missing(False)
+            self._remember_recent("images", path)
+
     def _update_thumbnail(self, path: str) -> None:
+        self._thumb_path = path
         try:
             with Image.open(path) as img:
                 img.thumbnail(THUMB_MAX)

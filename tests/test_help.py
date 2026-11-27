@@ -62,6 +62,28 @@ def test_paragraph_lines_are_joined():
     assert "Ein Absatz, der über zwei Zeilen läuft." in paragraphs
 
 
+def test_italic_and_lone_asterisk():
+    """*kursiv* wird ausgezeichnet (stand vorher roh mit Sternchen im Fenster),
+    ein freistehendes „*" (Pflichtfeld-Stern) bleibt Text."""
+    spans = helpmod.parse_inline("Log *oder* Wavelog, **fett**, Stern * bleibt")
+    assert [(s.text, s.style) for s in spans] == [
+        ("Log ", ""),
+        ("oder", "italic"),
+        (" Wavelog, ", ""),
+        ("fett", "bold"),
+        (", Stern * bleibt", ""),
+    ]
+
+
+def test_manual_has_no_raw_asterisks():
+    """Im fertig gerenderten Handbuch steht nirgends ein Markdown-Sternchen."""
+    text = helpmod.handbook_path().read_text(encoding="utf-8")
+    for block in helpmod.parse(text):
+        for span in block.spans:
+            if span.style != "code":
+                assert "*" not in span.text.replace(" * ", ""), span.text
+
+
 def test_inline_styles():
     spans = helpmod.parse_inline("Ein **fettes** Wort, `code` und [Link](https://example.org).")
     assert [(s.text, s.style) for s in spans] == [

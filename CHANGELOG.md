@@ -3,6 +3,27 @@
 Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 Versionsnummern setzt `scripts/release.py`, nie die Hand.
 
+## [Unveröffentlicht]
+
+### Behoben
+- **AppImage startet auf Fedora Kinoite** (und anderen schlanken Systemen):
+  libXft und libXrender liegen jetzt im AppImage. Vorher brach es dort ohne
+  Fenster und ohne Meldung ab.
+- **Tabelle, Schrittleiste und Titel in der richtigen Schrift.** Die eigenen
+  Schriften des Assistenten wurden gleich nach dem Anlegen wieder gelöscht;
+  unter Linux stand dort deshalb eine große Proportionalschrift statt der
+  Festbreite.
+- Zustellwege-Liste: kein schwarzer Doppelrand mehr, Text mit Abstand zum Rand.
+- Handbuch: *kursiv* wird dargestellt statt mit Sternchen.
+- Frontbild: ein von Hand eingetippter Pfad zeigt jetzt auch die Vorschau.
+- Vorschau: die Spalte „Remarks" wächst mit dem Fenster, Bemerkungen werden
+  nicht mehr nach 20 Zeichen abgeschnitten.
+- Hinweis „PDF erzeugt" (wenn die PDF nicht von selbst aufgeht): Ordner und
+  Dateinamen stehen auf eigenen Zeilen statt mitten im Namen umbrochen, ohne
+  technische Fehlermeldung.
+- Linux-tar.gz: enthielt noch das Tk ohne Xft (Pixelschrift), weil es vor dem
+  Tausch gepackt wurde. Der Release-Workflow packt es danach neu.
+
 ## [0.4.2] – 2026-11-27
 
 ### Behoben

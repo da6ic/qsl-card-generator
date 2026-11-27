@@ -128,13 +128,22 @@ class PreviewTable:
         # height=6 -> immer mindestens ~5 Einträge sichtbar; bei mehr Karten
         # scrollt die Tabelle intern (zusätzlich zum Seiten-Scroll).
         self.tree = ttk.Treeview(self.frame, columns=_COLUMNS, show="headings", height=6)
+        # Nur „Remarks" wächst mit dem Fenster: dort steht der einzige lange
+        # Text (bis 80 Zeichen). Wuchsen alle Spalten gleichmäßig, bekam die
+        # Bemerkung den kleinsten Anteil und war schon bei 20 Zeichen abgeschnitten.
         for col in _COLUMNS:
-            self.tree.column(col, width=70, anchor="center")
-        self.tree.column("call", width=90)
-        self.tree.column("mw", width=50)
-        self.tree.column("route", width=110)
-        self.tree.column("remarks", width=140, anchor="w")
-        self.tree.column("date", width=90)
+            self.tree.column(col, width=70, anchor="center", stretch=False)
+        # Die festen Breiten müssen Titel + Stift-Symbol fassen („Drucken ✎",
+        # „Route/Manager ✎"), sie wachsen nicht mehr mit.
+        self.tree.column("print", width=82)
+        self.tree.column("call", width=85)
+        self.tree.column("mw", width=45)
+        self.tree.column("qsos", width=60)
+        self.tree.column("via", width=75)
+        self.tree.column("route", width=125)
+        self.tree.column("remarks", width=200, anchor="w", stretch=True)
+        self.tree.column("date", width=78)
+        self.tree.column("utc", width=58)
         self._apply_headings()  # nur Spaltentitel; der Stift kommt als Overlay
 
         self.scroll = ttk.Scrollbar(self.frame, orient="vertical", command=self.tree.yview)

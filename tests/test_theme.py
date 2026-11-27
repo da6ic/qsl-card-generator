@@ -167,5 +167,33 @@ def test_restyle_tree_colors_classic_widgets(root):
     assert canvas.cget("background") == theme.LIGHT.bg
 
 
+def test_listbox_has_padding_and_no_black_border(root):
+    """Zustellwege-Liste: 1-px-Ring in Rahmenfarbe, Text mit Abstand dazu.
+    `relief="solid"` malte unter X11 einen schwarzen Rand zusätzlich."""
+    listbox = tk.Listbox(root)
+    theme.restyle_tree(root, theme.LIGHT)
+    assert str(listbox.cget("relief")) == "flat"
+    assert int(listbox.cget("highlightthickness")) == 1
+    assert int(listbox.cget("borderwidth")) == theme.LISTBOX_PAD
+    assert listbox.cget("highlightbackground") == theme.LIGHT.border
+
+
+def test_named_fonts_survive_garbage_collection(root):
+    """QslMono & Co. müssen als benannte Tk-Schriften bestehen bleiben. Über
+    `tkfont.Font(exists=False)` angelegt, löschte der Garbage Collector sie
+    sofort wieder — Tabelle und Schrittleiste standen dann in einer
+    Ersatzschrift (unter Linux große Noto Sans statt Festbreite)."""
+    import gc
+
+    theme.apply(root, "light")
+    gc.collect()
+    theme.apply(root, "dark")  # zweiter Lauf: vorhandene Schriften umstellen
+    gc.collect()
+    names = root.tk.splitlist(root.tk.call("font", "names"))
+    for name in ("QslMono", "QslMonoBold", "QslMonoTitle", "QslTitle", "QslHeadingBold"):
+        assert name in names
+    assert int(root.tk.call("font", "configure", "QslMono", "-size")) == theme.FONT_SIZE_BASE
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

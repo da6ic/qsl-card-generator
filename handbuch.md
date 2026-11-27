@@ -19,9 +19,9 @@ Deine Absenderangaben und alle Einstellungen werden für die nächste Benutzung
 **automatisch gespeichert**. Nur die Zugangsdaten für die Lookups
 ([Kapitel 6](#abschnitt-6)) nicht — die trägst du bei jedem Start neu ein.
 
-Pflichtangaben sind mit einem roten `*` markiert. Fehlt eine davon, sagt dir das
-Programm beim Klick auf „PDF erzeugen" in einem einzigen Hinweisfenster, was
-noch fehlt, und markiert die betroffenen Felder rot.
+Pflichtangaben sind mit einem roten `*` markiert. Fehlt eine davon, nennt dir das
+Programm unten in der Leiste neben „Weiter", was noch fehlt, und markiert die
+betroffenen Felder rot.
 
 ## Der Weg zur fertigen PDF {#ueberblick}
 
