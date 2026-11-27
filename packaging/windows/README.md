@@ -35,41 +35,28 @@ zeigt:
 py -0p
 ```
 
-## PyInstaller: hier braucht es die Entwicklungsfassung
+## PyInstaller: mindestens 6.22
 
 Python 3.14.7 unter Windows bringt Tcl/Tk 9 mit **eingebetteter** Bibliothek —
-die Tcl-Skripte stecken in der DLL statt in einem Ordner daneben. Das
-veröffentlichte PyInstaller 6.21.0 kennt diesen Fall noch nicht: es sammelt
-nichts ein, und sein Laufzeit-Hook bricht beim **Start** des fertigen Programms
-ab mit
+die Tcl-Skripte stecken in der DLL statt in einem Ordner daneben. PyInstaller
+6.21.0 kannte diesen Fall noch nicht: es sammelte nichts ein, und sein
+Laufzeit-Hook brach beim **Start** des fertigen Programms ab mit
 
 ```
 Tcl data directory "...\_internal\_tcl_data" not found.
 ```
 
-Der Fix ist geschrieben, aber noch in keinem Release (siehe `news/9470.*` im
-PyInstaller-Repository; 6.21.0 ist vom Juni 2026). Bis zur nächsten
-Veröffentlichung deshalb:
-
-```powershell
-.venv-build\Scripts\python.exe -m pip install --force-reinstall `
-    "pyinstaller @ git+https://github.com/pyinstaller/pyinstaller.git@develop"
-```
-
-Das braucht **keinen** C-Compiler — die vorgebauten Bootloader liegen im
-Repository (Windows-64bit, Linux-64bit, Darwin-64bit; für Windows **32-Bit gibt
-es keinen**, ein weiterer Grund gegen diese Bitbreite).
-
-`build_app.py` erkennt die Lage selbst und bricht mit genau diesem Hinweis ab —
-die Versionsnummer hilft dabei nicht, denn die Fassung mit dem Fix meldet sich
-weiterhin als 6.21.0.
+Ab **6.22** ist das behoben, `pip install -e ".[build]"` holt die passende
+Fassung (`pyproject.toml` fordert `pyinstaller>=6.22`). Der frühere Umweg über
+den `develop`-Zweig ist nicht mehr nötig. `build_app.py` prüft die Fähigkeit
+weiterhin selbst und bricht mit einem Hinweis ab, falls eine ältere Fassung
+installiert ist.
 
 ## Bauen
 
 ```powershell
-git clone git@gitlab.j-homelab.de:side-projects/qsl-karten-generator.git
-cd qsl-karten-generator
-git checkout build/mvp
+git clone https://github.com/da6ic/qsl-card-generator.git
+cd qsl-card-generator
 
 powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1 -Python "py -3.14"
 ```
@@ -118,9 +105,19 @@ Schaltersymbole in der Vorschautabelle. Dafür müsste `MIN_TK` in
 
 ## Ausliefern
 
-Der Anwender entpackt das ZIP an einen Ort, den er beschreiben darf
-(`Dokumente`, Desktop, USB-Stick) und startet `QSL-Karten-Generator.exe`.
-Ein Installer ist nicht nötig; das Programm ist bewusst als Ordner gebaut.
+Es gibt zwei Wege, beide aus demselben Programmordner:
+
+* **Installer** `…-windows-x64-setup.exe` (Inno Setup, `installer.iss` hier
+  daneben). Der Release-Workflow baut ihn mit; lokal mit
+  `iscc /DAppVersion=X.Y.Z packaging\windows\installer.iss` nach dem
+  `build_app.py`-Lauf. Installiert **ohne Adminrechte** nach
+  `%LOCALAPPDATA%\Programs\QSL-Karten-Generator` (beschreibbar, kein UAC),
+  legt den Startmenü-Eintrag an und trägt sich unter *Apps* zum Entfernen ein.
+  Wer im ersten Dialog „für alle Benutzer" wählt, landet unter
+  `C:\Program Files` — dann gilt der Hinweis unten zum Portable-Modus.
+  Die `AppId` in `installer.iss` nie ändern: an ihr erkennt Windows ein Update.
+* **ZIP** zum Entpacken an einen Ort, den der Anwender beschreiben darf
+  (`Dokumente`, Desktop, USB-Stick); dann `QSL-Karten-Generator.exe` starten.
 
 Im Archiv liegt dafür `LIESMICH.txt` neben der `.exe` — `build_app.py` kopiert
 sie beim Verpacken aus diesem Ordner dorthin (dasselbe Prinzip wie `install.sh`
