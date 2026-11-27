@@ -47,7 +47,82 @@ Rückseite im DARC-QSL-Layout.
 - **Farbthema** in Hell und Dunkel; folgt standardmäßig dem Betriebssystem,
   umschaltbar über „Ansicht → Farbthema".
 
-## Voraussetzungen
+## Installation
+
+Fertige Programme gibt es unter
+[Releases](https://github.com/da6ic/qsl-card-generator/releases/latest) —
+Python oder sonst etwas muss dafür nicht installiert sein.
+
+### Windows (10 und 11, 64-Bit)
+
+`QSL-Karten-Generator-<Version>-windows-x64-setup.exe` herunterladen und
+starten. Der Installer braucht keine Adminrechte, legt einen Eintrag im
+Startmenü an (auf Wunsch auch auf dem Desktop) und lässt sich über
+*Einstellungen ▸ Apps* wieder entfernen. Ein Update installiert man einfach
+über die alte Fassung, die Einstellungen bleiben erhalten.
+
+Das Programm ist nicht signiert. Beim ersten Start meldet Windows deshalb
+„Der Computer wurde durch Windows geschützt" — weiter mit
+*Weitere Informationen ▸ Trotzdem ausführen*.
+
+### Debian / Ubuntu (apt)
+
+Debian 12 oder neuer, Ubuntu 22.04 oder neuer, 64-Bit-PC. Einmal die
+Paketquelle einrichten:
+
+```bash
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://da6ic.github.io/qsl-card-generator/qsl-karten-generator.gpg \
+  | sudo tee /etc/apt/keyrings/qsl-karten-generator.gpg >/dev/null
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/qsl-karten-generator.gpg] https://da6ic.github.io/qsl-card-generator/apt stable main" \
+  | sudo tee /etc/apt/sources.list.d/qsl-karten-generator.list
+sudo apt update
+sudo apt install qsl-karten-generator
+```
+
+### Fedora (dnf)
+
+```bash
+sudo curl -fsSL -o /etc/yum.repos.d/qsl-karten-generator.repo \
+  https://da6ic.github.io/qsl-card-generator/qsl-karten-generator.repo
+sudo dnf install qsl-karten-generator
+```
+
+Bei apt und dnf kommen neue Fassungen mit dem normalen Systemupdate
+(`sudo apt upgrade` bzw. `sudo dnf upgrade`). Gestartet wird über das
+Anwendungsmenü oder mit `qsl-karten-generator`; entfernt mit
+`sudo apt remove qsl-karten-generator` bzw. `sudo dnf remove qsl-karten-generator`.
+Die Paketquellen sind mit dem Schlüssel
+`6C5B 4406 9C94 1E69 FA4A  94D2 7E86 72BC 9FC5 DF68` signiert.
+
+### Andere Linux-Systeme (AppImage)
+
+`QSL-Karten-Generator-<Version>-x86_64.AppImage` herunterladen, ausführbar
+machen und starten:
+
+```bash
+chmod +x QSL-Karten-Generator-*-x86_64.AppImage
+./QSL-Karten-Generator-*-x86_64.AppImage
+```
+
+Läuft auf allen 64-Bit-Systemen ab glibc 2.35. Fehlt dem System FUSE, startet
+es mit `--appimage-extract-and-run`.
+
+### macOS (Apple Silicon, ab macOS 11)
+
+`QSL-Karten-Generator-<Version>-macos-arm64.dmg` öffnen und das Programm auf
+„Programme" ziehen. Weil es nicht notarisiert ist, verweigert macOS den ersten
+Start; erlauben unter *Systemeinstellungen ▸ Datenschutz & Sicherheit ▸
+Dennoch öffnen*.
+
+### Prüfsummen
+
+Zu jedem Release gehört eine `SHA256SUMS.txt`
+(`sha256sum -c SHA256SUMS.txt --ignore-missing`).
+
+## Aus dem Quelltext starten
+
+### Voraussetzungen
 - Python **3.11+** mit **Tkinter** und am besten **Tk 9** — mit Tk 8.6 läuft das
   Programm auch, nur die Stift-/Schaltersymbole der Vorschautabelle fehlen dann
   (ohne Fehlermeldung). Tkinter ist je nach System ein eigenes Paket:
@@ -61,7 +136,7 @@ Rückseite im DARC-QSL-Layout.
   Prüfen: `python -c "import tkinter; print(tkinter.TkVersion)"` muss `9.0` ausgeben.
 - Ein Frontbild.
 
-## Schnellstart
+### Schnellstart
 
 Im Projektordner (wichtig: `requirements.txt` installiert das Projekt selbst
 editierbar mit `-e .[dev]`):
@@ -194,17 +269,34 @@ viel: scheitert der Build, wird die Versionszeile zurückgesetzt und die
 Arbeitskopie ist wieder sauber — statt eines Tags für eine Fassung, die es nie
 gab.
 
-Für die **anderen Plattformen** gilt weiter: Cross-Compile gibt es nicht.
-`release.py` baut nur für das System, auf dem es läuft; die übrigen Archive
-entstehen danach dort mit `git pull` und `python scripts/build_app.py --clean`,
-die Versionszeile ist dann ja schon committet.
+**Veröffentlicht wird über GitHub Actions** (`.github/workflows/release.yml`).
+Sobald der Tag hochgeladen ist (`git push origin vX.Y.Z`, oder auf GitHub unter
+*Releases ▸ Draft a new release* mit einem neuen Tag), baut der Workflow auf je
+einem Windows-, macOS- und Linux-Läufer alle Dateien, legt sie samt
+`SHA256SUMS.txt` als Release ab und aktualisiert die signierte apt-/dnf-
+Paketquelle auf GitHub Pages:
 
+| Datei | Für |
+|---|---|
+| `…-windows-x64-setup.exe` | Windows-Installer (Inno Setup, ohne Adminrechte) |
+| `…-macos-arm64.dmg` / `.zip` | macOS, Apple Silicon |
+| `qsl-karten-generator_…_amd64.deb` | Debian/Ubuntu (auch über apt) |
+| `qsl-karten-generator-…-1.x86_64.rpm` | Fedora (auch über dnf) |
+| `…-x86_64.AppImage` | andere Linux-Systeme |
+| `…-linux-x86_64.tar.gz` | Linux ohne Paketverwaltung |
+
+Von Hand gestartet (*Actions ▸ release ▸ Run workflow*) baut er nur und hängt
+die Dateien an den Lauf — zum Ausprobieren vor einem Release. Mit dem Haken
+`publish_repo` veröffentlicht er dabei die Paketquelle neu. Was einmalig
+einzurichten ist (Signierschlüssel, Pages), steht in `packaging/repo/README.md`.
+
+Lokal baut `release.py` bzw. `build_app.py` nur für das eigene System.
 **Cross-Compile gibt es nicht** — PyInstaller bündelt den Interpreter, unter dem
 es läuft. Jedes Ziel braucht sein eigenes Betriebssystem:
 
 | Ziel | Gebaut auf | Python | Ergebnis |
 |---|---|---|---|
-| Windows 64-Bit | Windows (VM genügt) | **3.14.7+** x64 von python.org | `…-windows-x64.zip` |
+| Windows 64-Bit | Windows (VM genügt) | **3.14.7+** x64 von python.org | `…-windows-x64.zip`, Installer mit `iscc packaging\windows\installer.iss` |
 | Fedora | Fedora 42+ oder der Container in `packaging/linux/` | **`python3.14`** aus den Fedora-Paketen | `…-linux-x86_64.tar.gz` |
 | macOS | macOS (Apple Silicon) | Homebrew (mit `tcl-tk`) oder python.org **3.14.7+** | `…-macos-arm64.zip` |
 
@@ -221,10 +313,10 @@ gebaut wird dort deshalb mit dem mitgelieferten **`python3.14`**
 (`packaging/linux/README.md` zeigt die Messung).
 PyInstaller muss **≥ 6.21** sein — davor kann es Tcl/Tk 9 gar nicht bündeln.
 
-**Für Windows reicht auch 6.21.0 noch nicht:** Python 3.14.7 legt die
-Tcl-Bibliothek *in die DLL*, und das kennt erst die noch unveröffentlichte
-Entwicklungsfassung. `build_app.py` erkennt das und nennt den Ausweg; Einzelheiten
-in `packaging/windows/README.md`.
+**Für Windows braucht es PyInstaller ≥ 6.22:** Python 3.14.7 legt die
+Tcl-Bibliothek *in die DLL*, und erst ab dieser Fassung sammelt PyInstaller sie
+mit ein. `build_app.py` prüft das und nennt den Ausweg; Einzelheiten in
+`packaging/windows/README.md`.
 
 **Windows 32-Bit wird bewusst nicht gebaut** — die Gründe stehen in
 `packaging/windows/README.md`. Windows 11 ist 64-Bit-only, und Windows 10 in

@@ -3,6 +3,20 @@
 Format angelehnt an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/).
 Versionsnummern setzt `scripts/release.py`, nie die Hand.
 
+## [0.4.1] – 2026-11-27
+
+### Neu
+- **Windows-Installer** (`…-windows-x64-setup.exe`, Inno Setup,
+  `packaging/windows/installer.iss`): ohne Adminrechte, Startmenü-Eintrag,
+  Deinstallation über *Apps*, Update über die alte Fassung. Er **ersetzt** das
+  Windows-ZIP im Release: herunterladen, doppelklicken, fertig.
+
+### Doku
+- README: Abschnitt „Installation" mit Installer, apt-/dnf-Befehlen, AppImage
+  und macOS; Release-Workflow und die Dateien eines Releases beschrieben.
+- Handbuch, Kapitel „Installieren und weitergeben": Installer, apt, dnf, AppImage.
+- `packaging/windows/README.md`: PyInstaller ≥ 6.22 statt `develop`.
+
 ## [0.4.0] – 2026-11-26
 
 Freigegeben nach dem Test gegen eine echte Wavelog-Instanz. Erste Fassung, die

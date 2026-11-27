@@ -594,29 +594,42 @@ Kürzel, das auf deinem Rechner gilt.
 
 ## Installieren und weitergeben {#installation}
 
-Das Programm kommt als Archiv und braucht kein Installationsprogramm. Du
-entpackst es an einen Ort, den du beschreiben darfst, und startest es von dort.
-Zum Entfernen löschst du den Ordner wieder.
+Fertige Fassungen gibt es auf
+[github.com/da6ic/qsl-card-generator/releases](https://github.com/da6ic/qsl-card-generator/releases).
 
-**Windows** — ZIP entpacken nach Dokumente, Desktop oder auf einen USB-Stick,
-dann `QSL-Karten-Generator.exe` starten. **Nicht** nach `C:\Programme`: dorthin
-darf das Programm nicht schreiben. Beim ersten Start meldet Windows „Der
-Computer wurde durch Windows geschützt" — das Programm ist nicht signiert. Über
-*Weitere Informationen* ▸ *Trotzdem ausführen* geht es weiter.
+**Windows** — den Installer `…-windows-x64-setup.exe` herunterladen und per
+Doppelklick starten. Er braucht keine Adminrechte, legt einen Eintrag im
+Startmenü an und lässt sich unter *Einstellungen ▸ Apps* wieder entfernen.
+Eine neue Fassung installierst du einfach darüber, deine Einstellungen
+bleiben. Beim ersten
+Start meldet Windows „Der Computer wurde durch Windows geschützt" — das
+Programm ist nicht signiert. Über *Weitere Informationen* ▸ *Trotzdem
+ausführen* geht es weiter.
 
-**macOS** — ZIP entpacken und die App dorthin legen, wo du sie haben willst
-(`Programme`, Schreibtisch oder USB-Stick); die `LIESMICH.txt` daneben brauchst
-du danach nicht mehr. Beim ersten Start verweigert macOS den Start: die App ist
-signiert, aber nicht bei Apple registriert. Der Weg daran vorbei hängt an der
-Version — auf **macOS 15 und neuer** klickst du die Meldung weg und erlaubst den
-Start unter *Systemeinstellungen ▸ Datenschutz & Sicherheit* mit *Dennoch
-öffnen*; auf **macOS 14 und älter** genügt einmal **Rechtsklick ▸ Öffnen** statt
+**macOS** — die `.dmg` öffnen und die App auf „Programme" ziehen (oder das ZIP
+entpacken und die App dorthin legen, wo du sie haben willst). Beim ersten Start
+verweigert macOS den Start: die App ist signiert, aber nicht bei Apple
+registriert. Der Weg daran vorbei hängt an der Version — auf **macOS 15 und
+neuer** klickst du die Meldung weg und erlaubst den Start unter
+*Systemeinstellungen ▸ Datenschutz & Sicherheit* mit *Dennoch öffnen*; auf
+**macOS 14 und älter** genügt einmal **Rechtsklick ▸ Öffnen** statt
 Doppelklick. Danach reicht der Doppelklick.
 
-**Linux** — `tar xzf QSL-Karten-Generator-*.tar.gz`, dann im entpackten Ordner
-`./install.sh`. Das legt das Programm nach `~/.local/opt` und trägt es ins
-Anwendungsmenü ein, ohne `sudo`. Entfernen mit `./install.sh --uninstall`. Ohne
-Installation läuft es genauso: `./QSL-Karten-Generator` im entpackten Ordner.
+**Debian und Ubuntu** — über die Paketquelle, dann kommen neue Fassungen mit
+dem normalen Systemupdate. Die Befehle zum Einrichten stehen auf
+[da6ic.github.io/qsl-card-generator](https://da6ic.github.io/qsl-card-generator/);
+danach genügt `sudo apt install qsl-karten-generator`. Entfernen mit
+`sudo apt remove qsl-karten-generator`.
+
+**Fedora** — genauso: die Paketquelle von derselben Seite einrichten, dann
+`sudo dnf install qsl-karten-generator`. Entfernen mit
+`sudo dnf remove qsl-karten-generator`.
+
+**Andere Linux-Systeme** — das AppImage herunterladen, mit
+`chmod +x QSL-Karten-Generator-*.AppImage` ausführbar machen und starten. Oder
+das `tar.gz`: `tar xzf QSL-Karten-Generator-*.tar.gz`, dann im entpackten
+Ordner `./install.sh`. Das legt das Programm nach `~/.local/opt` und trägt es
+ins Anwendungsmenü ein, ohne `sudo`. Entfernen mit `./install.sh --uninstall`.
 
 Gibst du das Archiv weiter, gib den Hinweis auf die Startmeldung mit — sonst
 hält der Empfänger das Programm für gefährlich und löscht es.

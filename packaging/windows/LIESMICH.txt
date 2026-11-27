@@ -14,8 +14,9 @@ QSL-Karten-Generator — Installation unter Windows
 
    Der Weg daran vorbei:  Weitere Informationen  ▸  Trotzdem ausführen
 
-Ein Installationsprogramm gibt es nicht, und es ist auch keines nötig. Zum
-Entfernen genügt es, diesen Ordner wieder zu löschen.
+Zum Entfernen genügt es, diesen Ordner wieder zu löschen. Bequemer ist der
+Installer (…-windows-x64-setup.exe) von
+https://github.com/da6ic/qsl-card-generator/releases
 
 Alles Weitere — die Bedienung, wo deine Einstellungen gespeichert werden und
 wie du das Programm auf einem USB-Stick mitnimmst — steht im Handbuch:
