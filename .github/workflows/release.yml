@@ -87,9 +87,16 @@ jobs:
       - run: uv pip install -p .venv -e ".[build]"
       - run: .venv/bin/python -c "import tkinter; print('Tk', tkinter.TkVersion); assert tkinter.TkVersion >= 9.0"
       - run: .venv/bin/python scripts/build_app.py --clean
-      - name: Werkzeuge für die Pakete
+      # Das Tk von python-build-standalone hat kein Xft: unter X11 nur Pixel-
+      # schrift ohne Kantenglättung. Darum dieselbe Tk-Version mit Xft bauen
+      # und im Bündel austauschen (Begründung in packaging/linux/tk_xft.sh).
+      - name: Tk mit Xft ins Bündel
         run: |
           sudo apt-get update -qq
+          sudo apt-get install -y -qq libx11-dev libxft-dev libfontconfig-dev
+          packaging/linux/tk_xft.sh dist/QSL-Karten-Generator
+      - name: Werkzeuge für die Pakete
+        run: |
           sudo apt-get install -y -qq rpm
           curl -fsSL -o /tmp/appimagetool \
             https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
