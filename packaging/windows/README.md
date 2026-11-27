@@ -70,7 +70,9 @@ Kürzel (`windows-x64`) — genau die Angaben, die man dem fertigen Programm nic
 mehr ansieht. Steht dort `Tk 8.6` oder die falsche Bitbreite: abbrechen statt
 weiterbauen.
 
-Ergebnis: `dist\QSL-Karten-Generator-<version>-windows-x64.zip`.
+Ergebnis: der Programmordner `dist\QSL-Karten-Generator\` und daneben ein ZIP
+(nur zum lokalen Weitergeben). Den Installer baut danach
+`iscc /DAppVersion=X.Y.Z packaging\windows\installer.iss`.
 
 `<version>` kommt aus `qslcards/__init__.py`. **Angehoben wird sie hier nicht** —
 das macht `scripts/release.py` einmal auf dem Entwicklungsrechner (samt Commit
@@ -105,7 +107,9 @@ Schaltersymbole in der Vorschautabelle. Dafür müsste `MIN_TK` in
 
 ## Ausliefern
 
-Es gibt zwei Wege, beide aus demselben Programmordner:
+Ausgeliefert wird **nur der Installer** — im Release liegt für Windows genau
+eine Datei, die man herunterlädt und doppelklickt. Ein ZIP erst entpacken zu
+müssen, wurde vom Nutzer ausdrücklich verworfen.
 
 * **Installer** `…-windows-x64-setup.exe` (Inno Setup, `installer.iss` hier
   daneben). Der Release-Workflow baut ihn mit; lokal mit
@@ -116,10 +120,10 @@ Es gibt zwei Wege, beide aus demselben Programmordner:
   Wer im ersten Dialog „für alle Benutzer" wählt, landet unter
   `C:\Program Files` — dann gilt der Hinweis unten zum Portable-Modus.
   Die `AppId` in `installer.iss` nie ändern: an ihr erkennt Windows ein Update.
-* **ZIP** zum Entpacken an einen Ort, den der Anwender beschreiben darf
-  (`Dokumente`, Desktop, USB-Stick); dann `QSL-Karten-Generator.exe` starten.
+* Das **ZIP**, das `build_app.py` lokal zusätzlich schreibt, kommt nicht ins
+  Release. Es taugt zum Weitergeben von Hand (entpacken, starten).
 
-Im Archiv liegt dafür `LIESMICH.txt` neben der `.exe` — `build_app.py` kopiert
+Im ZIP liegt dafür `LIESMICH.txt` neben der `.exe` — `build_app.py` kopiert
 sie beim Verpacken aus diesem Ordner dorthin (dasselbe Prinzip wie `install.sh`
 im Linux-Archiv). Sie beantwortet **nur**, was vor dem ersten Start zählt: wohin
 entpacken und wie man an SmartScreen vorbeikommt. Alles Weitere steht im

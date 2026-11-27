@@ -14,8 +14,7 @@ QSL-Karten-Generator — Installation unter Windows
 
    Der Weg daran vorbei:  Weitere Informationen  ▸  Trotzdem ausführen
 
-Zum Entfernen genügt es, diesen Ordner wieder zu löschen. Wer lieber einen
-Startmenü-Eintrag und ein Update über die alte Fassung möchte, nimmt den
+Zum Entfernen genügt es, diesen Ordner wieder zu löschen. Bequemer ist der
 Installer (…-windows-x64-setup.exe) von
 https://github.com/da6ic/qsl-card-generator/releases
 

@@ -8,8 +8,8 @@ Versionsnummern setzt `scripts/release.py`, nie die Hand.
 ### Neu
 - **Windows-Installer** (`…-windows-x64-setup.exe`, Inno Setup,
   `packaging/windows/installer.iss`): ohne Adminrechte, Startmenü-Eintrag,
-  Deinstallation über *Apps*, Update über die alte Fassung. Das ZIP bleibt für
-  den Einsatz ohne Installation.
+  Deinstallation über *Apps*, Update über die alte Fassung. Er **ersetzt** das
+  Windows-ZIP im Release: herunterladen, doppelklicken, fertig.
 
 ### Doku
 - README: Abschnitt „Installation" mit Installer, apt-/dnf-Befehlen, AppImage

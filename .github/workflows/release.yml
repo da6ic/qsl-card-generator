@@ -2,8 +2,7 @@
 # drei Systeme, legt sie als GitHub-Release ab und aktualisiert das signierte
 # APT-/DNF-Repository auf GitHub Pages.
 #
-#   Windows   QSL-Karten-Generator-<v>-windows-x64-setup.exe (Installer)
-#             QSL-Karten-Generator-<v>-windows-x64.zip       (Ordner, ohne Installation)
+#   Windows   QSL-Karten-Generator-<v>-windows-x64-setup.exe (Installer, kein ZIP)
 #   macOS     QSL-Karten-Generator-<v>-macos-arm64.dmg/.zip  (Apple Silicon)
 #   Linux     QSL-Karten-Generator-<v>-x86_64.AppImage
 #             qsl-karten-generator_<v>_amd64.deb             (Debian/Ubuntu)
@@ -125,8 +124,10 @@ jobs:
       # (`//zipfs:/`) selbst ein — der Umweg über `develop` entfällt.
       - run: python -m pip install -e ".[build]"
       - run: python scripts/build_app.py --clean
-      # Installer (.exe) aus demselben Ordner wie das ZIP. Inno Setup liegt auf
-      # den Windows-Abbildern meist schon bereit; sonst per Chocolatey.
+      # Installer (.exe) aus dem Programmordner. Ins Release kommt nur er, nicht
+      # das ZIP von build_app.py: herunterladen und doppelklicken, nichts
+      # entpacken. Inno Setup liegt auf den Windows-Abbildern meist schon
+      # bereit; sonst per Chocolatey.
       - name: Installer bauen (Inno Setup)
         shell: pwsh
         run: |
@@ -142,9 +143,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: |
-            dist/*.zip
-            dist/*-setup.exe
+          path: dist/*-setup.exe
           if-no-files-found: error
 
   macos:

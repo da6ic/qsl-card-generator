@@ -597,13 +597,11 @@ Kürzel, das auf deinem Rechner gilt.
 Fertige Fassungen gibt es auf
 [github.com/da6ic/qsl-card-generator/releases](https://github.com/da6ic/qsl-card-generator/releases).
 
-**Windows** — am einfachsten mit dem Installer `…-windows-x64-setup.exe`: er
-braucht keine Adminrechte, legt einen Eintrag im Startmenü an und lässt sich
-unter *Einstellungen ▸ Apps* wieder entfernen. Eine neue Fassung installierst
-du einfach darüber, deine Einstellungen bleiben. Ohne Installation (etwa für
-einen USB-Stick) nimmst du das ZIP, entpackst es nach Dokumente, Desktop oder
-auf den Stick und startest `QSL-Karten-Generator.exe`. **Nicht** nach
-`C:\Programme` entpacken: dorthin darf das Programm nicht schreiben. Beim ersten
+**Windows** — den Installer `…-windows-x64-setup.exe` herunterladen und per
+Doppelklick starten. Er braucht keine Adminrechte, legt einen Eintrag im
+Startmenü an und lässt sich unter *Einstellungen ▸ Apps* wieder entfernen.
+Eine neue Fassung installierst du einfach darüber, deine Einstellungen
+bleiben. Beim ersten
 Start meldet Windows „Der Computer wurde durch Windows geschützt" — das
 Programm ist nicht signiert. Über *Weitere Informationen* ▸ *Trotzdem
 ausführen* geht es weiter.

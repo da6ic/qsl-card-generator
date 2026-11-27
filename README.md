@@ -65,9 +65,6 @@ Das Programm ist nicht signiert. Beim ersten Start meldet Windows deshalb
 „Der Computer wurde durch Windows geschützt" — weiter mit
 *Weitere Informationen ▸ Trotzdem ausführen*.
 
-Ohne Installation (z. B. für einen USB-Stick) gibt es dasselbe Programm als
-`…-windows-x64.zip`: entpacken und `QSL-Karten-Generator.exe` starten.
-
 ### Debian / Ubuntu (apt)
 
 Debian 12 oder neuer, Ubuntu 22.04 oder neuer, 64-Bit-PC. Einmal die
@@ -282,7 +279,6 @@ Paketquelle auf GitHub Pages:
 | Datei | Für |
 |---|---|
 | `…-windows-x64-setup.exe` | Windows-Installer (Inno Setup, ohne Adminrechte) |
-| `…-windows-x64.zip` | Windows ohne Installation |
 | `…-macos-arm64.dmg` / `.zip` | macOS, Apple Silicon |
 | `qsl-karten-generator_…_amd64.deb` | Debian/Ubuntu (auch über apt) |
 | `qsl-karten-generator-…-1.x86_64.rpm` | Fedora (auch über dnf) |
@@ -300,7 +296,7 @@ es läuft. Jedes Ziel braucht sein eigenes Betriebssystem:
 
 | Ziel | Gebaut auf | Python | Ergebnis |
 |---|---|---|---|
-| Windows 64-Bit | Windows (VM genügt) | **3.14.7+** x64 von python.org | `…-windows-x64.zip` (Installer: `iscc packaging\windows\installer.iss`) |
+| Windows 64-Bit | Windows (VM genügt) | **3.14.7+** x64 von python.org | `…-windows-x64.zip`, Installer mit `iscc packaging\windows\installer.iss` |
 | Fedora | Fedora 42+ oder der Container in `packaging/linux/` | **`python3.14`** aus den Fedora-Paketen | `…-linux-x86_64.tar.gz` |
 | macOS | macOS (Apple Silicon) | Homebrew (mit `tcl-tk`) oder python.org **3.14.7+** | `…-macos-arm64.zip` |
 
