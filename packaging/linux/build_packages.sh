@@ -91,7 +91,7 @@ Version: $VERSION
 Architecture: amd64
 Maintainer: $MAINTAINER
 Installed-Size: $size_kb
-Depends: libc6 (>= $MIN_GLIBC)
+Depends: libc6 (>= $MIN_GLIBC), libx11-6, libxft2, libfontconfig1
 Recommends: xdg-utils
 Section: hamradio
 Priority: optional
@@ -124,6 +124,8 @@ BuildArch:      x86_64
 # jede davon als Abhängigkeit (und als Angebot!) ins Paket schreiben.
 AutoReqProv:    no
 Requires:       glibc >= $MIN_GLIBC
+# Tk ist mit Xft gebaut (packaging/linux/tk_xft.sh) und nimmt diese vom System.
+Requires:       libX11, libXft, fontconfig
 Recommends:     xdg-utils
 
 # Fertiges Bündel: nichts strippen, keine debuginfo, keine build-id-Links.
